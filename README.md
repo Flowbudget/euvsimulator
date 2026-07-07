@@ -39,11 +39,11 @@ src/euv/
 |--------|--------|-----------|
 | Material Database | ✅ Done | Foundation |
 | Multilayer Optics | ✅ Done | Optics Core |
-| Mask 3D Solver | ❌ | EM Simulation |
-| Layout I/O | ❌ | Layout Import |
-| Aerial Image | ❌ | Aerial Image |
+| Mask 3D Solver | ✅ Done | EM Simulation |
+| Layout I/O | ✅ Done | Layout Import |
+| Aerial Image | ✅ Done | Aerial Image |
 | Full Pipeline | ❌ | End-to-End |
-| Plasma Source | ❌ | Source Model |
+| Plasma Source | ✅ Done | Source Model |
 | Resist Model | ❌ | Resist Core |
 | Resist Stochastics | ❌ | Stochastic Effects |
 | REST API | ❌ | REST API |
