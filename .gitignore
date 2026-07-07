@@ -21,9 +21,6 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data downloads (CXRO)
-data/cxro/
-
 # Simulation output
 output/
 *.png
