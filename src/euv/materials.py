@@ -44,7 +44,7 @@ from euv.constants import (
 # Path resolution
 # ──────────────────────────────────────────────
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "cxro"
+DATA_DIR = Path(__file__).resolve().parent / "data" / "cxro"
 """Directory containing ``<Element>.csv`` for Z = 1–92."""
 
 

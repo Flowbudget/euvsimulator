@@ -1,3 +1,3 @@
 include LICENSE
 include README.md
-graft data/cxro
+graft src/euv/data/cxro

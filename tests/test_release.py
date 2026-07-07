@@ -54,7 +54,7 @@ def test_manifest_in_exists():
     path = PROJECT_ROOT / "MANIFEST.in"
     assert path.exists(), f"{path} does not exist"
     content = path.read_text()
-    assert "include src/euv/data/henke/*.nff" in content
+    assert "graft src/euv/data/cxro" in content
     assert "include LICENSE" in content
     assert "include README.md" in content
 
