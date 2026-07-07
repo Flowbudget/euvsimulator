@@ -29,7 +29,9 @@ class TestCXRODataPresence:
 
     def test_cxro_directory_exists(self):
         """data/cxro/ must exist with CSVs."""
-        data_dir = Path(__file__).resolve().parent.parent / "data" / "cxro"
+        from euv.materials import CXROTable
+
+        data_dir = CXROTable()._data_dir
         assert data_dir.is_dir(), (
             f"CXRO data directory not found at {data_dir}. "
             "Run ``python scripts/download_cxro.py`` first."
