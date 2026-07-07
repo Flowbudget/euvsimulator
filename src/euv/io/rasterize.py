@@ -1,5 +1,4 @@
-"""
-Rasterise GDSII polygon geometry onto a binary permittivity grid for RCWA input.
+"""Rasterise GDSII polygon geometry onto a binary permittivity grid for RCWA input.
 
 The core function :func:`rasterize_geometry` samples a mask layer's polygons
 onto a uniform Cartesian grid, returning a 2D binary array where 1 indicates
@@ -14,12 +13,11 @@ rasterisation against the analytical polygon area.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Tuple
 
 import numpy as np
 
 from euv.io.gds import MaskGeometry
-
 
 # ──────────────────────────────────────────────
 # Core rasteriser
@@ -120,9 +118,7 @@ def area_conservation_error(
     if layer_key not in geometry.polygons:
         exact_area = 0.0
     else:
-        exact_area = sum(
-            _polygon_area(v) for v in geometry.polygons[layer_key]
-        )
+        exact_area = sum(_polygon_area(v) for v in geometry.polygons[layer_key])
 
     if exact_area == 0.0:
         return 0.0 if np.count_nonzero(raster) == 0 else float("inf")

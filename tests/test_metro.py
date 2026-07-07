@@ -18,7 +18,6 @@ from euv.metro.cd import (
 from euv.metro.process_window import dose_matrix, plot_bossung, process_window, pw_metrics
 from euv.metro.sem_render import add_edge_roughness, add_shot_noise, render_sem
 
-
 # ═══════════════════════════════════════════════════════════════════
 # Fixtures
 # ═══════════════════════════════════════════════════════════════════
@@ -33,7 +32,7 @@ def line_profile_1d():
     x = torch.linspace(0, 128, 512)  # nm
     sigma = 12.0  # nm
     center = 64.0
-    intensity = 1.0 - 0.6 * torch.exp(-((x - center) ** 2) / (2 * sigma ** 2))
+    intensity = 1.0 - 0.6 * torch.exp(-((x - center) ** 2) / (2 * sigma**2))
     return intensity, x
 
 
@@ -50,7 +49,8 @@ def binary_rectangle():
 @pytest.fixture
 def bossung_data():
     """A synthetic Bossung surface — parabolic focus dependence with
-    dose-dependent CD."""
+    dose-dependent CD.
+    """
     doses = np.linspace(10.0, 30.0, 11)  # mJ/cm²
     focuses = np.linspace(-50.0, 50.0, 11)  # nm
     target_cd = 32.0
@@ -60,7 +60,7 @@ def bossung_data():
     b = 0.005  # quadratic focus dependence
     c = 0.0  # no cross term
     D_grid, F_grid = np.meshgrid(doses, focuses)
-    cd_matrix = target_cd + a * (D_grid - D0) + b * F_grid ** 2 + c * (D_grid - D0) * F_grid
+    cd_matrix = target_cd + a * (D_grid - D0) + b * F_grid**2 + c * (D_grid - D0) * F_grid
     # Clip so in-spec region is realistic
     cd_matrix = np.clip(cd_matrix, 20.0, 44.0)
     return cd_matrix, doses, focuses, target_cd
@@ -82,7 +82,7 @@ class TestCDExtraction:
         # -(x-64)^2/(2*144) = ln(0.8333) = -0.1823
         # (x-64)^2 = 0.1823 * 288 = 52.51
         # x-64 = ±7.25 → x = 56.75, 71.25 → CD = 14.5 nm
-        expected_cd = 2.0 * math.sqrt(-2.0 * 12.0 ** 2 * math.log(0.5 / 0.6))
+        expected_cd = 2.0 * math.sqrt(-2.0 * 12.0**2 * math.log(0.5 / 0.6))
         assert abs(cd - expected_cd) < 0.5, f"CD {cd:.2f} ≠ expected {expected_cd:.2f}"
 
     def test_cd_1d_flat(self):
@@ -157,10 +157,10 @@ class TestNILS:
         x = torch.linspace(0, 128, 512)
         sigma = 12.0
         center = 64.0
-        intensity = 1.0 - 0.6 * torch.exp(-((x - center) ** 2) / (2 * sigma ** 2))
+        intensity = 1.0 - 0.6 * torch.exp(-((x - center) ** 2) / (2 * sigma**2))
 
         # Find edge at threshold 0.5
-        edge_x = center - math.sqrt(-2.0 * sigma ** 2 * math.log(0.5 / 0.6))
+        edge_x = center - math.sqrt(-2.0 * sigma**2 * math.log(0.5 / 0.6))
         nils = compute_nils(intensity, x, float(edge_x))
 
         # NILS = (dI/dx)/I at the edge.  At the left edge of a dark line
@@ -179,7 +179,7 @@ class TestNILS:
     def test_nils_outside_domain(self):
         """Edge outside domain → should not crash, returns 0."""
         x = torch.linspace(0, 128, 128)
-        I = 1.0 - 0.6 * torch.exp(-((x - 64.0) ** 2) / (2 * 12.0 ** 2))
+        I = 1.0 - 0.6 * torch.exp(-((x - 64.0) ** 2) / (2 * 12.0**2))
         nils = compute_nils(I, x, 1000.0)  # far outside
         assert abs(nils) < 0.5  # should not crash
 
@@ -228,8 +228,9 @@ class TestProcessWindow:
 
     def test_dose_matrix_mock(self):
         """Mock pipeline function generates a Bossung."""
+
         def mock_pipeline(dose_mj_cm2, focus_nm):
-            cd = 32.0 - 1.0 * (dose_mj_cm2 - 20.0) + 0.005 * focus_nm ** 2
+            cd = 32.0 - 1.0 * (dose_mj_cm2 - 20.0) + 0.005 * focus_nm**2
             return {"cd_nm": float(cd)}
 
         doses = [15.0, 20.0, 25.0]
@@ -281,6 +282,7 @@ class TestContour:
     def test_contour_no_scikit_dependency(self):
         """Contour extraction does not import scikit-image."""
         import sys
+
         old_modules = set(sys.modules.keys())
         # The function was imported at the top; verify no skimage dep
         # in the actual implementation
@@ -332,7 +334,8 @@ class TestSEMRender:
         assert len(roughened) == len(contour), "Same number of points"
         # Some points should have moved
         moved = sum(
-            1 for (x1, y1), (x2, y2) in zip(contour, roughened)
+            1
+            for (x1, y1), (x2, y2) in zip(contour, roughened)
             if abs(x1 - x2) > 0.01 or abs(y1 - y2) > 0.01
         )
         assert moved > 0, "At least some contour points should be perturbed"
@@ -355,6 +358,7 @@ class TestModuleInterface:
     def test_all_exports_exist(self):
         """All expected names are in the `euv.metro` namespace."""
         import euv.metro as metro
+
         for name in [
             "extract_cd_1d",
             "extract_cd_2d",

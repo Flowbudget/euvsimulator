@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -38,10 +38,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/OpEnUV"
-Repository = "https://github.com/your-org/OpEnUV"
+Homepage = "https://github.com/Flowbudget/OpEnUV"
+Repository = "https://github.com/Flowbudget/OpEnUV"
 Documentation = "https://openeuv.readthedocs.io/"
-Issues = "https://github.com/your-org/OpEnUV/issues"
+Issues = "https://github.com/Flowbudget/OpEnUV/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -58,7 +58,10 @@ dev = [
 euv = "euv.io.cli:app"
 
 [tool.setuptools]
-include_package_data = true
+include-package-data = true
+
+[tool.setuptools.package-data]
+euv = ["data/**/*", "api/static/*"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -77,7 +80,28 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "N", "I", "D"]
-ignore = ["D100", "D104", "D401", "D413"]
+# D100/D104/D401/D413: relaxed docstring conventions.
+# D203/D205/D211/D212/D213/D415/D417/D301/D400: docstring-*formatting*
+#   pedantry that conflicts with the NumPy docstring style used throughout;
+#   we keep the "must have a docstring" rules (D101/D102/D103) but not the
+#   whitespace/summary-placement nitpicks.
+# N802/N803/N806: physics code uses standard mathematical notation for
+#   matrices and vectors (E, Kx, W, V, S11, ...) which is uppercase by
+#   convention and far clearer than snake_case for anyone reading the
+#   underlying equations (Moharam, Li, Hopkins).
+# E741: single-letter names like I (identity), l (layer) are standard here.
+ignore = [
+    "D100", "D104", "D401", "D413",
+    "D203", "D205", "D211", "D212", "D213", "D415", "D417", "D301", "D400",
+    "D105", "D107",
+    "N802", "N803", "N806", "N812", "N815", "E741", "F841",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests do not require docstrings or import-ordering rigor, and F841
+# (unused local) is common in assertion-heavy test setup.
+"tests/*" = ["D101", "D102", "D103", "D105", "D107", "F841", "F401"]
+"docs/conf.py" = ["D", "F401"]
 
 [tool.mypy]
 python_version = "3.10"

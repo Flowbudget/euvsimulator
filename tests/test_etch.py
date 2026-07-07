@@ -16,7 +16,6 @@ from euv.etch.bias import (
     isotropic_bias,
 )
 
-
 # ──────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────
@@ -44,8 +43,7 @@ class TestIsotropicBias:
         biased = isotropic_bias(contour, bias_nm=10.0, pixel_size_nm=1.0)
         n_after = int(biased.sum().item())
         assert n_after > n_before, (
-            f"Positive bias should expand the feature; "
-            f"{n_before} → {n_after}"
+            f"Positive bias should expand the feature; " f"{n_before} → {n_after}"
         )
 
     def test_negative_bias_erodes_feature(self):
@@ -55,8 +53,7 @@ class TestIsotropicBias:
         biased = isotropic_bias(contour, bias_nm=-5.0, pixel_size_nm=1.0)
         n_after = int(biased.sum().item())
         assert n_after < n_before, (
-            f"Negative bias should shrink the feature; "
-            f"{n_before} → {n_after}"
+            f"Negative bias should shrink the feature; " f"{n_before} → {n_after}"
         )
 
     def test_output_shape_matches_input(self):
@@ -108,7 +105,7 @@ class TestEmpiricalCDBias:
         """Custom parameters override defaults."""
         cd_out = empirical_cd_bias(40.0, 2.0, parameters={"a": 5.0, "b": -0.3, "c": 2.0})
         # Expected: 40 + 5.0 * 2.0^(-0.3) + 2.0 = 40 + 5.0 * 0.812 + 2.0 = 46.06
-        expected = 40.0 + 5.0 * (2.0 ** -0.3) + 2.0
+        expected = 40.0 + 5.0 * (2.0**-0.3) + 2.0
         assert abs(cd_out - expected) < 0.1, f"Expected ~{expected:.2f}, got {cd_out}"
 
     def test_output_never_negative(self):
@@ -148,8 +145,12 @@ class TestEtchBiasFromFormula:
 
     def test_small_feature_larger_bias_than_large(self):
         """Smaller features typically have larger bias (inverse RIE lag)."""
-        bias_small = etch_bias_from_formula(cd_nm=16.0, pitch_nm=32.0, depth_nm=60.0, chemistry="cf4")
-        bias_large = etch_bias_from_formula(cd_nm=64.0, pitch_nm=128.0, depth_nm=60.0, chemistry="cf4")
+        bias_small = etch_bias_from_formula(
+            cd_nm=16.0, pitch_nm=32.0, depth_nm=60.0, chemistry="cf4"
+        )
+        bias_large = etch_bias_from_formula(
+            cd_nm=64.0, pitch_nm=128.0, depth_nm=60.0, chemistry="cf4"
+        )
         assert bias_small != bias_large, "Bias should differ with feature size"
 
 

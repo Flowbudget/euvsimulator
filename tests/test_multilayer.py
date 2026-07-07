@@ -11,7 +11,7 @@ from euv.optics.multilayer import (
     interdiffusion_correction,
     mo_si_stack,
 )
-from euv.optics.tmm import reflectivity, reflectivity_scan
+from euv.optics.tmm import reflectivity
 
 
 class TestMultilayerStack:
@@ -37,9 +37,7 @@ class TestMoSiStack:
         """
         stack = mo_si_stack(n_bilayers=50)
         expected_layers = 50 * 2 + 1  # Mo/Si bilayers + Ru cap
-        assert stack.N == expected_layers, (
-            f"Expected {expected_layers} layers, got {stack.N}"
-        )
+        assert stack.N == expected_layers, f"Expected {expected_layers} layers, got {stack.N}"
         assert stack.symbols[0] == "Ru"
         assert stack.symbols[1] == "Mo"
         assert stack.symbols[2] == "Si"
@@ -125,9 +123,9 @@ class TestInterdiffusion:
         R_corr, _ = reflectivity(n_corr, d_corr, wl, theta0, te=True)
 
         # Interdiffusion should reduce reflectivity (Debye-Waller damping)
-        assert R_corr.item() < R_ideal.item(), (
-            f"Interdiffused R ({R_corr:.4f}) should be < ideal R ({R_ideal:.4f})"
-        )
+        assert (
+            R_corr.item() < R_ideal.item()
+        ), f"Interdiffused R ({R_corr:.4f}) should be < ideal R ({R_ideal:.4f})"
 
 
 class TestDefaultMaterials:

@@ -26,12 +26,20 @@ class TestTMMSingleInterface:
         theta0 = 0.0
 
         R_te, r_te = reflectivity(
-            n_layers, d, wl, theta0,
-            n_substrate=torch.tensor(1.5+0.0j), te=True,
+            n_layers,
+            d,
+            wl,
+            theta0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=True,
         )
         R_tm, r_tm = reflectivity(
-            n_layers, d, wl, theta0,
-            n_substrate=torch.tensor(1.5+0.0j), te=False,
+            n_layers,
+            d,
+            wl,
+            theta0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=False,
         )
 
         expected_R = ((1.0 - 1.5) / (1.0 + 1.5)) ** 2
@@ -45,8 +53,12 @@ class TestTMMSingleInterface:
         n_layers = torch.tensor([n_si], dtype=torch.complex128)
         d = torch.tensor([1e-12], dtype=torch.float64)
         R, _ = reflectivity(
-            n_layers, d, torch.tensor([13.5e-9]), 0.0,
-            n_substrate=torch.tensor(n_si), te=True,
+            n_layers,
+            d,
+            torch.tensor([13.5e-9]),
+            0.0,
+            n_substrate=torch.tensor(n_si),
+            te=True,
         )
         assert 0.0 <= R.item() <= 0.1
 
@@ -56,29 +68,29 @@ class TestTMMMoSiMultilayer:
 
     def test_peak_reflectivity(self):
         """Mo/Si 40-bilayer mirror: ~70% peak at 13.5 nm, 6°, TE."""
-        n_layers = torch.tensor(
-            [0.9238+0.00637j, 0.999+0.00183j] * 40, dtype=torch.complex128
-        )
+        n_layers = torch.tensor([0.9238 + 0.00637j, 0.999 + 0.00183j] * 40, dtype=torch.complex128)
         d = torch.tensor([2.8e-9, 4.1e-9] * 40, dtype=torch.float64)
         R, _ = reflectivity(
-            n_layers, d, torch.tensor([13.5e-9], dtype=torch.float64),
+            n_layers,
+            d,
+            torch.tensor([13.5e-9], dtype=torch.float64),
             math.radians(6.0),
-            n_substrate=torch.tensor(0.999+0.00183j), te=True,
+            n_substrate=torch.tensor(0.999 + 0.00183j),
+            te=True,
         )
         assert 0.60 <= R.item() <= 0.80, f"R={R.item():.4f}"
 
     def test_reflectivity_scan_shape(self):
         """Wavelength scan returns correct-length arrays."""
-        n_layers = torch.tensor(
-            [0.9238+0.00637j, 0.999+0.00183j] * 10, dtype=torch.complex128
-        )
+        n_layers = torch.tensor([0.9238 + 0.00637j, 0.999 + 0.00183j] * 10, dtype=torch.complex128)
         d = torch.tensor([2.8e-9, 4.1e-9] * 10, dtype=torch.float64)
 
         wl, R = reflectivity_scan(
-            n_layers, d,
+            n_layers,
+            d,
             wavelength_range=(13.0e-9, 14.0e-9, 21),
             theta0=math.radians(6.0),
-            n_substrate=torch.tensor(0.999+0.00183j),
+            n_substrate=torch.tensor(0.999 + 0.00183j),
         )
 
         assert wl.shape == (21,)
@@ -88,23 +100,20 @@ class TestTMMMoSiMultilayer:
 
     def test_peak_near_13_5nm(self):
         """The reflectivity peak should be near 13.5 nm."""
-        n_layers = torch.tensor(
-            [0.9238+0.00637j, 0.999+0.00183j] * 40, dtype=torch.complex128
-        )
+        n_layers = torch.tensor([0.9238 + 0.00637j, 0.999 + 0.00183j] * 40, dtype=torch.complex128)
         d = torch.tensor([2.8e-9, 4.1e-9] * 40, dtype=torch.float64)
 
         wl, R = reflectivity_scan(
-            n_layers, d,
+            n_layers,
+            d,
             wavelength_range=(13.0e-9, 14.0e-9, 51),
             theta0=math.radians(6.0),
-            n_substrate=torch.tensor(0.999+0.00183j),
+            n_substrate=torch.tensor(0.999 + 0.00183j),
         )
 
         peak_idx = torch.argmax(R)
         peak_wl = wl[peak_idx].item() * 1e9
-        assert 13.3 <= peak_wl <= 13.7, (
-            f"Peak at {peak_wl:.3f} nm, expected near 13.5 nm"
-        )
+        assert 13.3 <= peak_wl <= 13.7, f"Peak at {peak_wl:.3f} nm, expected near 13.5 nm"
 
 
 class TestTMMPolarization:
@@ -118,17 +127,25 @@ class TestTMMPolarization:
         theta0 = math.radians(45.0)
 
         R_te, _ = reflectivity(
-            n_layers, d, wl, theta0,
-            n_substrate=torch.tensor(1.5+0.0j), te=True,
+            n_layers,
+            d,
+            wl,
+            theta0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=True,
         )
         R_tm, _ = reflectivity(
-            n_layers, d, wl, theta0,
-            n_substrate=torch.tensor(1.5+0.0j), te=False,
+            n_layers,
+            d,
+            wl,
+            theta0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=False,
         )
 
-        assert R_te.item() >= R_tm.item(), (
-            f"TE ({R_te:.4f}) should be >= TM ({R_tm:.4f}) at oblique incidence"
-        )
+        assert (
+            R_te.item() >= R_tm.item()
+        ), f"TE ({R_te:.4f}) should be >= TM ({R_tm:.4f}) at oblique incidence"
 
 
 class TestTMMDifferentiability:
@@ -139,8 +156,12 @@ class TestTMMDifferentiability:
         n = torch.tensor([1.5 + 0.0j], dtype=torch.complex128, requires_grad=False)
         d = torch.tensor([200e-9], dtype=torch.float64, requires_grad=True)
         R, _ = reflectivity(
-            n, d, torch.tensor([500e-9]), 0.0,
-            n_substrate=torch.tensor(1.5+0.0j), te=True,
+            n,
+            d,
+            torch.tensor([500e-9]),
+            0.0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=True,
         )
         grad = torch.autograd.grad(R.sum(), d, create_graph=False)[0]
         assert grad is not None
@@ -155,8 +176,11 @@ class TestTMMConvenience:
         n_layers = torch.tensor([1.5 + 0.0j], dtype=torch.complex128)
         d = torch.tensor([1e-9], dtype=torch.float64)
         R = reflectivity_at_wavelength(
-            n_layers, d, 500e-9,
-            n_substrate=torch.tensor(1.5+0.0j), te=True,
+            n_layers,
+            d,
+            500e-9,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=True,
         )
         assert isinstance(R, float)
         expected = ((1.0 - 1.5) / (1.0 + 1.5)) ** 2

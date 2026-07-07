@@ -7,8 +7,6 @@ without exceeding the VRAM budget.
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
-
 import torch
 
 from euv.aerial.abbe import abbe_image

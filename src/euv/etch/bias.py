@@ -12,7 +12,6 @@ from typing import Dict, Optional
 import torch
 import torch.nn.functional as F
 
-
 # ──────────────────────────────────────────────────────────
 # 1. Isotropic bias via morphological dilation / erosion
 # ──────────────────────────────────────────────────────────
@@ -126,7 +125,7 @@ def _disk_kernel(
         indexing="ij",
     )
     dist_sq = (x - radius) ** 2 + (y - radius) ** 2
-    kernel = (dist_sq <= radius ** 2 + 0.5).to(dtype)
+    kernel = (dist_sq <= radius**2 + 0.5).to(dtype)
     kernel = kernel.view(1, 1, K, K)
     return kernel
 
@@ -151,7 +150,7 @@ def empirical_cd_bias(
     The parameters ``a``, ``b``, ``c`` can be fitted to experimental CD-SEM
     measurements from focus-exposure matrices (FEM).  Defaults represent
     typical CF₄-based oxide etching at moderate bias.
- 
+
     Parameters
     ----------
     cd_in_nm : float
@@ -173,7 +172,7 @@ def empirical_cd_bias(
     b = parameters.get("b", -0.5)
     c = parameters.get("c", 0.0)
 
-    bias = a * (aspect_ratio ** b) + c
+    bias = a * (aspect_ratio**b) + c
     cd_out_nm = cd_in_nm + bias
     return max(cd_out_nm, 1.0)  # clamp to at least 1 nm
 
@@ -245,8 +244,7 @@ def etch_bias_from_formula(
     formulas = _CHEMISTRY_FORMULAS
     if chemistry not in formulas:
         raise ValueError(
-            f"Unknown chemistry '{chemistry}'.  "
-            f"Supported: {', '.join(sorted(formulas))}"
+            f"Unknown chemistry '{chemistry}'.  " f"Supported: {', '.join(sorted(formulas))}"
         )
 
     f = formulas[chemistry]
@@ -419,6 +417,6 @@ def _gaussian_kernel_2d(
         indexing="ij",
     )
     dist_sq = (x - center) ** 2 + (y - center) ** 2
-    kernel = torch.exp(-dist_sq / (2.0 * max(sigma ** 2, 1e-12)))
+    kernel = torch.exp(-dist_sq / (2.0 * max(sigma**2, 1e-12)))
     kernel = kernel / kernel.sum()
     return kernel.to(dtype).view(1, 1, K, K)

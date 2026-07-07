@@ -1,5 +1,4 @@
-"""
-Grazing-incidence collector mirror geometry.
+"""Grazing-incidence collector mirror geometry.
 
 In EUV lithography, the plasma source emits isotropically.  A collector
 mirror (nested Wolter-type or ellipsoidal shells) gathers the in-band

@@ -1,8 +1,5 @@
 """Tests for the 1D RCWA (Rigorous Coupled-Wave Analysis) solver."""
 
-import math
-
-import pytest
 import torch
 
 from euv.mask3d.rcwa_torch import (
@@ -11,7 +8,6 @@ from euv.mask3d.rcwa_torch import (
     binary_grating_profile,
     permittivity_toeplitz,
 )
-
 
 # ──────────────────────────────────────────────
 # Toeplitz matrix
@@ -28,19 +24,20 @@ class TestPermittivityToeplitz:
         E = permittivity_toeplitz(profile, n_orders=11)
         assert E.shape == (11, 11)
         # Diagonal entries = DC component = eps
-        assert torch.allclose(
-            torch.diag(E), torch.full((11,), eps, dtype=torch.complex128)
-        )
+        assert torch.allclose(torch.diag(E), torch.full((11,), eps, dtype=torch.complex128))
         # Off-diagonal = 0
         off_diag = E - torch.diag(torch.diag(E))
         assert torch.allclose(off_diag, torch.zeros_like(off_diag), atol=1e-14)
 
     def test_binary_grating_toeplitz_symmetric(self):
         """Toeplitz matrix of a real-ε symmetric grating should be
-        Hermitian (E = E.conj().T, since ε_{-m} = conj(ε_m))."""
+        Hermitian (E = E.conj().T, since ε_{-m} = conj(ε_m)).
+        """
         profile = binary_grating_profile(
-            period=64e-9, fill_width=32e-9,
-            eps_line=2.25+0.0j, eps_space=1.0+0.0j,
+            period=64e-9,
+            fill_width=32e-9,
+            eps_line=2.25 + 0.0j,
+            eps_space=1.0 + 0.0j,
             n_samples=1024,
         )
         E = permittivity_toeplitz(profile, n_orders=21)
@@ -50,8 +47,10 @@ class TestPermittivityToeplitz:
     def test_inverse_rule(self):
         """Inverse-rule matrix should differ from direct for binary gratings."""
         profile = binary_grating_profile(
-            period=64e-9, fill_width=32e-9,
-            eps_line=2.25+0.0j, eps_space=1.0+0.0j,
+            period=64e-9,
+            fill_width=32e-9,
+            eps_line=2.25 + 0.0j,
+            eps_space=1.0 + 0.0j,
             n_samples=1024,
         )
         E_direct = permittivity_toeplitz(profile, n_orders=11, use_inverse_rule=False)
@@ -76,7 +75,7 @@ class TestRCWA1D:
         """
         period = 64e-9
         n_glass = 1.5 + 0.0j
-        eps_glass = n_glass ** 2
+        eps_glass = n_glass**2
         thickness = 10e-9
 
         profile = torch.full((512,), eps_glass, dtype=torch.complex128)
@@ -88,11 +87,15 @@ class TestRCWA1D:
 
         # Should match Fresnel for a thin glass layer
         from euv.optics.tmm import reflectivity
+
         n_layer = torch.tensor([n_glass], dtype=torch.complex128)
         R_tmm, _ = reflectivity(
-            n_layer, torch.tensor([thickness], dtype=torch.float64),
-            torch.tensor([13.5e-9], dtype=torch.float64), 0.0,
-            n_substrate=torch.tensor(n_glass), te=True,
+            n_layer,
+            torch.tensor([thickness], dtype=torch.float64),
+            torch.tensor([13.5e-9], dtype=torch.float64),
+            0.0,
+            n_substrate=torch.tensor(n_glass),
+            te=True,
         )
 
         # RCWA 0th order should approximately match
@@ -110,8 +113,10 @@ class TestRCWA1D:
         eps_space = 1.0 + 0.0j  # vacuum
 
         profile = binary_grating_profile(
-            period=period, fill_width=32e-9,
-            eps_line=eps_line, eps_space=eps_space,
+            period=period,
+            fill_width=32e-9,
+            eps_line=eps_line,
+            eps_space=eps_space,
             n_samples=1024,
         )
         d = torch.tensor([100e-9], dtype=torch.float64)
@@ -132,8 +137,10 @@ class TestRCWA1D:
         eps_space = 1.0 + 0.0j
 
         profile = binary_grating_profile(
-            period=period, fill_width=32e-9,
-            eps_line=eps_line, eps_space=eps_space,
+            period=period,
+            fill_width=32e-9,
+            eps_line=eps_line,
+            eps_space=eps_space,
             n_samples=1024,
         )
         d = torch.tensor([100e-9], dtype=torch.float64)
@@ -145,9 +152,9 @@ class TestRCWA1D:
 
         # ±1 orders should be approximately equal
         if 1 in eff and -1 in eff:
-            assert abs(eff[1] - eff[-1]) < 1e-4, (
-                f"+1 order ({eff[1]:.6f}) ≠ -1 order ({eff[-1]:.6f})"
-            )
+            assert (
+                abs(eff[1] - eff[-1]) < 1e-4
+            ), f"+1 order ({eff[1]:.6f}) ≠ -1 order ({eff[-1]:.6f})"
         # ±2 orders should be approximately equal
         if 2 in eff and -2 in eff:
             assert abs(eff[2] - eff[-2]) < 1e-4
@@ -159,8 +166,10 @@ class TestRCWA1D:
         eps_space = 1.0 + 0.0j
 
         profile = binary_grating_profile(
-            period=period, fill_width=32e-9,
-            eps_line=eps_line, eps_space=eps_space,
+            period=period,
+            fill_width=32e-9,
+            eps_line=eps_line,
+            eps_space=eps_space,
             n_samples=1024,
         )
         d = torch.tensor([100e-9], dtype=torch.float64)
@@ -172,14 +181,14 @@ class TestRCWA1D:
 
         # At oblique incidence, ±1 should differ
         if 1 in eff and -1 in eff:
-            assert abs(eff[1] - eff[-1]) > 1e-6, (
-                f"Oblique: +1 ({eff[1]:.6f}) ≈ -1 ({eff[-1]:.6f}), expected difference"
-            )
+            assert (
+                abs(eff[1] - eff[-1]) > 1e-6
+            ), f"Oblique: +1 ({eff[1]:.6f}) ≈ -1 ({eff[-1]:.6f}), expected difference"
 
     def test_orders_list(self):
         """Returned orders should have correct mapping of indices."""
         period = 64e-9
-        profile = torch.full((512,), 2.25+0.0j, dtype=torch.complex128)
+        profile = torch.full((512,), 2.25 + 0.0j, dtype=torch.complex128)
         d = torch.tensor([10e-9], dtype=torch.float64)
 
         cfg = RCWAConfig(n_orders=11, theta=0.0, polarization="TE", device="cpu")
@@ -204,13 +213,13 @@ class TestBinaryGratingProfile:
 
     def test_profile_shape(self):
         """Profile should have the correct number of samples."""
-        eps = binary_grating_profile(64e-9, 32e-9, 2.25+0.0j, 1.0+0.0j, n_samples=512)
+        eps = binary_grating_profile(64e-9, 32e-9, 2.25 + 0.0j, 1.0 + 0.0j, n_samples=512)
         assert eps.shape == (512,)
         assert eps.dtype == torch.complex128
 
     def test_duty_cycle(self):
         """50% duty cycle should have equal line and space fractions."""
-        eps = binary_grating_profile(64e-9, 32e-9, 2.25+0.0j, 1.0+0.0j, n_samples=4096)
+        eps = binary_grating_profile(64e-9, 32e-9, 2.25 + 0.0j, 1.0 + 0.0j, n_samples=4096)
         line_count = (eps.real > 1.5).sum().item()
         total = eps.shape[0]
         ratio = line_count / total
@@ -218,7 +227,7 @@ class TestBinaryGratingProfile:
 
     def test_no_line(self):
         """Zero-width line should be all space."""
-        eps = binary_grating_profile(64e-9, 0.0, 2.25+0.0j, 1.0+0.0j, n_samples=512)
+        eps = binary_grating_profile(64e-9, 0.0, 2.25 + 0.0j, 1.0 + 0.0j, n_samples=512)
         assert torch.allclose(eps, torch.ones_like(eps))
 
 
@@ -237,8 +246,10 @@ class TestRCWAConvergence:
         eps_space = 1.0 + 0.0j
 
         profile = binary_grating_profile(
-            period=period, fill_width=32e-9,
-            eps_line=eps_line, eps_space=eps_space,
+            period=period,
+            fill_width=32e-9,
+            eps_line=eps_line,
+            eps_space=eps_space,
             n_samples=1024,
         )
         d = torch.tensor([100e-9], dtype=torch.float64)
@@ -246,7 +257,11 @@ class TestRCWAConvergence:
         cfg = RCWAConfig(n_orders=11, theta=0.0, polarization="TE", device="cpu")
         solver = RCWA1D(cfg)
         eff, n_used = solver.solve_with_convergence(
-            profile, d, period, target_rel=1e-2, max_orders=41,
+            profile,
+            d,
+            period,
+            target_rel=1e-2,
+            max_orders=41,
         )
         # Should converge with > 11 orders for a 50% duty cycle binary grating
         assert n_used > 11, f"Converged at {n_used} orders (expected > 11)"

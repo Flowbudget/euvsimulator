@@ -31,16 +31,28 @@ euv.mask3d
 .. automodule:: euv.mask3d.rcwa_torch
    :members:
 
+.. automodule:: euv.mask3d.rcwa2d
+   :members:
+
 euv.aerial
 ----------
 
 .. automodule:: euv.aerial.abbe
    :members:
 
+.. automodule:: euv.aerial.hopkins
+   :members:
+
 .. automodule:: euv.aerial.pupil
    :members:
 
 .. automodule:: euv.aerial.source
+   :members:
+
+euv.opc
+-------
+
+.. automodule:: euv.opc.openilt_bridge
    :members:
 
 euv.source

@@ -1,7 +1,5 @@
 """Tests for the pupil module."""
 
-import math
-
 import pytest
 import torch
 

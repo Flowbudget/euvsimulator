@@ -18,25 +18,22 @@ Tests cover the full resist simulation pipeline:
 
 from __future__ import annotations
 
-import math
-
 import pytest
 import torch
 
 from euv.resist import (
+    MackModel,
+    deprotection_analytical,
+    deprotection_fd,
     dill_abc_exposure,
-    gaussian_se_blur,
     dose_to_acid,
+    extract_cd,
+    gaussian_se_blur,
     reaction_diffusion_adi,
     reaction_diffusion_analytical,
-    deprotection_fd,
-    deprotection_analytical,
-    MackModel,
-    threshold_development,
     surface_advancement_level_set,
-    extract_cd,
+    threshold_development,
 )
-
 
 # ──────────────────────────────────────────────
 # Fixtures
@@ -326,9 +323,7 @@ class TestReactionDiffusionAnalytical:
         """Inhibitor decays exponentially with acid × k × t."""
         acid = torch.ones((16, 16)) * 0.5
         inhib = torch.ones((16, 16)) * 0.8
-        _, inhib_out = reaction_diffusion_analytical(
-            acid, inhib, D=0.0, k=0.2, t_bake=5.0
-        )
+        _, inhib_out = reaction_diffusion_analytical(acid, inhib, D=0.0, k=0.2, t_bake=5.0)
         # M(t) = M₀ · exp(−k · [H⁺] · t) = 0.8 · exp(-0.2·0.5·5) = 0.8·exp(-0.5)
         expected = 0.8 * torch.exp(-0.5 * torch.ones(1))
         assert torch.allclose(inhib_out, expected.expand_as(inhib_out), atol=1e-6)
@@ -496,9 +491,7 @@ class TestSurfaceAdvancement:
         # fully deprotected (low M) at centre
         inhib[:, 16, 16] = 0.1
         mack = MackModel()
-        depth = surface_advancement_level_set(
-            inhib, mack, dx=1.0, dz=1.0, t_develop=5.0
-        )
+        depth = surface_advancement_level_set(inhib, mack, dx=1.0, dz=1.0, t_develop=5.0)
         assert depth.shape == (32, 32)
 
     def test_more_development_at_centre(self, device: torch.device):
@@ -506,9 +499,7 @@ class TestSurfaceAdvancement:
         inhib = torch.ones((10, 16, 16), device=device)
         inhib[:, :, 8] = 0.05  # column of cleared resist
         mack = MackModel(R_max=100.0)
-        depth = surface_advancement_level_set(
-            inhib, mack, dx=1.0, dz=1.0, t_develop=10.0
-        )
+        depth = surface_advancement_level_set(inhib, mack, dx=1.0, dz=1.0, t_develop=10.0)
         assert depth[0, 8] > depth[0, 0]
 
 
@@ -563,7 +554,7 @@ class TestCDExtraction:
         assert cd == pytest.approx(60.0, abs=2.0)
 
     def test_non_standard_spacing(self, device: torch.device):
-        """dx scales the CD."""
+        """Dx scales the CD."""
         line = torch.ones(100, device=device)
         line[30:60] = 0.0  # 30 px feature
         cd = extract_cd(line, dx=2.0)
@@ -691,9 +682,7 @@ class TestEdgeCases:
         """k=0, D>0 → acid diffuses, inhibitor unchanged."""
         acid_in = dose_to_acid(dose_map)
         inhib_in = torch.ones_like(acid_in) * 0.5
-        _, inhib_out = reaction_diffusion_adi(
-            acid_in, inhib_in, D=5.0, k=0.0, n_steps=5
-        )
+        _, inhib_out = reaction_diffusion_adi(acid_in, inhib_in, D=5.0, k=0.0, n_steps=5)
         assert torch.allclose(inhib_out, inhib_in, atol=1e-6)
 
     def test_full_pipeline_no_nans(self, device: torch.device):

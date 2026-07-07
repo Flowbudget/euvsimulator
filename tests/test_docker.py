@@ -71,36 +71,42 @@ def test_dockerfile_python_311_slim() -> None:
     content = _read_dockerfile("Dockerfile")
     bases = re.findall(r"^FROM\s+(\S+)", content, re.MULTILINE)
     for base in bases:
-        assert base == "python:3.11-slim", (
-            f"Stage uses {base!r} instead of python:3.11-slim"
-        )
+        assert base == "python:3.11-slim", f"Stage uses {base!r} instead of python:3.11-slim"
 
 
 def test_dockerfile_has_correct_cmd() -> None:
     """Dockerfile must end with the expected uvicorn CMD."""
     content = _read_dockerfile("Dockerfile")
-    assert 'CMD ["uvicorn", "euv.api.main:app"' in content, (
-        "Dockerfile missing or has wrong CMD for uvicorn"
-    )
+    assert (
+        'CMD ["uvicorn", "euv.api.main:app"' in content
+    ), "Dockerfile missing or has wrong CMD for uvicorn"
 
 
 def test_dockerfile_installs_required_packages() -> None:
     """Dockerfile must install all required packages."""
     content = _read_dockerfile("Dockerfile")
-    required = ["numpy", "scipy", "torch", "fastapi", "uvicorn",
-                 "pydantic", "httpx", "typer", "gdstk", "matplotlib"]
+    required = [
+        "numpy",
+        "scipy",
+        "torch",
+        "fastapi",
+        "uvicorn",
+        "pydantic",
+        "httpx",
+        "typer",
+        "gdstk",
+        "matplotlib",
+    ]
     for pkg in required:
-        assert pkg in content, (
-            f"Dockerfile does not reference required package: {pkg}"
-        )
+        assert pkg in content, f"Dockerfile does not reference required package: {pkg}"
 
 
 def test_dockerfile_torch_cpu_index() -> None:
     """Dockerfile must use the CPU-only PyTorch index URL."""
     content = _read_dockerfile("Dockerfile")
-    assert "download.pytorch.org/whl/cpu" in content, (
-        "Dockerfile missing CPU-only PyTorch index URL"
-    )
+    assert (
+        "download.pytorch.org/whl/cpu" in content
+    ), "Dockerfile missing CPU-only PyTorch index URL"
 
 
 def test_dockerfile_exposes_port() -> None:
@@ -123,17 +129,13 @@ def test_cli_dockerfile_python_311_slim() -> None:
     content = _read_dockerfile("Dockerfile.cli")
     bases = re.findall(r"^FROM\s+(\S+)", content, re.MULTILINE)
     for base in bases:
-        assert base == "python:3.11-slim", (
-            f"CLI stage uses {base!r} instead of python:3.11-slim"
-        )
+        assert base == "python:3.11-slim", f"CLI stage uses {base!r} instead of python:3.11-slim"
 
 
 def test_cli_dockerfile_correct_cmd() -> None:
     """Dockerfile.cli CMD must show CLI help."""
     content = _read_dockerfile("Dockerfile.cli")
-    assert 'CMD ["euv", "simulate", "--help"]' in content, (
-        "Dockerfile.cli missing or has wrong CMD"
-    )
+    assert 'CMD ["euv", "simulate", "--help"]' in content, "Dockerfile.cli missing or has wrong CMD"
 
 
 def test_cli_dockerfile_no_uvicorn() -> None:
@@ -146,12 +148,11 @@ def test_cli_dockerfile_no_uvicorn() -> None:
     # listed as a standalone package.
     lines = content.splitlines()
     uvicorn_in_install = any(
-        "uvicorn" in line and line.strip().startswith("RUN pip")
-        for line in lines
+        "uvicorn" in line and line.strip().startswith("RUN pip") for line in lines
     )
-    assert not uvicorn_in_install, (
-        "Dockerfile.cli should not install uvicorn — it's a CLI-only image"
-    )
+    assert (
+        not uvicorn_in_install
+    ), "Dockerfile.cli should not install uvicorn — it's a CLI-only image"
 
 
 # ── docker-compose content checks ─────────────────────────────────────────────
@@ -160,25 +161,21 @@ def test_cli_dockerfile_no_uvicorn() -> None:
 def test_compose_api_port() -> None:
     """docker-compose.yml must map port 8000."""
     text = COMPOSE_FILES["docker-compose.yml"].read_text()
-    assert '"8000:8000"' in text or "'8000:8000'" in text or "8000:8000" in text, (
-        "docker-compose.yml missing port mapping 8000:8000"
-    )
+    assert (
+        '"8000:8000"' in text or "'8000:8000'" in text or "8000:8000" in text
+    ), "docker-compose.yml missing port mapping 8000:8000"
 
 
 def test_compose_api_volume() -> None:
     """docker-compose.yml must have a volume for CXRO data."""
     text = COMPOSE_FILES["docker-compose.yml"].read_text()
-    assert "euv/data" in text, (
-        "docker-compose.yml missing CXRO data volume mount"
-    )
+    assert "euv/data" in text, "docker-compose.yml missing CXRO data volume mount"
 
 
 def test_compose_api_restart() -> None:
     """docker-compose.yml must set restart: unless-stopped."""
     text = COMPOSE_FILES["docker-compose.yml"].read_text()
-    assert "unless-stopped" in text, (
-        "docker-compose.yml missing restart: unless-stopped"
-    )
+    assert "unless-stopped" in text, "docker-compose.yml missing restart: unless-stopped"
 
 
 def test_compose_cli_interactive() -> None:
@@ -196,6 +193,4 @@ def test_dockerignore_entries() -> None:
     text = DOCKERIGNORE.read_text()
     required = [".git", "__pycache__", "tests", "*.ipynb", ".env"]
     for pattern in required:
-        assert pattern in text, (
-            f".dockerignore missing required entry: {pattern}"
-        )
+        assert pattern in text, f".dockerignore missing required entry: {pattern}"

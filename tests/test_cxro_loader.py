@@ -8,7 +8,6 @@ import pytest
 
 from euv.materials import CXROTable, Material, get_cxro_table
 
-
 # ──────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────
@@ -30,9 +29,7 @@ class TestCXRODataPresence:
 
     def test_cxro_directory_exists(self):
         """data/cxro/ must exist with CSVs."""
-        data_dir = (
-            Path(__file__).resolve().parent.parent / "data" / "cxro"
-        )
+        data_dir = Path(__file__).resolve().parent.parent / "data" / "cxro"
         assert data_dir.is_dir(), (
             f"CXRO data directory not found at {data_dir}. "
             "Run ``python scripts/download_cxro.py`` first."
@@ -41,9 +38,7 @@ class TestCXRODataPresence:
     def test_all_92_elements_available(self, table):
         """All Z=1..92 elements should have CSVs."""
         elements = table.list_elements()
-        assert len(elements) >= 90, (
-            f"Expected ~92 elements, got {len(elements)}"
-        )
+        assert len(elements) >= 90, f"Expected ~92 elements, got {len(elements)}"
         for core in ["Mo", "Si", "Ru", "Ta", "Sn"]:
             assert core in elements, f"Missing core element {core}"
 
@@ -69,21 +64,15 @@ class TestCXRORefractiveIndex:
             ("Sn", (0.93, 0.96), (0.04, 0.10)),
         ],
     )
-    def test_refractive_index_13_5nm(
-        self, table, elem, expected_n_range, expected_k_range
-    ):
+    def test_refractive_index_13_5nm(self, table, elem, expected_n_range, expected_k_range):
         """n,k at 13.5 nm should match known reference ranges."""
         n, k = table.refractive_index(elem, 91.84)
 
         n_lo, n_hi = expected_n_range
-        assert n_lo <= n <= n_hi, (
-            f"{elem} @ 91.84 eV: n={n:.6f} ∉ [{n_lo}, {n_hi}]"
-        )
+        assert n_lo <= n <= n_hi, f"{elem} @ 91.84 eV: n={n:.6f} ∉ [{n_lo}, {n_hi}]"
 
         k_lo, k_hi = expected_k_range
-        assert k_lo <= k <= k_hi, (
-            f"{elem} @ 91.84 eV: k={k:.6f} ∉ [{k_lo}, {k_hi}]"
-        )
+        assert k_lo <= k <= k_hi, f"{elem} @ 91.84 eV: k={k:.6f} ∉ [{k_lo}, {k_hi}]"
 
     def test_refractive_index_monotonic_f2(self, table):
         """f2 should be > 0 for all elements at EUV energy."""

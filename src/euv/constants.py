@@ -1,5 +1,4 @@
-"""
-Fundamental physical constants and EUV-specific parameters.
+"""Fundamental physical constants and EUV-specific parameters.
 
 All values are in SI units unless otherwise noted.  EUV lithography operates
 at 13.5 nm (in-band: 13.35–13.65 nm) corresponding to a photon energy of

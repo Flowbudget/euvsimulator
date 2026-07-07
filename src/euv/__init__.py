@@ -1,5 +1,4 @@
-"""
-euv — Open Source Extreme Ultraviolet Lithography Simulator
+"""euv — Open Source Extreme Ultraviolet Lithography Simulator
 =============================================================
 
 OpEnUV (Open Source EUV) is a modular, GPU-accelerated simulator for

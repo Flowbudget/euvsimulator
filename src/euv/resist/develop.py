@@ -44,9 +44,9 @@ C.A. Mack, "New model for resist development", Proc. SPIE 5383,
 
 from __future__ import annotations
 
-import torch
-from typing import Tuple, Optional
+from typing import Tuple
 
+import torch
 
 # ──────────────────────────────────────────────
 # Mack model for dissolution rate
@@ -245,10 +245,7 @@ def surface_advancement_level_set(
         for k in range(N):
             for i in range(H):
                 for j in range(W):
-                    profile_3d[k, i, j] = (
-                        1.0 if cum_time[k, i, j] <= t_vals[-1]
-                        else 0.0
-                    )
+                    profile_3d[k, i, j] = 1.0 if cum_time[k, i, j] <= t_vals[-1] else 0.0
         return profile_3d
     else:
         # developed depth: deepest layer where cum_time <= t_develop
@@ -366,7 +363,11 @@ def _find_runs(x: torch.Tensor, target: int = 0) -> list:
     Returns list of (start_idx, end_idx) inclusive.
     """
     padded = torch.cat(
-        [torch.tensor([1 - target], device=x.device), x, torch.tensor([1 - target], device=x.device)]
+        [
+            torch.tensor([1 - target], device=x.device),
+            x,
+            torch.tensor([1 - target], device=x.device),
+        ]
     )
     diffs = torch.diff(padded.float())
     starts = torch.where(diffs < -0.5)[0]

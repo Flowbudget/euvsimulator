@@ -33,3 +33,11 @@ output/
 
 # Logs
 *.log
+
+# Built documentation
+docs/_build/
+
+# Test / coverage artifacts
+.pytest_cache/
+coverage_html/
+.coverage

@@ -1,5 +1,4 @@
-"""
-Rigorous Coupled-Wave Analysis (RCWA) — 1D grating, PyTorch.
+"""Rigorous Coupled-Wave Analysis (RCWA) — 1D grating, PyTorch.
 
 Fourier Modal Method (FMM) with numerically stable scattering-matrix
 (S-matrix) cascade.  All core functions support autograd.
@@ -31,7 +30,6 @@ from typing import Dict, Optional, Tuple
 
 import torch
 
-
 # ──────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────
@@ -54,6 +52,7 @@ class RCWAConfig:
     device : str
         PyTorch device (default: ``"cpu"``).
     """
+
     wavelength: float = 13.5e-9
     n_orders: int = 21
     theta: float = 6.0
@@ -65,7 +64,7 @@ class RCWAConfig:
             raise ValueError(f"n_orders must be odd, got {self.n_orders}")
         self.polarization = self.polarization.upper()
         if self.polarization not in ("TE", "TM"):
-            raise ValueError(f"polarization must be TE or TM")
+            raise ValueError("polarization must be TE or TM")
 
 
 # ──────────────────────────────────────────────
@@ -155,7 +154,7 @@ class RCWA1D:
             Complex reflected order amplitudes.
         """
         if n_incident is None:
-            n_incident = torch.tensor([1.0+0.0j, 1.0+0.0j], dtype=torch.complex128)
+            n_incident = torch.tensor([1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128)
         if n_substrate is None:
             n_substrate = n_incident.clone()
 
@@ -182,16 +181,23 @@ class RCWA1D:
 
         eig_vals, W = torch.linalg.eig(A)
         q = torch.sqrt(eig_vals)
-        q = torch.where(q.imag < 0, -q, q)  # Im(q) >= 0
+        # Branch selection (standard RCWA convention): choose the root that
+        # decays or propagates forward.  Prefer Im(q) > 0 (evanescent decay);
+        # when Im(q) is numerically ~0 (propagating mode), fall back to
+        # Re(q) > 0.  This prevents the exp(i k0 q d) blow-up that occurs
+        # when a near-real eigenvalue picks the wrong branch at high order.
+        _imag_tol = 1e-10
+        flip = torch.where(
+            q.imag.abs() < _imag_tol,
+            q.real < 0,  # near-real: pick Re(q) > 0
+            q.imag < 0,  # complex: pick Im(q) > 0
+        )
+        q = torch.where(flip, -q, q)
         V = W @ torch.diag(q)  # modal admittance (TE)
 
         # Rayleigh admittances of incident and substrate media
-        kz_inc = torch.sqrt(
-            (n_i[0] * k0) ** 2 - k_xm**2 + 0j
-        )
-        kz_sub = torch.sqrt(
-            (n_s[0] * k0) ** 2 - k_xm**2 + 0j
-        )
+        kz_inc = torch.sqrt((n_i[0] * k0) ** 2 - k_xm**2 + 0j)
+        kz_sub = torch.sqrt((n_s[0] * k0) ** 2 - k_xm**2 + 0j)
         kz_inc = torch.where(kz_inc.imag < 0, -kz_inc, kz_inc)
         kz_sub = torch.where(kz_sub.imag < 0, -kz_sub, kz_sub)
 
@@ -199,8 +205,8 @@ class RCWA1D:
             Y_inc = torch.diag(kz_inc / k0).to(torch.complex128)
             Y_sub = torch.diag(kz_sub / k0).to(torch.complex128)
         else:
-            Y_inc = torch.diag(n_i[0]**2 * k0 / kz_inc).to(torch.complex128)
-            Y_sub = torch.diag(n_s[0]**2 * k0 / kz_sub).to(torch.complex128)
+            Y_inc = torch.diag(n_i[0] ** 2 * k0 / kz_inc).to(torch.complex128)
+            Y_sub = torch.diag(n_s[0] ** 2 * k0 / kz_sub).to(torch.complex128)
 
         # Build top interface S-matrix: Rayleigh ↔ eigenmodes
         S_top = self._rayleigh_to_eigenmode_smatrix(Y_inc, W, V)
@@ -212,9 +218,7 @@ class RCWA1D:
         S_bot = self._eigenmode_to_rayleigh_smatrix(Y_sub, W, V)
 
         # Cascade: total S = S_top ⨂ S_layer ⨂ S_bot
-        S_total = self._redheffer_star_matrix(
-            self._redheffer_star_matrix(S_top, S_layer), S_bot
-        )
+        S_total = self._redheffer_star_matrix(self._redheffer_star_matrix(S_top, S_layer), S_bot)
 
         # Incident: 0th order only
         inc = torch.zeros(self.M, dtype=torch.complex128, device=self.device)
@@ -224,9 +228,7 @@ class RCWA1D:
         reflected = S_total[0, 0] @ inc
         return reflected
 
-    def diffraction_efficiency(
-        self, orders: torch.Tensor
-    ) -> Dict[int, float]:
+    def diffraction_efficiency(self, orders: torch.Tensor) -> Dict[int, float]:
         """Diffraction efficiencies per order.
 
         Parameters
@@ -330,9 +332,7 @@ class RCWA1D:
     # ── Redheffer star product ─────────────────
 
     @staticmethod
-    def _redheffer_star_matrix(
-        S_a: torch.Tensor, S_b: torch.Tensor
-    ) -> torch.Tensor:
+    def _redheffer_star_matrix(S_a: torch.Tensor, S_b: torch.Tensor) -> torch.Tensor:
         """Redheffer star product for matrix-valued S-matrices.
 
         Stable formulation (Li 1996):
@@ -376,14 +376,19 @@ class RCWA1D:
 
         for M in range(11, max_orders + 1, 10):
             cfg = RCWAConfig(
-                wavelength=self.cfg.wavelength, n_orders=M,
-                theta=self.cfg.theta, polarization=self.cfg.polarization,
+                wavelength=self.cfg.wavelength,
+                n_orders=M,
+                theta=self.cfg.theta,
+                polarization=self.cfg.polarization,
                 device=self.cfg.device,
             )
             solver = RCWA1D(cfg)
             orders = solver.solve(
-                eps_profile, thicknesses, period,
-                n_incident=n_incident, n_substrate=n_substrate,
+                eps_profile,
+                thicknesses,
+                period,
+                n_incident=n_incident,
+                n_substrate=n_substrate,
             )
             eff = solver.diffraction_efficiency(orders)
             r0 = eff.get(0, 0.0)

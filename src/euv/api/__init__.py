@@ -1,5 +1,4 @@
-"""
-OpEnUV REST API — FastAPI-based HTTP interface.
+"""OpEnUV REST API — FastAPI-based HTTP interface.
 
 Provides endpoints for:
 - Health checks (``GET /health``)

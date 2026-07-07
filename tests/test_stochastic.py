@@ -1,5 +1,4 @@
-"""
-Comprehensive tests for the stochastic resist module — shot noise, LER, LWR.
+"""Comprehensive tests for the stochastic resist module — shot noise, LER, LWR.
 
 Tests cover:
 
@@ -21,15 +20,13 @@ import pytest
 import torch
 
 from euv.resist.stochastic import (
-    poisson_shot_noise,
-    _generate_photon_shot_noise,
     extract_edges,
     extract_ler,
     extract_lwr,
     ler_lwr_estimate,
+    poisson_shot_noise,
     rms_scaling_check,
 )
-
 
 # ──────────────────────────────────────────────
 # Fixtures
@@ -394,17 +391,13 @@ class TestLERLWREstimate:
     def test_multiple_realisations(self, line_acid: torch.Tensor, device: torch.device):
         """n_realisations=10 produces averaged result."""
         rng = torch.Generator(device=device).manual_seed(42)
-        result = ler_lwr_estimate(
-            line_acid, n_realisations=10, average=True, shot_noise_rng=rng
-        )
+        result = ler_lwr_estimate(line_acid, n_realisations=10, average=True, shot_noise_rng=rng)
         assert isinstance(result["ler"], float)
 
     def test_multiple_realisations_list(self, line_acid: torch.Tensor, device: torch.device):
         """average=False returns lists."""
         rng = torch.Generator(device=device).manual_seed(42)
-        result = ler_lwr_estimate(
-            line_acid, n_realisations=5, average=False, shot_noise_rng=rng
-        )
+        result = ler_lwr_estimate(line_acid, n_realisations=5, average=False, shot_noise_rng=rng)
         assert isinstance(result["ler"], list)
         assert len(result["ler"]) == 5
         assert isinstance(result["lwr"], list)
@@ -413,12 +406,8 @@ class TestLERLWREstimate:
         """Different development thresholds yield different LER."""
         rng1 = torch.Generator(device=device).manual_seed(42)
         rng2 = torch.Generator(device=device).manual_seed(42)
-        result_low = ler_lwr_estimate(
-            line_acid, develop_threshold=0.1, shot_noise_rng=rng1
-        )
-        result_high = ler_lwr_estimate(
-            line_acid, develop_threshold=0.9, shot_noise_rng=rng2
-        )
+        result_low = ler_lwr_estimate(line_acid, develop_threshold=0.1, shot_noise_rng=rng1)
+        result_high = ler_lwr_estimate(line_acid, develop_threshold=0.9, shot_noise_rng=rng2)
         # The results may differ
         assert result_low["ler"] is not None
         assert result_high["ler"] is not None
@@ -433,9 +422,7 @@ class TestRMSScaling:
     def test_basic_run(self, line_acid: torch.Tensor, device: torch.device):
         """Scaling check runs without error."""
         dose_levels = torch.tensor([5.0, 10.0, 20.0, 40.0], device=device)
-        result = rms_scaling_check(
-            line_acid, dose_levels, n_realisations=5, seed=42
-        )
+        result = rms_scaling_check(line_acid, dose_levels, n_realisations=5, seed=42)
         assert "dose_levels" in result
         assert "ler" in result
         assert "lwr" in result
@@ -444,9 +431,7 @@ class TestRMSScaling:
     def test_ler_decreases_with_dose(self, line_acid: torch.Tensor, device: torch.device):
         """LER decreases as dose increases."""
         dose_levels = torch.tensor([5.0, 10.0, 20.0, 40.0], device=device)
-        result = rms_scaling_check(
-            line_acid, dose_levels, n_realisations=8, seed=42
-        )
+        result = rms_scaling_check(line_acid, dose_levels, n_realisations=8, seed=42)
         ler = result["ler"]
         # Higher dose → lower LER (monotonic trend)
         for i in range(1, len(ler)):
@@ -458,9 +443,7 @@ class TestRMSScaling:
     ):
         """LER × √(dose) is approximately constant across dose levels."""
         dose_levels = torch.tensor([5.0, 10.0, 20.0, 40.0], device=device)
-        result = rms_scaling_check(
-            line_acid, dose_levels, n_realisations=10, seed=42
-        )
+        result = rms_scaling_check(line_acid, dose_levels, n_realisations=10, seed=42)
         product = result["ler_sqrt_dose"]
         finite = ~torch.isnan(product) & (product > 0)
         if finite.sum() >= 3:
@@ -468,31 +451,23 @@ class TestRMSScaling:
             # Each product should be within 50% of mean (loose tolerance
             # for stochastic simulation)
             deviations = (product[finite] - mean_product).abs() / mean_product
-            assert (deviations < 0.5).all(), (
-                f"LER×√(dose) deviations too large: {deviations.tolist()}"
-            )
+            assert (
+                deviations < 0.5
+            ).all(), f"LER×√(dose) deviations too large: {deviations.tolist()}"
 
-    def test_fit_exponent_near_neg_half(
-        self, line_acid: torch.Tensor, device: torch.device
-    ):
+    def test_fit_exponent_near_neg_half(self, line_acid: torch.Tensor, device: torch.device):
         """Power-law fit exponent is close to -0.5."""
         dose_levels = torch.tensor([5.0, 10.0, 20.0, 40.0], device=device)
-        result = rms_scaling_check(
-            line_acid, dose_levels, n_realisations=10, seed=42
-        )
+        result = rms_scaling_check(line_acid, dose_levels, n_realisations=10, seed=42)
         exponent = result["fit_dose_exponent"]
         if not math.isnan(exponent):
             # Expect exponent ≈ -0.5, allow ±0.3 for stochasticity
-            assert -0.8 <= exponent <= -0.2, (
-                f"Exponent {exponent:.3f} not near -0.5"
-            )
+            assert -0.8 <= exponent <= -0.2, f"Exponent {exponent:.3f} not near -0.5"
 
     def test_lwr_also_scales(self, line_acid: torch.Tensor, device: torch.device):
         """LWR also exhibits 1/√(dose) scaling."""
         dose_levels = torch.tensor([5.0, 10.0, 20.0, 40.0], device=device)
-        result = rms_scaling_check(
-            line_acid, dose_levels, n_realisations=8, seed=42
-        )
+        result = rms_scaling_check(line_acid, dose_levels, n_realisations=8, seed=42)
         lwr = result["lwr"]
         # Higher dose → lower LWR
         finite_mask = ~torch.isnan(lwr)
@@ -572,9 +547,7 @@ class TestReproducibility:
         assert torch.allclose(l1, l2, equal_nan=True)
         assert torch.allclose(r1, r2, equal_nan=True)
 
-    def test_ler_lwr_estimate_reproducible(
-        self, line_acid: torch.Tensor, device: torch.device
-    ):
+    def test_ler_lwr_estimate_reproducible(self, line_acid: torch.Tensor, device: torch.device):
         """Same seed across different generator objects produces same result."""
         rng1 = torch.Generator(device=device).manual_seed(777)
         rng2 = torch.Generator(device=device).manual_seed(777)
@@ -583,7 +556,9 @@ class TestReproducibility:
         assert result1["ler"] == pytest.approx(result2["ler"], abs=1e-10)
         assert result1["lwr"] == pytest.approx(result2["lwr"], abs=1e-10)
 
-    def test_photon_count_consistent(self, line_acid: torch.Tensor, line_dose: torch.Tensor, device: torch.device):
+    def test_photon_count_consistent(
+        self, line_acid: torch.Tensor, line_dose: torch.Tensor, device: torch.device
+    ):
         """Photon count from return_photon_count has expected magnitude."""
         rng = torch.Generator(device=device).manual_seed(42)
         _, photons = poisson_shot_noise(

@@ -14,13 +14,16 @@ lithography at 13.5 nm.  It is released under the Apache-2.0 license.
    install
    quickstart
 
-.. toctree::
-   :maxdepth: 2
-   :caption: User Guide
+Tutorials
+---------
 
-   tutorials/basic_simulation
-   tutorials/process_window
-   tutorials/materials
+Runnable Jupyter notebooks live in ``docs/tutorials/``:
+
+* ``basic_simulation.ipynb`` — end-to-end 32 nm line/space simulation
+* ``process_window.ipynb`` — dose-focus Bossung plot and process window
+* ``materials.ipynb`` — querying the CXRO material database
+
+Launch them with ``jupyter lab docs/tutorials/``.
 
 .. toctree::
    :maxdepth: 2

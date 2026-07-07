@@ -1,5 +1,4 @@
-"""
-Transfer-Matrix Method (TMM) for multilayer thin-film reflectivity.
+"""Transfer-Matrix Method (TMM) for multilayer thin-film reflectivity.
 
 Uses the **scattering matrix (S-matrix) / Redheffer star product**
 formulation for numerical stability with many layers and lossy media.
@@ -45,7 +44,6 @@ import math
 from typing import Tuple
 
 import torch
-
 
 # ──────────────────────────────────────────────
 # Helpers
@@ -254,8 +252,9 @@ def stack_smatrix(
         if j < N - 1:
             S_iface = _interface_smatrix(eta_all[:, j], eta_all[:, j + 1])
         else:
-            S_iface = _interface_smatrix(eta_all[:, j],
-                                          _admittance(n_sub, _kz(n_sub, k0, n0_sin2), k0, te))
+            S_iface = _interface_smatrix(
+                eta_all[:, j], _admittance(n_sub, _kz(n_sub, k0, n0_sin2), k0, te)
+            )
         S_total = _redheffer_star(S_total, S_iface)
 
     return S_total
@@ -290,8 +289,13 @@ def reflectivity(
         Complex reflection coefficient.
     """
     S = stack_smatrix(
-        n_layers, thicknesses, wavelengths_m, theta0,
-        n_incident, n_substrate, te=te,
+        n_layers,
+        thicknesses,
+        wavelengths_m,
+        theta0,
+        n_incident,
+        n_substrate,
+        te=te,
     )
     # Reflection coefficient r = S₁₁ (port 0 → port 0 = reflected wave)
     r = S[..., 0, 0]
@@ -315,9 +319,7 @@ def reflectivity_at_wavelength(
 ) -> float:
     """Single-wavelength reflectivity (scalar wrapper)."""
     wl = torch.tensor([wavelength_m], dtype=torch.float64)
-    R, _ = reflectivity(
-        n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te
-    )
+    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te)
     return float(R.item())
 
 
@@ -336,7 +338,5 @@ def reflectivity_scan(
     """
     npts = wavelength_range[2]
     wl = torch.linspace(wavelength_range[0], wavelength_range[1], npts)
-    R, _ = reflectivity(
-        n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te
-    )
+    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te)
     return wl, R

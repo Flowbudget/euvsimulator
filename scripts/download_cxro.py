@@ -22,9 +22,7 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 import tarfile
-import tempfile
 from pathlib import Path
 
 import httpx
@@ -34,9 +32,21 @@ CXRO_URL = "https://henke.lbl.gov/optical_constants/sf.tar.gz"
 
 # EUV-relevant elements + their Z for reference
 CORE_ELEMENTS = {
-    42: "Mo", 14: "Si", 44: "Ru", 73: "Ta", 50: "Sn",
-    6: "C", 24: "Cr", 13: "Al", 28: "Ni", 79: "Au",
-    40: "Zr", 4: "Be", 41: "Nb", 12: "Mg", 22: "Ti",
+    42: "Mo",
+    14: "Si",
+    44: "Ru",
+    73: "Ta",
+    50: "Sn",
+    6: "C",
+    24: "Cr",
+    13: "Al",
+    28: "Ni",
+    79: "Au",
+    40: "Zr",
+    4: "Be",
+    41: "Nb",
+    12: "Mg",
+    22: "Ti",
 }
 
 
@@ -67,11 +77,13 @@ def convert_nff_to_csv(content: str | Path, csv_path: Path) -> int:
                 except ValueError:
                     continue  # skip header lines
                 f1_val = None if parts[1].strip() == "-9999." else float(parts[1])
-                writer.writerow([
-                    float(parts[0]),
-                    f1_val,
-                    float(parts[2]),
-                ])
+                writer.writerow(
+                    [
+                        float(parts[0]),
+                        f1_val,
+                        float(parts[2]),
+                    ]
+                )
                 rows += 1
     return rows
 
@@ -116,6 +128,7 @@ def download_and_extract(client: httpx.Client) -> int:
 
 
 def main():
+    """Download all CXRO Henke scattering-factor tables into the data dir."""
     with httpx.Client() as client:
         count = download_and_extract(client)
 

@@ -1,5 +1,4 @@
-"""
-Stochastic resist model — Poisson shot noise, LER / LWR extraction.
+"""Stochastic resist model — Poisson shot noise, LER / LWR extraction.
 
 Theory
 ------
@@ -52,9 +51,9 @@ P.P. Naulleau et al., "The role of photon shot noise in the
 
 from __future__ import annotations
 
-import torch
-from typing import Tuple, Optional
+from typing import Tuple
 
+import torch
 
 # ──────────────────────────────────────────────
 # Poisson shot-noise overlay
@@ -140,9 +139,7 @@ def poisson_shot_noise(
         #   N_ph = dose [mJ/cm²] × voxel_area [cm²] × dose_to_energy_factor
         #          [eV per mJ/cm²] / photon_energy_eV
         #        = dose × voxel_area_cm2 × dose_to_energy_factor / photon_energy_eV
-        photons_per_voxel = (
-            dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV
-        )
+        photons_per_voxel = dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV
         lam = photons_per_voxel * quantum_efficiency
     else:
         # Use acid directly as the Poisson rate, scaled to a useful
@@ -214,9 +211,7 @@ def _generate_photon_shot_noise(
     photons_per_voxel : torch.Tensor
         Mean photon count per voxel.
     """
-    photons_per_voxel = (
-        dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV
-    )
+    photons_per_voxel = dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV
     lam = photons_per_voxel * quantum_efficiency
     lam = torch.clamp(lam, min=0.0)
     noisy_count = torch.poisson(lam, generator=rng)
@@ -354,16 +349,16 @@ def extract_ler(
 
     if edge == "left":
         deviations = left_finite - left_finite.mean()
-        return float(torch.sqrt((deviations ** 2).mean()))
+        return float(torch.sqrt((deviations**2).mean()))
     elif edge == "right":
         deviations = right_finite - right_finite.mean()
-        return float(torch.sqrt((deviations ** 2).mean()))
+        return float(torch.sqrt((deviations**2).mean()))
     else:  # "both"
         # Combine left and right deviations
         left_dev = left_finite - left_finite.mean()
         right_dev = right_finite - right_finite.mean()
         all_dev = torch.cat([left_dev, right_dev])
-        return float(torch.sqrt((all_dev ** 2).mean()))
+        return float(torch.sqrt((all_dev**2).mean()))
 
 
 # ──────────────────────────────────────────────
@@ -489,7 +484,8 @@ def ler_lwr_estimate(
     for _ in range(n_realisations):
         # Apply shot noise
         noisy = poisson_shot_noise(
-            acid, dose=dose,
+            acid,
+            dose=dose,
             quantum_efficiency=quantum_efficiency,
             rng=shot_noise_rng,
         )
@@ -606,7 +602,8 @@ def rms_scaling_check(
         for _ in range(n_realisations):
             rng = torch.Generator(device=device).manual_seed(seed + i * n_realisations + _)
             noisy = poisson_shot_noise(
-                acid_scaled, dose=dose_map,
+                acid_scaled,
+                dose=dose_map,
                 quantum_efficiency=quantum_efficiency,
                 rng=rng,
             )

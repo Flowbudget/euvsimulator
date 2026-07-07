@@ -14,7 +14,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 from scipy.optimize import minimize
 
-
 # ──────────────────────────────────────────────────────────
 # Data container
 # ──────────────────────────────────────────────────────────
@@ -128,14 +127,12 @@ def objective_resist(
             try:
                 cd = float(pipeline_fn(dose=dose, focus=focus, **param_dict))
             except Exception as exc:
-                warnings.warn(
-                    f"Pipeline failed at (dose={dose}, focus={focus}): {exc}"
-                )
+                warnings.warn(f"Pipeline failed at (dose={dose}, focus={focus}): {exc}")
                 cd = 0.0
             sim_cd[i, j] = cd
 
     residuals = sim_cd.ravel() - data.cd_matrix_nm.ravel()
-    rmse = float(np.sqrt(np.mean(residuals ** 2)))
+    rmse = float(np.sqrt(np.mean(residuals**2)))
     return rmse
 
 
@@ -287,9 +284,7 @@ def bootstrap_fit(
     D, F = data.cd_matrix_nm.shape
 
     # Fit on original data first
-    orig_fit = fit_resist_params(
-        data, initial_params, pipeline_fn, bounds=bounds, method=method
-    )
+    orig_fit = fit_resist_params(data, initial_params, pipeline_fn, bounds=bounds, method=method)
     param_names = list(initial_params.keys())
     n_params = len(param_names)
     boot_samples = np.zeros((n_samples, n_params), dtype=float)
@@ -421,13 +416,9 @@ def calibrate_on_synthetic(
         for j in range(F):
             focus = float(focus_values[j])
             try:
-                cd_sim[i, j] = float(
-                    pipeline_fn(dose=dose, focus=focus, **target_params)
-                )
+                cd_sim[i, j] = float(pipeline_fn(dose=dose, focus=focus, **target_params))
             except Exception as exc:
-                warnings.warn(
-                    f"Pipeline failed at (dose={dose}, focus={focus}): {exc}"
-                )
+                warnings.warn(f"Pipeline failed at (dose={dose}, focus={focus}): {exc}")
                 cd_sim[i, j] = 0.0
 
     # Add Gaussian noise
@@ -451,9 +442,7 @@ def calibrate_on_synthetic(
     for key in target_params:
         target = target_params[key]
         fitted_val = fitted.get(key, target)
-        rel_errors[key] = (
-            abs(fitted_val - target) / max(abs(target), 1e-12)
-        )
+        rel_errors[key] = abs(fitted_val - target) / max(abs(target), 1e-12)
 
     return {
         "target_params": target_params,

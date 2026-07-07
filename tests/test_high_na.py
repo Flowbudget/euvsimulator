@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import math
-
 import torch
 
-from euv.aerial.pupil import anamorphic_pupil, pupil_grid, zernike, apply_aberrations
+from euv.aerial.pupil import anamorphic_pupil, apply_aberrations, pupil_grid, zernike
 
 
 class TestAnamorphicPupil:
@@ -37,8 +35,7 @@ class TestAnamorphicPupil:
         max_fx = float(fx.abs().max())
         max_fy = float(fy.abs().max())
         assert max_fx > max_fy, (
-            f"fx range ({max_fx:.4f}) should be > fy range ({max_fy:.4f}) "
-            f"for anamorphic 8×/4×"
+            f"fx range ({max_fx:.4f}) should be > fy range ({max_fy:.4f}) " f"for anamorphic 8×/4×"
         )
         # Theoretical: max_fx = 0.55/4 = 0.1375, max_fy = 0.55/8 = 0.06875
         assert abs(max_fx - na / mag_x) < 0.01
@@ -54,17 +51,17 @@ class TestAnamorphicPupil:
         # Anamorphic 0.55 squashed by 8× should have area comparable to 0.33
         # (0.55/4) * (0.55/8) ≈ 0.0094 vs (0.33/4)² ≈ 0.0068
         # So anam should be slightly larger
-        assert area_anam > area_circ * 0.5, (
-            f"Anamorphic area ({area_anam}) should be > 0.5× circular ({area_circ})"
-        )
+        assert (
+            area_anam > area_circ * 0.5
+        ), f"Anamorphic area ({area_anam}) should be > 0.5× circular ({area_circ})"
 
     def test_anamorphic_na_scaling(self):
         """Higher NA should produce a larger frequency range."""
         fx_lo, _, _ = pupil_grid(64, na=0.33, mag_x=4.0, mag_y=8.0)
         fx_hi, _, _ = pupil_grid(64, na=0.55, mag_x=4.0, mag_y=8.0)
-        assert float(fx_hi.abs().max()) > float(fx_lo.abs().max()), (
-            "Higher NA should have larger frequency extent"
-        )
+        assert float(fx_hi.abs().max()) > float(
+            fx_lo.abs().max()
+        ), "Higher NA should have larger frequency extent"
 
     def test_anamorphic_device(self):
         """Pupil on CPU should work."""
@@ -128,7 +125,7 @@ class TestHighNAAerialImage:
 
         # Half-pupil: block the right half
         pupil_half = pupil_full.clone()
-        pupil_half[:, grid // 2:] = 0.0
+        pupil_half[:, grid // 2 :] = 0.0
         img_half = abbe_image(mask_fft, source, fx, fy, pupil_half, na=0.33)
 
         diff = (img_full - img_half).abs().mean().item()

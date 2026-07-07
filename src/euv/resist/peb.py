@@ -42,9 +42,9 @@ M.D. Stewart et al., "Comparison of analytical and finite-difference
 
 from __future__ import annotations
 
-import torch
-from typing import Tuple, Optional
+from typing import Tuple
 
+import torch
 
 # ──────────────────────────────────────────────
 # Reaction-diffusion — ADI solver (2D)
@@ -52,7 +52,12 @@ from typing import Tuple, Optional
 
 
 def _build_tridiagonal_matrix(
-    n: int, diag: float, off_diag: float, diag_boundary: float, device: torch.device, dtype: torch.dtype
+    n: int,
+    diag: float,
+    off_diag: float,
+    diag_boundary: float,
+    device: torch.device,
+    dtype: torch.dtype,
 ) -> torch.Tensor:
     """Build a tridiagonal matrix of size n×n.
 
@@ -178,7 +183,7 @@ def reaction_diffusion_adi(
 
     # Pre-build tridiagonal system matrices
     # (1 + 2α) on diagonal, -α on off-diagonals
-    main_diag = (1.0 + 2.0 * alpha)
+    main_diag = 1.0 + 2.0 * alpha
     off_diag = -alpha
 
     if boundary == "neumann":
@@ -207,7 +212,7 @@ def reaction_diffusion_adi(
         lap_x = _laplacian_x_explicit(A, boundary)
         R = A + alpha * lap_x  # (H, W)
         # T_y @ A_new[:,j] = R[:,j] for each column j
-        A = (T_y.inverse() @ R)  # (H, H) @ (H, W) = (H, W)
+        A = T_y.inverse() @ R  # (H, H) @ (H, W) = (H, W)
 
         # --- reaction half-step ---
         M = M * torch.exp(-k * A * (dt / 2.0))
@@ -272,11 +277,13 @@ def reaction_diffusion_analytical(
 
     if sigma_diff is not None and sigma_diff > 0:
         from euv.resist.exposure import gaussian_se_blur
+
         A = gaussian_se_blur(A, sigma=sigma_diff, dx=dx)
     elif D > 0 and t_bake > 0:
         sigma_val = (2.0 * D * t_bake) ** 0.5
         if sigma_val > 0.1:
             from euv.resist.exposure import gaussian_se_blur
+
             A = gaussian_se_blur(A, sigma=sigma_val, dx=dx)
 
     # Deprotection: M(t) = M₀ · exp(−k · A · t)

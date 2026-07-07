@@ -2,8 +2,6 @@
 
 from math import isclose
 
-import pytest
-
 from euv.constants import (
     AVOGADRO,
     BOLTZMANN,
@@ -12,22 +10,22 @@ from euv.constants import (
     DEMAGNIFICATION,
     ELECTRON_MASS,
     ELECTRON_VOLT,
+    ELEMENTARY_CHARGE,
     EUV_ANGLE_DEG,
     EUV_ANGLE_RAD,
     EUV_BANDWIDTH_EV,
     EUV_ENERGY_EV,
     EUV_WAVELENGTH_M,
     EUV_WAVELENGTH_NM,
-    ELEMENTARY_CHARGE,
     NA_HIGH,
     NA_LOW,
     PLANCK_CONSTANT,
     PLANCK_EV,
     REDUCED_PLANCK,
     SPEED_OF_LIGHT,
+    J_to_eV,
     eV_to_J,
     eV_to_nm,
-    J_to_eV,
     nm_to_eV,
 )
 
@@ -39,11 +37,11 @@ class TestFundamentalConstants:
         assert SPEED_OF_LIGHT == 299_792_458
 
     def test_planck_constant(self):
-        """h = 6.62607015e-34 J·s (exact in SI 2019)."""
+        """H = 6.62607015e-34 J·s (exact in SI 2019)."""
         assert PLANCK_CONSTANT == 6.62607015e-34
 
     def test_planck_ev(self):
-        """h = 4.135667696e-15 eV·s."""
+        """H = 4.135667696e-15 eV·s."""
         assert isclose(PLANCK_EV, 4.135667696e-15, rel_tol=1e-12)
 
     def test_reduced_planck(self):
@@ -52,7 +50,7 @@ class TestFundamentalConstants:
         assert isclose(REDUCED_PLANCK, expected, rel_tol=1e-15)
 
     def test_electron_charge(self):
-        """e = 1.602176634e-19 C (exact in SI 2019)."""
+        """E = 1.602176634e-19 C (exact in SI 2019)."""
         assert ELEMENTARY_CHARGE == 1.602176634e-19
 
     def test_electron_volt(self):

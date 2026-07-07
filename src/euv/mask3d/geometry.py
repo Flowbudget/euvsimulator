@@ -1,5 +1,4 @@
-"""
-Mask geometry builder — absorber stacks, multilayer substrate, and
+"""Mask geometry builder — absorber stacks, multilayer substrate, and
 permittivity conversion utilities for the RCWA solver.
 
 Provides:
@@ -13,7 +12,7 @@ Provides:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import torch
 
@@ -64,6 +63,7 @@ class MaskStack:
     line_width_nm : float
         Absorber line width [nm] — for the grating region.
     """
+
     absorber_layers: List[MaskLayer]
     multilayer_bilayers: int = 40
     d_mo_nm: float = 2.8
@@ -74,10 +74,12 @@ class MaskStack:
 
     @property
     def total_absorber_thickness_nm(self) -> float:
-        return sum(l.thickness_nm for l in self.absorber_layers)
+        """Total thickness of all absorber layers [nm]."""
+        return sum(layer.thickness_nm for layer in self.absorber_layers)
 
     @property
     def pitch_nm(self) -> float:
+        """Grating pitch [nm] (alias for ``period_nm``)."""
         return self.period_nm
 
 
@@ -125,10 +127,12 @@ def standard_euv_mask(
         return complex(n, k)
 
     layers = [
-        MaskLayer(material=capping, thickness_nm=capping_thickness_nm,
-                   nk=_nk(capping), etched=True),
-        MaskLayer(material=absorber, thickness_nm=absorber_thickness_nm,
-                   nk=_nk(absorber), etched=True),
+        MaskLayer(
+            material=capping, thickness_nm=capping_thickness_nm, nk=_nk(capping), etched=True
+        ),
+        MaskLayer(
+            material=absorber, thickness_nm=absorber_thickness_nm, nk=_nk(absorber), etched=True
+        ),
     ]
 
     return MaskStack(
@@ -191,8 +195,8 @@ def build_permittivity_profile(
     n_mo, k_mo = 0.9238, 0.00637
     n_si, k_si = 0.999, 0.00183
     d_mo, d_si = stack.d_mo_nm, stack.d_si_nm
-    eps_mo = complex(n_mo - k_mo * 1j)**2
-    eps_si = complex(n_si - k_si * 1j)**2
+    eps_mo = complex(n_mo - k_mo * 1j) ** 2
+    eps_si = complex(n_si - k_si * 1j) ** 2
     eps_sub = (eps_mo * d_mo + eps_si * d_si) / (d_mo + d_si)
 
     thicknesses = torch.tensor(

@@ -23,7 +23,6 @@ from typing import List, Tuple
 
 import torch
 
-
 # ═══════════════════════════════════════════════════════════════════
 # Helper: find threshold-crossing indices with sub-pixel interpolation
 # ═══════════════════════════════════════════════════════════════════
@@ -64,7 +63,7 @@ def _threshold_crossings(
     diffs = torch.diff(above.float())
     # +1 where False → True (rising), -1 where True → False (falling)
     falling = torch.where(diffs < -0.5)[0]  # True → False
-    rising = torch.where(diffs > 0.5)[0]    # False → True
+    rising = torch.where(diffs > 0.5)[0]  # False → True
 
     if mode == "line":
         # Dark line: falling edge (left) then rising edge (right)
@@ -166,9 +165,7 @@ def extract_cd_1d(
     return float(cd_nm)
 
 
-def _linear_interp_1d(
-    x: torch.Tensor, y: torch.Tensor, x_target: float
-) -> float:
+def _linear_interp_1d(x: torch.Tensor, y: torch.Tensor, x_target: float) -> float:
     """Manual 1D linear interpolation (pure PyTorch, no ``torch.interp``).
 
     Parameters
@@ -272,7 +269,9 @@ def extract_cd_2d(
             right_edges[row] = x_hi
             widths[row] = abs(x_hi - x_lo)
 
-    cd_mean = float(widths[~torch.isnan(widths)].mean().item()) if (~torch.isnan(widths)).any() else 0.0
+    cd_mean = (
+        float(widths[~torch.isnan(widths)].mean().item()) if (~torch.isnan(widths)).any() else 0.0
+    )
     return left_edges, right_edges, cd_mean
 
 
@@ -398,7 +397,7 @@ def extract_contour(
 
     boundary_mask = torch.zeros_like(padded)
     for di, dj in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-        boundary_mask |= (padded & ~torch.roll(padded, shifts=(di, dj), dims=(0, 1)))
+        boundary_mask |= padded & ~torch.roll(padded, shifts=(di, dj), dims=(0, 1))
 
     # Remove padding
     boundary_mask = boundary_mask[1:-1, 1:-1]

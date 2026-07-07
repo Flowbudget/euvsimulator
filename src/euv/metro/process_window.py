@@ -19,10 +19,9 @@ pw_metrics
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
-
 
 # ═══════════════════════════════════════════════════════════════════
 # Dose-focus matrix (Bossung)

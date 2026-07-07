@@ -1,5 +1,4 @@
-"""
-Pydantic v2 schemas for the OpEnUV REST API.
+"""Pydantic v2 schemas for the OpEnUV REST API.
 
 Defines request/response models for all endpoints, relying on the
 established project types in ``euv.materials`` and ``euv.constants``.
@@ -10,7 +9,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-
 
 # ──────────────────────────────────────────────
 # Health
@@ -35,16 +33,22 @@ class AerialImageConfig(BaseModel):
     na: float = Field(0.33, ge=0.1, le=0.7, description="Numerical aperture")
     reduction_ratio: str = Field("4x", description="Projection reduction (4x or 8x)")
     illumination_sigma: float = Field(0.8, ge=0.0, le=1.0, description="Coherence factor σ")
-    illumination_shape: str = Field("annular", description="Source shape (conventional, annular, dipole, quasar)")
+    illumination_shape: str = Field(
+        "annular", description="Source shape (conventional, annular, dipole, quasar)"
+    )
     inner_sigma: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annular inner σ")
     outer_sigma: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annular outer σ")
-    zernike_coeffs: Optional[List[float]] = Field(None, description="Fringe Zernike coefficients (Noll-indexed)")
+    zernike_coeffs: Optional[List[float]] = Field(
+        None, description="Fringe Zernike coefficients (Noll-indexed)"
+    )
 
 
 class MaskConfig(BaseModel):
     """Parameters for the reflective EUV mask."""
 
-    layout: str = Field("linespace", description="Layout type: linespace, contact_array, or gds_path")
+    layout: str = Field(
+        "linespace", description="Layout type: linespace, contact_array, or gds_path"
+    )
     pitch_nm: float = Field(40.0, gt=0, description="Feature pitch [nm]")
     cd_nm: float = Field(18.0, gt=0, description="Critical dimension [nm]")
     absorber_material: str = Field("Ta", description="Absorber element symbol")
@@ -60,7 +64,9 @@ class ResistConfig(BaseModel):
 
     resist_type: str = Field("CAR", description="Resist type: CAR or MOR")
     thickness_nm: float = Field(30.0, gt=0, description="Resist thickness [nm]")
-    acid_diffusion_length_nm: float = Field(5.0, ge=0, description="Acid diffusion length (CAR) [nm]")
+    acid_diffusion_length_nm: float = Field(
+        5.0, ge=0, description="Acid diffusion length (CAR) [nm]"
+    )
     development_time_s: float = Field(30.0, gt=0, description="Development time [s]")
     dose_mJ_cm2: float = Field(20.0, gt=0, description="Exposure dose [mJ/cm²]")
 
@@ -76,7 +82,9 @@ class SimulationConfig(BaseModel):
 class SimulationRequest(BaseModel):
     """Request body for ``POST /simulate``."""
 
-    config: SimulationConfig = Field(default_factory=SimulationConfig, description="Full simulation configuration")
+    config: SimulationConfig = Field(
+        default_factory=SimulationConfig, description="Full simulation configuration"
+    )
 
 
 class SimulationResult(BaseModel):
@@ -93,7 +101,9 @@ class SimulationResponse(BaseModel):
 
     status: str = Field("completed", description="Simulation status")
     config: SimulationConfig = Field(..., description="Config used for the simulation")
-    results: List[SimulationResult] = Field(default_factory=list, description="Pipeline output metrics")
+    results: List[SimulationResult] = Field(
+        default_factory=list, description="Pipeline output metrics"
+    )
     raw: Optional[Dict[str, Any]] = Field(None, description="Optional raw output data")
 
 
@@ -121,9 +131,13 @@ class MaterialListResponse(BaseModel):
 class NkRequest(BaseModel):
     """Request body for ``POST /materials/nk``."""
 
-    symbol: str = Field(..., min_length=1, max_length=4, description="Chemical symbol (e.g. Mo, Si)")
+    symbol: str = Field(
+        ..., min_length=1, max_length=4, description="Chemical symbol (e.g. Mo, Si)"
+    )
     energy_eV: float = Field(91.84, gt=0, description="Photon energy [eV]")
-    density_g_cm3: Optional[float] = Field(None, gt=0, description="Override density [g/cm³]; uses standard if omitted")
+    density_g_cm3: Optional[float] = Field(
+        None, gt=0, description="Override density [g/cm³]; uses standard if omitted"
+    )
 
 
 class NkResponse(BaseModel):

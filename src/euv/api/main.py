@@ -1,5 +1,4 @@
-"""
-FastAPI application for the OpEnUV REST API.
+"""FastAPI application for the OpEnUV REST API.
 
 Endpoints
 ---------
@@ -11,6 +10,7 @@ Endpoints
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
@@ -46,16 +46,14 @@ app = FastAPI(
 # Static files (Web UI dashboard)
 # ──────────────────────────────────────────────
 
-import os as _os
-
-STATIC_DIR = _os.path.join(_os.path.dirname(__file__), "static")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
 async def serve_dashboard() -> FileResponse:
     """Serve the OpEnUV web dashboard."""
-    return FileResponse(_os.path.join(STATIC_DIR, "index.html"), media_type="text/html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"), media_type="text/html")
 
 
 # ──────────────────────────────────────────────
@@ -201,7 +199,9 @@ async def refractive_index(req: NkRequest) -> NkResponse:
         k=k,
         delta=1.0 - n,
         density=req.density_g_cm3 if req.density_g_cm3 is not None else mat.density,
-        absorption_length_nm=mat.wavelength_nm / (4.0 * 3.141592653589793 * k) if k > 0 else float("inf"),
+        absorption_length_nm=(
+            mat.wavelength_nm / (4.0 * 3.141592653589793 * k) if k > 0 else float("inf")
+        ),
         epsilon_real=eps.real,
         epsilon_imag=eps.imag,
     )

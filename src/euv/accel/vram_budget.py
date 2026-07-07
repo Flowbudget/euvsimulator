@@ -7,9 +7,6 @@ will fit on the target GPU before launching the solver.
 
 from __future__ import annotations
 
-import math
-from typing import Optional
-
 
 def estimate_rcma_vram(
     n_orders: int,

@@ -1,5 +1,4 @@
-"""
-Spectral weighting and dose-evaluation tools for EUV lithography.
+"""Spectral weighting and dose-evaluation tools for EUV lithography.
 
 Provides functions for computing in-band efficiency fractions,
 photon flux at the wafer plane, and dose-to-wafer mapping in
@@ -16,14 +15,11 @@ from __future__ import annotations
 import numpy as np
 
 from euv.constants import (
-    EUV_ENERGY_EV,
     EUV_WAVELENGTH_NM,
     PLANCK_EV,
     SPEED_OF_LIGHT,
-    nm_to_eV,
 )
 from euv.source.plasma import LPPPlasmaSource
-
 
 # ──────────────────────────────────────────────────────────
 # In-band efficiency
@@ -176,9 +172,11 @@ def dose_to_wafer(
 
     # Wafer power after collection + optics
     wafer_power_w = source.dose_rate(
-        collection_solid_angle_sr=collection_solid_angle_sr
-        if collection_solid_angle_sr is not None
-        else 2.0 * np.pi * (1.0 - np.cos(np.deg2rad(30.0))),
+        collection_solid_angle_sr=(
+            collection_solid_angle_sr
+            if collection_solid_angle_sr is not None
+            else 2.0 * np.pi * (1.0 - np.cos(np.deg2rad(30.0)))
+        ),
         losses=losses,
     )
 

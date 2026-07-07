@@ -1,5 +1,4 @@
-"""
-Tests for the OpEnUV REST API (``euv.api.main``).
+"""Tests for the OpEnUV REST API (``euv.api.main``).
 
 Uses FastAPI's ``TestClient`` to exercise all four endpoints:
 - ``GET /health``
@@ -14,7 +13,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from euv.api.main import app
-
 
 # ──────────────────────────────────────────────
 # Fixtures

@@ -5,8 +5,6 @@ All tests must pass on CPU (no GPU available in CI).
 
 from __future__ import annotations
 
-import math
-
 import pytest
 import torch
 
@@ -23,7 +21,6 @@ from euv.accel.vram_budget import (
     max_harmonics_for_vram,
     vram_report,
 )
-
 
 # ──────────────────────────────────────────────
 # Device selection
@@ -73,9 +70,9 @@ class TestVramBudget:
         adjusted_11 = est_11 - overhead
         ratio = adjusted_21 / adjusted_11 if adjusted_11 > 0 else float("inf")
         expected_ratio = (43**2) / (23**2)
-        assert ratio == pytest.approx(expected_ratio, rel=0.05), (
-            f"Expected M² scaling ratio ~{expected_ratio:.3f}, got {ratio:.3f}"
-        )
+        assert ratio == pytest.approx(
+            expected_ratio, rel=0.05
+        ), f"Expected M² scaling ratio ~{expected_ratio:.3f}, got {ratio:.3f}"
 
     def test_vram_estimate_abbe(self):
         """Abbe estimate returns a positive integer."""
@@ -175,13 +172,14 @@ class TestMixedPrecision:
 
 class TestChunkedAbbe:
     """chunked_abbe must match full abbe_image within numerical
-    precision on CPU."""
+    precision on CPU.
+    """
 
     def test_chunked_matches_full(self):
         """chunked_abbe matches abbe_image within 1e-10 on CPU."""
+        from euv.accel.chunked import chunked_abbe
         from euv.aerial.abbe import abbe_image
         from euv.aerial.pupil import pupil_grid
-        from euv.accel.chunked import chunked_abbe
 
         G = 32
         na = 0.33
@@ -215,23 +213,21 @@ class TestChunkedAbbe:
         # Chunked Abbe with small chunks
         chunked = chunked_abbe(mask_fft, source, fx, fy, pupil, na, chunk_size=1)
 
-        assert torch.allclose(full, chunked, atol=1e-10), (
-            f"Max diff: {(full - chunked).abs().max().item():.2e}"
-        )
+        assert torch.allclose(
+            full, chunked, atol=1e-10
+        ), f"Max diff: {(full - chunked).abs().max().item():.2e}"
 
     def test_chunked_empty_source(self):
         """chunked_abbe handles empty source gracefully."""
-        from euv.aerial.pupil import pupil_grid
         from euv.accel.chunked import chunked_abbe
+        from euv.aerial.pupil import pupil_grid
 
         G = 16
         na = 0.33
         device = torch.device("cpu")
         fx, fy, _ = pupil_grid(G, na=na, device=device)
         pupil = ((fx**2 + fy**2) <= na**2).to(torch.complex128)
-        mask_fft = torch.fft.fft2(
-            torch.fft.fftshift(torch.randn(G, G, dtype=torch.complex128))
-        )
+        mask_fft = torch.fft.fft2(torch.fft.fftshift(torch.randn(G, G, dtype=torch.complex128)))
         source = torch.zeros(G, G, dtype=torch.float64, device=device)
 
         result = chunked_abbe(mask_fft, source, fx, fy, pupil, na)

@@ -1,5 +1,4 @@
-"""
-Layout I/O — GDSII import/export and rasterization for EUV mask patterns.
+"""Layout I/O — GDSII import/export and rasterization for EUV mask patterns.
 
 Provides
 --------
@@ -16,12 +15,12 @@ from __future__ import annotations
 from euv.io.gds import (
     MaskGeometry,
     load_gds,
-    make_linespace,
     make_contact_array,
+    make_linespace,
 )
 from euv.io.rasterize import (
-    rasterize_geometry,
     area_conservation_error,
+    rasterize_geometry,
 )
 
 __all__ = [

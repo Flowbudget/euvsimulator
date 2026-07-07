@@ -1,5 +1,4 @@
-"""
-Builder for Mo/Si EUV multilayer mirror stacks.
+"""Builder for Mo/Si EUV multilayer mirror stacks.
 
 A standard EUV multilayer mirror consists of 40–60 Mo/Si bilayers
 (period ~6.9 nm) deposited on a Si substrate, capped with a thin

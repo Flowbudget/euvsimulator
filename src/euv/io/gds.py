@@ -1,5 +1,4 @@
-"""
-GDSII import/export wrapper for EUV mask layout geometry.
+"""GDSII import/export wrapper for EUV mask layout geometry.
 
 Uses ``gdstk`` as the GDSII backend.  The internal representation is a
 :class:`MaskGeometry` dataclass that maps ``(layer, datatype)`` pairs to

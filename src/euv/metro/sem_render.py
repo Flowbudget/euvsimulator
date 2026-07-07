@@ -16,7 +16,6 @@ from typing import List, Optional, Tuple
 
 import torch
 
-
 # ═══════════════════════════════════════════════════════════════════
 # SEM rendering
 # ═══════════════════════════════════════════════════════════════════
@@ -120,7 +119,7 @@ def render_sem(
 
         kernel_1d = torch.exp(
             -torch.arange(-radius, radius + 1, device=device, dtype=torch.float32) ** 2
-            / (2.0 * sigma_px ** 2)
+            / (2.0 * sigma_px**2)
         )
         kernel_1d = kernel_1d / kernel_1d.sum()
 
@@ -152,13 +151,17 @@ def _convolve_2d_separable(
     # Convolve along columns (W dim)
     img = torch.nn.functional.pad(img, (pad, pad, 0, 0), mode="reflect")
     img = torch.nn.functional.conv2d(
-        img, kernel_1d.view(1, 1, 1, -1), padding=0,
+        img,
+        kernel_1d.view(1, 1, 1, -1),
+        padding=0,
     )
 
     # Convolve along rows (H dim)
     img = torch.nn.functional.pad(img, (0, 0, pad, pad), mode="reflect")
     img = torch.nn.functional.conv2d(
-        img, kernel_1d.view(1, 1, -1, 1), padding=0,
+        img,
+        kernel_1d.view(1, 1, -1, 1),
+        padding=0,
     )
 
     return img.squeeze()  # back to (H, W)
@@ -253,7 +256,7 @@ def add_edge_roughness(
     t_y = torch.roll(pts[:, 1], shifts=-1) - torch.roll(pts[:, 1], shifts=1)
 
     # Normalise
-    norm_t = torch.sqrt(t_x ** 2 + t_y ** 2).clamp(min=1e-12)
+    norm_t = torch.sqrt(t_x**2 + t_y**2).clamp(min=1e-12)
     # Normal = (-t_y / |t|, t_x / |t|)   (rotate tangent 90° CCW)
     n_x = -t_y / norm_t
     n_y = t_x / norm_t

@@ -5,7 +5,6 @@ import torch
 
 from euv.mask3d.geometry import (
     MaskLayer,
-    MaskStack,
     build_permittivity_profile,
     standard_euv_mask,
 )
@@ -15,8 +14,7 @@ class TestMaskLayer:
     """Verify the MaskLayer dataclass."""
 
     def test_basic(self):
-        layer = MaskLayer(material="Ta", thickness_nm=60.0,
-                          nk=0.94+0.04j, etched=True)
+        layer = MaskLayer(material="Ta", thickness_nm=60.0, nk=0.94 + 0.04j, etched=True)
         assert layer.material == "Ta"
         assert layer.thickness_nm == 60.0
         assert layer.etched is True
@@ -35,8 +33,7 @@ class TestMaskStack:
         assert mask.line_width_nm == 32.0
 
     def test_total_absorber_thickness(self):
-        mask = standard_euv_mask(absorber_thickness_nm=50.0,
-                                 capping_thickness_nm=3.0)
+        mask = standard_euv_mask(absorber_thickness_nm=50.0, capping_thickness_nm=3.0)
         assert mask.total_absorber_thickness_nm == pytest.approx(53.0)
 
     def test_custom_absorber(self):
@@ -73,6 +70,6 @@ class TestBuildPermittivity:
         # Weighted average with 2.8/4.1 ratio
         eps_mo = complex(0.9238 + 0.00637j) ** 2
         eps_si = complex(0.999 + 0.00183j) ** 2
-        assert eps_mo.real < eps_sub.real < eps_si.real, (
-            f"eps_sub.real={eps_sub.real:.4f} outside [{eps_mo.real:.4f}, {eps_si.real:.4f}]"
-        )
+        assert (
+            eps_mo.real < eps_sub.real < eps_si.real
+        ), f"eps_sub.real={eps_sub.real:.4f} outside [{eps_mo.real:.4f}, {eps_si.real:.4f}]"

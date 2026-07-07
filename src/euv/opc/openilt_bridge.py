@@ -20,7 +20,7 @@ OpenILT: https://github.com/OpenOPC/openilt
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
 import torch
 
@@ -230,5 +230,6 @@ def run_ilt(
         print(f"Running ILT: {iterations} iterations, lr={lr}, device={model.device}")
         print(f"  Target shape: {target_contour.shape}")
 
-    return model.optimize(initial_mask, iterations=iterations, lr=lr,
-                          report_every=10 if verbose else iterations + 1)
+    return model.optimize(
+        initial_mask, iterations=iterations, lr=lr, report_every=10 if verbose else iterations + 1
+    )

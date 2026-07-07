@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose, assert_equal
 
 from euv.source.plasma import LPPPlasmaSource
 from euv.source.spectrum import (
@@ -12,8 +11,6 @@ from euv.source.spectrum import (
     in_band_efficiency,
     photons_per_nm2,
 )
-from euv.constants import EUV_WAVELENGTH_NM
-
 
 # ══════════════════════════════════════════════════════════
 # LPPPlasmaSource — construction & defaults
@@ -194,7 +191,8 @@ class TestInBandEfficiency:
 
     def test_typical_value(self):
         """Default source has ~75 % spectral efficiency (250 W in-band of
-        333.3 W total, since OOB is 25 % of budget)."""
+        333.3 W total, since OOB is 25 % of budget).
+        """
         src = LPPPlasmaSource()
         eff = in_band_efficiency(src)
         assert 0.60 <= eff <= 0.85, f"Efficiency {eff:.4f} outside expected range"

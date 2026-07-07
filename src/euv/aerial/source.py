@@ -1,5 +1,4 @@
-"""
-Illumination source shapes for partially coherent EUV imaging.
+"""Illumination source shapes for partially coherent EUV imaging.
 
 Provides functions to generate 2D source intensity distributions
 on the pupil grid: conventional (disk), annular, dipole, quasar
@@ -10,8 +9,6 @@ on the specified device.
 """
 
 from __future__ import annotations
-
-import math
 
 import torch
 

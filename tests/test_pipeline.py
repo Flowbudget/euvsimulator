@@ -1,8 +1,5 @@
 """Tests for the full simulation pipeline."""
 
-import pytest
-import torch
-
 from euv.pipeline import run_simulation, simulate_line_space
 
 

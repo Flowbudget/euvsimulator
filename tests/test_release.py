@@ -1,9 +1,8 @@
 """Tests for release preparation files."""
 
-import os
-import sys
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -88,18 +87,25 @@ def test_pyproject_has_urls():
 
 
 def test_pyproject_has_include_package_data():
-    """pyproject.toml has include_package_data = true."""
+    """pyproject.toml enables package data inclusion under [tool.setuptools]."""
     path = PROJECT_ROOT / "pyproject.toml"
     data = tomllib.loads(path.read_text())
     tool = data.get("tool", {})
     setuptools = tool.get("setuptools", {})
-    # Could be under [tool.setuptools] or nested
-    include = setuptools.get("include_package_data", False)
-    assert include is True, "include_package_data is not true in [tool.setuptools]"
+    # Modern setuptools uses the hyphenated key "include-package-data";
+    # accept either spelling.
+    include = setuptools.get("include-package-data", setuptools.get("include_package_data", False))
+    assert include is True, "include-package-data is not true in [tool.setuptools]"
 
 
 def test_all_release_files_exist():
     """All expected release files exist."""
-    for name in ["CHANGELOG.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "MANIFEST.in"]:
+    for name in [
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "CODE_OF_CONDUCT.md",
+        "SECURITY.md",
+        "MANIFEST.in",
+    ]:
         path = PROJECT_ROOT / name
         assert path.exists(), f"Missing release file: {name}"

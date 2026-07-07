@@ -17,11 +17,12 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx_rtd_theme",
-    "nbsphinx",
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+# Notebooks ship in docs/tutorials/ as standalone runnable examples.
+# They are excluded from the Sphinx build to keep it pandoc-free.
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints", "tutorials/*.ipynb"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = []
@@ -43,6 +44,10 @@ autodoc_default_options = {
 }
 
 nbsphinx_allow_errors = True
+
+# Do not execute notebooks at doc-build time — they are illustrative examples
+# and requiring a live Jupyter kernel would make the docs build fragile.
+nbsphinx_execute = "never"
 
 # Suppress known RST warnings from subagent-generated docstrings
 suppress_warnings = [

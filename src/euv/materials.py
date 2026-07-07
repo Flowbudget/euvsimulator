@@ -1,5 +1,4 @@
-"""
-Material database — CXRO/Henke atomic scattering factors and refractive indices.
+"""Material database — CXRO/Henke atomic scattering factors and refractive indices.
 
 Loads the CXRO f₁, f₂ tables (``data/cxro/*.csv``) for all 92 elements and
 computes complex refractive indices at arbitrary photon energies.
@@ -29,7 +28,7 @@ from __future__ import annotations
 import csv
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -39,7 +38,6 @@ from euv.constants import (
     AVOGADRO,
     CLASSICAL_ELECTRON_RADIUS,
     EUV_ENERGY_EV,
-    EUV_WAVELENGTH_M,
 )
 
 # ──────────────────────────────────────────────
@@ -272,9 +270,7 @@ class CXROTable:
         """Check if CXRO data exists for this element."""
         return (self._data_dir / f"{symbol}.csv").exists()
 
-    def get_f1f2(
-        self, symbol: str, energy_eV: float
-    ) -> Tuple[float, float]:
+    def get_f1f2(self, symbol: str, energy_eV: float) -> Tuple[float, float]:
         """Interpolate f₁, f₂ at a given photon energy.
 
         Parameters
@@ -371,9 +367,7 @@ class CXROTable:
         n = 1.0 - delta
         return n, max(k, 0.0)  # k must be non-negative
 
-    def get_material(
-        self, symbol: str, energy_eV: float = EUV_ENERGY_EV
-    ) -> Material:
+    def get_material(self, symbol: str, energy_eV: float = EUV_ENERGY_EV) -> Material:
         """Build a ``Material`` instance from CXRO data.
 
         Parameters
@@ -412,10 +406,7 @@ class CXROTable:
         try:
             return _ELEMENT_TABLE[symbol]
         except KeyError:
-            raise KeyError(
-                f"Unknown element '{symbol}'. "
-                f"CXRO loader covers Z = 1–92."
-            )
+            raise KeyError(f"Unknown element '{symbol}'. " f"CXRO loader covers Z = 1–92.")
 
 
 # ──────────────────────────────────────────────

@@ -68,7 +68,10 @@ class TestStaticFileServing:
     def test_app_js_is_served(self, client: TestClient) -> None:
         resp = client.get("/static/app.js")
         assert resp.status_code == 200
-        assert "application/javascript" in resp.headers["content-type"] or "text/javascript" in resp.headers["content-type"]
+        assert (
+            "application/javascript" in resp.headers["content-type"]
+            or "text/javascript" in resp.headers["content-type"]
+        )
         assert "fetchHealth" in resp.text
         assert "fetchMaterials" in resp.text
         assert "postSimulation" in resp.text

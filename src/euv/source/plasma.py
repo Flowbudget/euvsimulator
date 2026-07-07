@@ -1,5 +1,4 @@
-"""
-Parametric LPP Sn-plasma source model for EUV lithography.
+"""Parametric LPP Sn-plasma source model for EUV lithography.
 
 Models the laser-produced plasma (LPP) tin droplet source used in
 ASML NXE scanners.  The source emits strongly in a narrow band around
@@ -29,11 +28,8 @@ from typing import Literal
 
 import numpy as np
 from scipy import constants
-from scipy.special import erfc
 
 from euv.constants import (
-    EUV_ENERGY_EV,
-    EUV_WAVELENGTH_NM,
     nm_to_eV,
 )
 
@@ -271,9 +267,7 @@ class LPPPlasmaSource:
             # ∫₀^{π/2} exp(-θ²/(2σ²)) · 2π sinθ dθ ≈ 2πσ²  for σ ≪ π/2
             # Numerical integration is safer for arbitrary σ.
             th = np.linspace(0.0, np.pi / 2.0, 2001)
-            integrand = (
-                np.exp(-0.5 * (th / sigma) ** 2) * 2.0 * np.pi * np.sin(th)
-            )
+            integrand = np.exp(-0.5 * (th / sigma) ** 2) * 2.0 * np.pi * np.sin(th)
             return np.trapezoid(integrand, th)
         else:
             raise ValueError(f"Unknown angular model: {self.angular_model}")

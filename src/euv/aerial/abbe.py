@@ -1,5 +1,4 @@
-"""
-Abbe's method for partially coherent aerial image formation.
+"""Abbe's method for partially coherent aerial image formation.
 
 Abbe summation computes the aerial image as a weighted sum of
 coherent images from each illumination source point.  This is the
@@ -20,11 +19,7 @@ spectrum.  The total aerial image is::
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import torch
-
-from euv.aerial.pupil import pupil_grid
 
 
 def abbe_image(

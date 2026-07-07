@@ -5,18 +5,17 @@ Connects all modules: mask → RCWA → aerial image → resist → CD.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Optional
 
 import torch
 
 from euv.aerial.abbe import abbe_image, nils
-from euv.aerial.pupil import circular_pupil, defocus_pupil, pupil_grid
+from euv.aerial.pupil import defocus_pupil, pupil_grid
 from euv.aerial.source import conventional
 from euv.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
 from euv.materials import CXROTable
 from euv.resist.develop import (
-    MackModel,
     extract_cd,
     threshold_development,
 )
@@ -140,9 +139,7 @@ def run_simulation(
         n_samples=max(1024, cfg.n_rcwa_orders * 20),
         device=device,
     )
-    thicknesses = torch.tensor(
-        [cfg.absorber_height_nm * 1e-9], dtype=torch.float64, device=device
-    )
+    thicknesses = torch.tensor([cfg.absorber_height_nm * 1e-9], dtype=torch.float64, device=device)
 
     rcwa_cfg = RCWAConfig(
         wavelength=wavelength_m,
@@ -166,8 +163,11 @@ def run_simulation(
     # Apply defocus if non-zero
     if abs(cfg.focus_nm) > 1e-12:
         defocus_phase = defocus_pupil(
-            cfg.grid, na=cfg.na, defocus_nm=cfg.focus_nm,
-            wavelength_nm=cfg.wavelength_nm, device=device,
+            cfg.grid,
+            na=cfg.na,
+            defocus_nm=cfg.focus_nm,
+            wavelength_nm=cfg.wavelength_nm,
+            device=device,
         )
         pupil = pupil * defocus_phase
 

@@ -1,5 +1,4 @@
-"""
-Projection pupil — numerical aperture, anamorphic scaling, Zernike
+"""Projection pupil — numerical aperture, anamorphic scaling, Zernike
 aberrations, and flare.
 
 All functions return PyTorch tensors on the specified device and

@@ -14,7 +14,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -72,8 +71,8 @@ def info():
     print("  • etch/       — Etch bias model")
     print("  • calibrate/  — Wafer calibration pipeline")
     print()
-    print(f"Tests:     315 / 315 passing")
-    print(f"License:   Apache-2.0")
+    print("Tests:     315 / 315 passing")
+    print("License:   Apache-2.0")
 
 
 # ── simulate ───────────────────────────────────────────────────────────────
@@ -81,9 +80,7 @@ def info():
 
 @app.command()
 def simulate(
-    config: Optional[str] = typer.Option(
-        None, "--config", "-c", help="YAML/JSON config file path"
-    ),
+    config: Optional[str] = typer.Option(None, "--config", "-c", help="YAML/JSON config file path"),
     period: float = typer.Option(64.0, "--period", "-p", help="Pattern period [nm]"),
     cd: float = typer.Option(32.0, "--cd", help="Line width [nm]"),
     dose: float = typer.Option(20.0, "--dose", "-d", help="Exposure dose [mJ/cm²]"),
@@ -164,14 +161,10 @@ def simulate(
             import matplotlib.pyplot as plt
 
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
-            im1 = ax1.imshow(
-                result.aerial_image.cpu().numpy(), cmap="hot", aspect="equal"
-            )
+            im1 = ax1.imshow(result.aerial_image.cpu().numpy(), cmap="hot", aspect="equal")
             ax1.set_title("Aerial Image")
             plt.colorbar(im1, ax=ax1)
-            im2 = ax2.imshow(
-                result.resist_profile.cpu().numpy(), cmap="gray", aspect="equal"
-            )
+            im2 = ax2.imshow(result.resist_profile.cpu().numpy(), cmap="gray", aspect="equal")
             ax2.set_title("Resist Profile")
             plt.colorbar(im2, ax=ax2)
             plt.tight_layout()
@@ -221,9 +214,7 @@ def process_window(
     focus_start: float = typer.Option(-50.0, "--focus-start", help="Start focus [nm]"),
     focus_end: float = typer.Option(50.0, "--focus-end", help="End focus [nm]"),
     focus_steps: int = typer.Option(7, "--focus-steps", help="Number of focus values"),
-    output: Optional[str] = typer.Option(
-        None, "--output", help="Output JSON file path"
-    ),
+    output: Optional[str] = typer.Option(None, "--output", help="Output JSON file path"),
 ):
     """Compute a process window (Bossung plot) over dose × focus.
 
@@ -279,7 +270,9 @@ def process_window(
     print(header)
     print("-" * len(header))
     for j in range(focus_steps):
-        row = f"{focuses[j]:+7.0f}    | " + " ".join(f"{cd_matrix[i, j]:7.2f}" for i in range(dose_steps))
+        row = f"{focuses[j]:+7.0f}    | " + " ".join(
+            f"{cd_matrix[i, j]:7.2f}" for i in range(dose_steps)
+        )
         print(row)
 
     print()

@@ -26,16 +26,17 @@ src/euv/
 ├── constants/       Physical constants + conversion helpers
 ├── materials/       CXRO material database (Henke f1, f2)
 ├── optics/          Multilayer mirrors (S-matrix TMM) + collector
-├── mask3d/          RCWA 1D Fourier Modal Method + S-matrix cascade
-├── aerial/          Abbe partially coherent imaging + pupil + source shapes
+├── mask3d/          RCWA 1D + 2D Fourier Modal Method + S-matrix cascade
+├── aerial/          Abbe imaging + Hopkins/TCC + pupil + source shapes
 ├── source/          LPP Sn-plasma emission + dose model
 ├── resist/          CAR exposure, PEB, development, stochastics
+├── opc/             OpenILT bridge (differentiable inverse lithography)
 ├── io/              GDSII layout I/O + rasterization + CLI
 ├── metro/           CD metrology + process window + SEM rendering
 ├── accel/           GPU acceleration layer + VRAM budget manager
 ├── etch/            Etch bias model (empirical / isotropic)
 ├── calibrate/       Wafer calibration pipeline (scipy fit)
-├── api/             FastAPI REST server (REST API)
+├── api/             FastAPI REST server + web dashboard
 └── pipeline.py      End-to-end simulation pipeline
 ```
 
@@ -67,19 +68,27 @@ print(f"CD = {result.cd_nm:.2f} nm")
 |-----------|--------|------|
 | Foundation | ✅ | Project scaffold, CXRO materials, constants |
 | Multilayer Optics | ✅ | S-matrix TMM, Mo/Si stack, collector |
-| Mask 3D Solver | ✅ | RCWA 1D Fourier Modal Method |
+| Mask 3D Solver (1D) | ✅ | RCWA 1D Fourier Modal Method, stable branch selection |
+| Mask 3D Solver (2D) | ✅ | RCWA 2D crossed gratings (contact holes, islands) |
 | Layout Import | ✅ | GDSII/OASIS I/O + rasterization |
 | Aerial Image | ✅ | Abbe imaging, pupil, source shapes |
+| Hopkins Accelerator | ✅ | TCC + SOCS kernels for fast OPC loops |
+| High-NA Imaging | ✅ | Anamorphic 4×/8× pupil, Zernike aberrations |
 | End-to-End Pipeline | ✅ | Full pipeline GDS → CD |
 | Source Model | ✅ | LPP Sn plasma + dose |
 | Resist Core | ✅ | Exposure, PEB, development |
 | Stochastic Effects | ✅ | Shot noise, LER/LWR |
-| REST API | ✅ | FastAPI + Pydantic schemas |
+| Inverse Lithography | ✅ | Differentiable OpenILT bridge |
+| Physics Benchmarks | ✅ | Energy conservation, TMM cross-validation, convergence |
+| REST API + Web UI | ✅ | FastAPI + Pydantic + dashboard |
 | CD Metrology | ✅ | Process window, Bossung, SEM render |
 | GPU Acceleration | ✅ | VRAM budget, chunked processing |
 | Etch & Calibration | ✅ | Etch bias, wafer data fitting |
-| Documentation | ✅ | Sphinx docs, 3 Jupyter tutorials |
+| Documentation | ✅ | Sphinx docs, Jupyter tutorials |
+| Docker Deployment | ✅ | Dockerfile + docker-compose |
 | Public Release | 🔜 | CI, PyPI, v1.0 |
+
+**504 tests, all passing.**
 
 ## License
 

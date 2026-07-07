@@ -13,7 +13,6 @@ from euv.calibrate.wafer_fit import (
     objective_resist,
 )
 
-
 # ──────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────
@@ -157,7 +156,7 @@ class TestObjectiveResist:
         # residuals = [0-20, 0-30] = [-20, -30]
         # MSE = (400 + 900) / 2 = 650
         # RMSE = sqrt(650) ≈ 25.495
-        expected = np.sqrt((20.0 ** 2 + 30.0 ** 2) / 2.0)
+        expected = np.sqrt((20.0**2 + 30.0**2) / 2.0)
         assert rmse == pytest.approx(expected, abs=1e-10)
 
 
@@ -184,9 +183,9 @@ class TestFitResistParams:
             pipeline_fn=const_pipeline,
         )
         expected_keys = {"fitted_params", "rmse", "success", "message", "n_iter", "nfev"}
-        assert expected_keys.issubset(result.keys()), (
-            f"Missing keys: {expected_keys - set(result.keys())}"
-        )
+        assert expected_keys.issubset(
+            result.keys()
+        ), f"Missing keys: {expected_keys - set(result.keys())}"
 
     def test_fits_simple_pipeline(self):
         """Fitting works on a simple analytical pipeline."""
@@ -251,8 +250,12 @@ class TestBootstrapFit:
             seed=42,
         )
         expected_keys = {
-            "param_names", "fitted_on_original", "bootstrap_samples",
-            "ci_lower", "ci_upper", "ci_level",
+            "param_names",
+            "fitted_on_original",
+            "bootstrap_samples",
+            "ci_lower",
+            "ci_upper",
+            "ci_level",
         }
         assert expected_keys.issubset(result.keys())
 
@@ -321,8 +324,13 @@ class TestCalibrateOnSynthetic:
             seed=42,
         )
         expected_keys = {
-            "target_params", "fitted_params", "relative_error",
-            "rmse", "noise_std_used", "n_dose", "n_focus",
+            "target_params",
+            "fitted_params",
+            "relative_error",
+            "rmse",
+            "noise_std_used",
+            "n_dose",
+            "n_focus",
         }
         assert expected_keys.issubset(result.keys())
 

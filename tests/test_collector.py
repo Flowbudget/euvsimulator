@@ -3,7 +3,6 @@
 import math
 
 import pytest
-import torch
 
 from euv.optics.collector import (
     CollectorGeometry,
