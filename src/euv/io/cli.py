@@ -319,9 +319,7 @@ def materials(
 
         d = Path(DATA_DIR)
         if d.exists():
-            available = sorted(
-                f.stem for f in d.iterdir() if f.suffix.lower() == ".csv"
-            )
+            available = sorted(f.stem for f in d.iterdir() if f.suffix.lower() == ".csv")
         else:
             available = []
         print(f"Available materials ({len(available)}):")
