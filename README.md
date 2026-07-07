@@ -44,11 +44,11 @@ src/euv/
 | Mask 3D Solver | ✅ Done | EM Simulation |
 | Layout I/O | ✅ Done | Layout Import |
 | Aerial Image | ✅ Done | Aerial Image |
-| Full Pipeline | ❌ | End-to-End |
+| Full Pipeline | ✅ Done | End-to-End |
 | Plasma Source | ✅ Done | Source Model |
 | Resist Model | ✅ Done | Resist Core |
-| Resist Stochastics | ❌ | Stochastic Effects |
-| REST API | ❌ | REST API |
+| Resist Stochastics | ✅ Done | Stochastic Effects |
+| REST API | ✅ Done | REST API |
 | First OSS Release | ❌ | Public Release |
 
 ## License
