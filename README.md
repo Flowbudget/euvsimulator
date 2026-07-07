@@ -4,9 +4,10 @@
 From plasma source to CD metrology — open-source EUV lithography simulation for research and education.
 
 ```bash
-pip install euv
-euv simulate --config mask.yaml
-euv serve                          # REST API on :8000
+pip install -e .
+euv simulate                          # 32 nm L/S, NA 0.33
+euv process-window --period=64 --cd=32
+euv serve                              # REST API on :8000
 ```
 
 ## Quick Start
@@ -15,8 +16,7 @@ euv serve                          # REST API on :8000
 git clone https://github.com/Flowbudget/OpEnUV.git
 cd OpEnUV
 pip install -e ".[dev]"
-python scripts/download_cxro.py   # download atomic scattering factors
-pytest tests/                       # run tests (-v for verbose)
+pytest tests/ -q                      # 315+ tests, all passing
 ```
 
 ## Architecture
@@ -29,27 +29,57 @@ src/euv/
 ├── mask3d/          RCWA 1D Fourier Modal Method + S-matrix cascade
 ├── aerial/          Abbe partially coherent imaging + pupil + source shapes
 ├── source/          LPP Sn-plasma emission + dose model
-├── resist/          CAR exposure, PEB, development simulation
-├── io/              GDSII layout I/O + rasterization
-├── api/             FastAPI REST server
-└── data/            CXRO material constants (auto-downloaded)
+├── resist/          CAR exposure, PEB, development, stochastics
+├── io/              GDSII layout I/O + rasterization + CLI
+├── metro/           CD metrology + process window + SEM rendering
+├── accel/           GPU acceleration layer + VRAM budget manager
+├── etch/            Etch bias model (empirical / isotropic)
+├── calibrate/       Wafer calibration pipeline (scipy fit)
+├── api/             FastAPI REST server (REST API)
+└── pipeline.py      End-to-end simulation pipeline
 ```
 
-## Status
+## CLI Usage
 
-| Module | Status | Milestone |
-|--------|--------|-----------|
-| Material Database | ✅ Done | Foundation |
-| Multilayer Optics | ✅ Done | Optics Core |
-| Mask 3D Solver | ✅ Done | EM Simulation |
-| Layout I/O | ✅ Done | Layout Import |
-| Aerial Image | ✅ Done | Aerial Image |
-| Full Pipeline | ✅ Done | End-to-End |
-| Plasma Source | ✅ Done | Source Model |
-| Resist Model | ✅ Done | Resist Core |
-| Resist Stochastics | ✅ Done | Stochastic Effects |
-| REST API | ✅ Done | REST API |
-| First OSS Release | ❌ | Public Release |
+| Command | Description |
+|---------|-------------|
+| `euv simulate` | Run full simulation (config file or CLI args) |
+| `euv make-mask` | Generate line/space mask GDSII |
+| `euv process-window` | Dose-focus Bossung plot |
+| `euv materials` | List/query CXRO database |
+| `euv serve` | Start REST API server |
+| `euv bench` | Performance benchmark |
+| `euv info` | System info |
+
+## Python API
+
+```python
+from euv.pipeline import SimulationConfig, run_simulation
+
+cfg = SimulationConfig(period_nm=64.0, line_width_nm=32.0, dose_mj_cm2=20.0)
+result = run_simulation(cfg)
+print(f"CD = {result.cd_nm:.2f} nm")
+```
+
+## Milestones
+
+| Milestone | Status | What |
+|-----------|--------|------|
+| Foundation | ✅ | Project scaffold, CXRO materials, constants |
+| Multilayer Optics | ✅ | S-matrix TMM, Mo/Si stack, collector |
+| Mask 3D Solver | ✅ | RCWA 1D Fourier Modal Method |
+| Layout Import | ✅ | GDSII/OASIS I/O + rasterization |
+| Aerial Image | ✅ | Abbe imaging, pupil, source shapes |
+| End-to-End Pipeline | ✅ | Full pipeline GDS → CD |
+| Source Model | ✅ | LPP Sn plasma + dose |
+| Resist Core | ✅ | Exposure, PEB, development |
+| Stochastic Effects | ✅ | Shot noise, LER/LWR |
+| REST API | ✅ | FastAPI + Pydantic schemas |
+| CD Metrology | ✅ | Process window, Bossung, SEM render |
+| GPU Acceleration | ✅ | VRAM budget, chunked processing |
+| Etch & Calibration | ✅ | Etch bias, wafer data fitting |
+| Documentation | ✅ | Sphinx docs, 3 Jupyter tutorials |
+| Public Release | 🔜 | CI, PyPI, v1.0 |
 
 ## License
 

@@ -57,6 +57,7 @@ class MaskGeometry:
         """Return sorted list of ``(layer, datatype)`` keys present."""
         return sorted(self.polygons.keys())
 
+    @property
     def polygon_count(self) -> int:
         """Total number of polygons across all layers."""
         return sum(len(v) for v in self.polygons.values())

@@ -1,13 +1,11 @@
-"""
-OpEnUV documentation root.
+# Sphinx build configuration for OpEnUV docs
 
-Build with::
+import os
+import sys
 
-    pip install -e ".[dev]"
-    sphinx-build docs/ docs/_build/
-"""
+sys.path.insert(0, os.path.abspath("../../src"))
 
-project = "euv"
+project = "OpEnUV"
 copyright = "2026, OpEnUV Contributors"
 author = "OpEnUV Contributors"
 release = "0.1.0"
@@ -15,12 +13,30 @@ release = "0.1.0"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
+    "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
+    "sphinx.ext.intersphinx",
     "sphinx_rtd_theme",
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "torch": ("https://pytorch.org/docs/stable", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
+}
+
+napoleon_google_docstring = True
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = True
+
+autodoc_default_options = {
+    "members": True,
+    "undoc-members": False,
+    "show-inheritance": True,
+}

@@ -50,6 +50,37 @@ def pupil_grid(
     return fx, fy, inside
 
 
+def defocus_pupil(
+    grid: int,
+    na: float = 0.33,
+    defocus_nm: float = 0.0,
+    wavelength_nm: float = 13.5,
+    device: str = "cpu",
+) -> torch.Tensor:
+    """Apply defocus to a pupil function.
+
+    Defocus is modelled as a quadratic phase term:
+        W_defocus = defocus_nm * NA² * (fx² + fy²)
+
+    Parameters
+    ----------
+    defocus_nm : float
+        Defocus distance in nm (positive = defocus, negative = under-focus).
+    wavelength_nm : float
+        Exposure wavelength in nm.
+
+    Returns
+    -------
+    defocus_phase : (grid, grid) complex128
+        Complex phase factor to multiply with the pupil.
+    """
+    fx, fy, _ = pupil_grid(grid, na, device=device)
+    # Quadratic phase: W = (2π/λ) * defocus * sqrt(NA² - (fx²+fy²))
+    rho_sq = fx**2 + fy**2
+    phase = (2.0 * math.pi / (wavelength_nm * 1e-9)) * (defocus_nm * 1e-9) * rho_sq
+    return torch.exp(1j * phase.to(torch.complex128))
+
+
 def circular_pupil(
     grid: int,
     na: float = 0.33,

@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 
 from euv.aerial.abbe import abbe_image, nils
-from euv.aerial.pupil import circular_pupil, pupil_grid
+from euv.aerial.pupil import circular_pupil, defocus_pupil, pupil_grid
 from euv.aerial.source import conventional
 from euv.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
 from euv.materials import CXROTable
@@ -91,6 +91,7 @@ class SimulationConfig:
     n_rcwa_orders: int = 21
     dose_mj_cm2: float = 20.0
     resist_threshold: float = 0.5
+    focus_nm: float = 0.0
     grid: int = 256
     device: str = "cpu"
 
@@ -161,6 +162,14 @@ def run_simulation(
     # ── 4. Pupil ──────────────────────────────
     fx, fy, inside_pupil = pupil_grid(cfg.grid, na=cfg.na, device=device)
     pupil = inside_pupil.to(torch.float64).to(torch.complex128)
+
+    # Apply defocus if non-zero
+    if abs(cfg.focus_nm) > 1e-12:
+        defocus_phase = defocus_pupil(
+            cfg.grid, na=cfg.na, defocus_nm=cfg.focus_nm,
+            wavelength_nm=cfg.wavelength_nm, device=device,
+        )
+        pupil = pupil * defocus_phase
 
     # ── 5. Mask FFT ────────────────────────────
     # Build a simple mask transmission: line/space

@@ -200,8 +200,10 @@ def gaussian_se_blur(
 
     # --- build 1D Gaussian kernel ---
     radius = kernel_size // 2
+    # Match input dtype — F.conv2d requires kernel and input to have the same dtype
+    working_dtype = image.dtype
     x = torch.arange(
-        -radius, radius + 1, device=image.device, dtype=torch.float32
+        -radius, radius + 1, device=image.device, dtype=working_dtype
     )
     kernel_1d = torch.exp(-0.5 * (x / sigma_px) ** 2)
     kernel_1d = kernel_1d / (kernel_1d.sum() + 1e-12)
