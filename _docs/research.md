@@ -1,231 +1,231 @@
-# 🔬 EUV-Lithographie-Simulator – Komponenten & Ressourcen
-**Stand: 07.07.2026** | **Recherche: Hermes Agent**
+# 🔬 EUV Lithography Simulator – Components & Resources
+**Date: 2026-07-07** | **Research: Hermes Agent**
 
 ---
 
-## 1. Überblick: Was ein EUV-Simulator abdecken muss
+## 1. Overview: What an EUV Simulator Must Cover
 
-Ein vollständiger EUV-Lithographie-Simulator modelliert den gesamten Strahlengang von der Plasmaquelle bis zum entwickelten Resist:
+A complete EUV lithography simulator models the entire optical path from the plasma source to the developed resist:
 
 ```
-Plasmaquelle (LPP, Sn-Droplet, 13.5nm)
+Plasma Source (LPP, Sn Droplet, 13.5nm)
     ↓
-Beleuchtungsoptik (Kollektorspiegel, Homogenizer)
+Illumination Optics (Collector Mirror, Homogenizer)
     ↓
-Reflektive Maske (Mo/Si-Multilayer + Absorber-Strukturen)
+Reflective Mask (Mo/Si Multilayer + Absorber Structures)
     ↓
-Projektionsoptik (4-fach anamorphotische Spiegel, NA 0.33/0.55)
+Projection Optics (4× Anamorphic Mirrors, NA 0.33/0.55)
     ↓
-Aerial Image (Luftbild auf Wafer-Ebene)
+Aerial Image (at Wafer Level)
     ↓
-Photoresist (Exposition, sekundäre Elektronen, chem. Verstärkung)
+Photoresist (Exposure, Secondary Electrons, Chem. Amplification)
     ↓
-Entwicklung / Ätzen
+Development / Etching
 ```
 
 ---
 
-## 2. 🔧 Open-Source-Software (GitHub)
+## 2. 🔧 Open-Source Software (GitHub)
 
-### 2.1 Komplette EUV-Simulatoren
+### 2.1 Complete EUV Simulators
 
-| Projekt | Stars | Sprache | Beschreibung |
+| Project | Stars | Language | Description |
 |---------|:-----:|:-------:|-------------|
-| [**EUVlitho**](https://github.com/takahashi-edalab/EUVlitho) | ★18 | C++/Python | Rigoroser EM-Simulator für EUV + CNN-Fitting für M3D-Parameter |
-| [**ELitho**](https://github.com/takahashi-edalab/elitho) | ★2 | Python | Python-basierter High-NA EUV-Simulator (SPIE Publikation) |
-| [**High-NA EUV Sim**](https://github.com/JiSeok1579/high-na-euv-sim) | ★0 | ? | 0.55 NA High-NA EUV, Quelle→Wafer mit M3D+Resist+SMO |
-| [**LithographySimulator**](https://github.com/quarterwave0/LithographySimulator) | ★40 | Python | Abbe-Methode, partielle Kohärenz, GPU (PyTorch) |
+| [**EUVlitho**](https://github.com/takahashi-edalab/EUVlitho) | ★18 | C++/Python | Rigorous EM simulator for EUV + CNN fitting for M3D parameters |
+| [**ELitho**](https://github.com/takahashi-edalab/elitho) | ★2 | Python | Python-based High-NA EUV simulator (SPIE publication) |
+| [**High-NA EUV Sim**](https://github.com/JiSeok1579/high-na-euv-sim) | ★0 | ? | 0.55 NA High-NA EUV, source→wafer with M3D+Resist+SMO |
+| [**LithographySimulator**](https://github.com/quarterwave0/LithographySimulator) | ★40 | Python | Abbe method, partial coherence, GPU (PyTorch) |
 
-### 2.2 Lithographie-Optik & Masken
+### 2.2 Lithography Optics & Masks
 
-| Projekt | Stars | Beschreibung |
+| Project | Stars | Description |
 |---------|:-----:|-------------|
-| [**TorchLitho 2.0**](https://github.com/OpenOPC/TorchLitho-2.0) | ★46 | Differentiable Lithographie-Simulation, GPU, Full-Chip (ASICON'25) |
-| [**OpenILT**](https://github.com/OpenOPC/OpenILT) | ★231 | Inverse Lithography Technology – Maskenoptimierung als inverses Problem |
-| [**OpenLithoHub**](https://openlithohub.com) | – | Benchmarks, OPC/ILT-Metriken, Public Leaderboard |
-| [**OxiPhoton**](https://github.com/cool-japan/oxiphoton) | ★10 | EM-Wellenausbreitung in Rust – inkl. Multilayer-Spiegel-Simulation |
+| [**TorchLitho 2.0**](https://github.com/OpenOPC/TorchLitho-2.0) | ★46 | Differentiable lithography simulation, GPU, full-chip (ASICON'25) |
+| [**OpenILT**](https://github.com/OpenOPC/OpenILT) | ★231 | Inverse Lithography Technology – mask optimization as inverse problem |
+| [**OpenLithoHub**](https://openlithohub.com) | – | Benchmarks, OPC/ILT metrics, public leaderboard |
+| [**OxiPhoton**](https://github.com/cool-japan/oxiphoton) | ★10 | EM wave propagation in Rust – includes multilayer mirror simulation |
 
-### 2.3 Photoresist-Simulation
+### 2.3 Photoresist Simulation
 
-| Projekt | Stars | Beschreibung |
+| Project | Stars | Description |
 |---------|:-----:|-------------|
-| [**TorchResist**](https://github.com/ShiningSord/TorchResist) | ★26 | Differentiable Resist-Simulation, PyTorch |
-| **DragonResist-EUV-Foundry** | – | Production-Grade Resist-Framework (<3.5% Abweichung zu Wafer-Daten) – GitHub scheint evtl. privat |
-| **TU Delft Resist-MC** | – | Monte-Carlo-Simulation der Wechselwirkung EUV↔Metal-Oxide-Resists |
+| [**TorchResist**](https://github.com/ShiningSord/TorchResist) | ★26 | Differentiable resist simulation, PyTorch |
+| **DragonResist-EUV-Foundry** | – | Production-grade resist framework (<3.5% deviation from wafer data) – GitHub appears private |
+| **TU Delft Resist-MC** | – | Monte Carlo simulation of EUV↔Metal-Oxide Resist interaction |
 
-### 2.4 Allgemeine Lithographie-Simulatoren
+### 2.4 General Lithography Simulators
 
-| Projekt | Stars | Beschreibung |
+| Project | Stars | Description |
 |---------|:-----:|-------------|
 | [**Advanced Lithography Sim**](https://github.com/hamzanael2k/Advanced-Lithography-Simulation-Tool) | ★12 | General lithography simulator |
-| **Optolithium** (Gitee) | – | Optische Lithographie (Lehrzwecke) |
+| **Optolithium** (Gitee) | – | Optical lithography (educational) |
 
 ---
 
-## 3. 📐 Physikalische Module (was gebaut werden muss)
+## 3. 📐 Physical Modules (What Must Be Built)
 
-### 3.1 Plasmaquelle (LPP – Laser Produced Plasma)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Laser → Sn-Droplet → Plasma → 13.5 nm EUV Emission     │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Parameter:**
-- Wellenlänge: **13.5 nm** (92 eV, in-band)
-- Quelle: CO₂-Laser (10.6 µm) oder Nd:YAG auf Zinn-Mikrotröpfchen
-- Pre-Pulse formt Droplet → Scheibe → Main-Pulse → Plasma
-- Typische Leistung: ~250W in-band (ASML NXE:3600D)
-- **Open Source:** Keine vollständige Plasma-Quell-Simulation gefunden
-- **Forschung:** ARCNL (Amsterdam), Source Code Comparison Workshop (jährlich)
-- **Selbstbau:** SPARTAN/FLYCHK atomic codes (NLTE-Plasma), RADCAL/POST für Strahlungstransport
-
-### 3.2 Beleuchtungsoptik (Illuminator)
+### 3.1 Plasma Source (LPP – Laser Produced Plasma)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Kollektor (Ellipsoid-Multilayer) → Homogenizer → Maske  │
+│  Laser → Sn Droplet → Plasma → 13.5 nm EUV Emission     │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **Mo/Si Multilayer-Spiegel:** 40–60 Schichten, ~70% Reflektivität bei 13.5 nm
-- Kollektor: Ellipsoid- oder Winston-Cone-Geometrie
-- Homogenizer: Fly's-Eye-Array oder Facetten-Spiegel
-- **Simulation:** Transfer-Matrix-Methode (TMM), OxiPhoton (Rust), IMD Software
-- **OxiPhoton:** Hat `multilayer_mirror.rs` – guter Startpunkt
+**Parameters:**
+- Wavelength: **13.5 nm** (92 eV, in-band)
+- Source: CO₂ laser (10.6 µm) or Nd:YAG onto tin micro-droplets
+- Pre-pulse shapes droplet → disk → Main Pulse → plasma
+- Typical power: ~250W in-band (ASML NXE:3600D)
+- **Open Source:** No complete plasma source simulation found
+- **Research:** ARCNL (Amsterdam), Source Code Comparison Workshop (annual)
+- **Custom build:** SPARTAN/FLYCHK atomic codes (NLTE plasma), RADCAL/POST for radiation transport
 
-### 3.3 Reflektive Maske (Reticle)
+### 3.2 Illumination Optics (Illuminator)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Absorber (Ta/TaN/TaBN) → 40× Mo/Si ML → Substrat      │
+│  Collector (Ellipsoid Multilayer) → Homogenizer → Mask   │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **Mask 3D (M3D) Effekte:** Absorberkanten beugen EUV → kritisch für Imaging
-- **EUVlitho/ELitho:** Rigorose EM-Simulation für M3D-Effekte
-- **CNN-Fitting:** EUVlitho trainiert CNN aus rigorosen Simulationen → schnell
-- OpenILT für Masken-Optimierung (OPC/ILT)
+- **Mo/Si Multilayer Mirrors:** 40–60 layers, ~70% reflectivity at 13.5 nm
+- Collector: Ellipsoid or Winston cone geometry
+- Homogenizer: Fly's-eye array or faceted mirrors
+- **Simulation:** Transfer-matrix method (TMM), OxiPhoton (Rust), IMD Software
+- **OxiPhoton:** Has `multilayer_mirror.rs` – good starting point
 
-### 3.4 Projektionsoptik
+### 3.3 Reflective Mask (Reticle)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  6–8 anamorphotische Multilayer-Spiegel → 4× Reduction  │
+│  Absorber (Ta/TaN/TaBN) → 40× Mo/Si ML → Substrate      │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **Low-NA:** NA 0.33 (aktuelle ASML NXE)
+- **Mask 3D (M3D) Effects:** Absorber edges diffract EUV → critical for imaging
+- **EUVlitho/ELitho:** Rigorous EM simulation for M3D effects
+- **CNN Fitting:** EUVlitho trains CNN from rigorous simulations → fast
+- OpenILT for mask optimization (OPC/ILT)
+
+### 3.4 Projection Optics
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  6–8 anamorphotic multilayer mirrors → 4× Reduction     │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **Low-NA:** NA 0.33 (current ASML NXE)
 - **High-NA:** NA 0.55 (ASML EXE:5000 – Twinscan EXE)
-- Anamorphotisch: Unterschiedliche Vergrößerung in X/Y (4×/8×)
-- Wavefront-Aberrationen müssen < λ/50 sein
+- Anamorphotic: Different magnification in X/Y (4×/8×)
+- Wavefront aberrations must be < λ/50
 - **Simulation:** TorchLitho 2.0 (GPU), OxiPhoton
 
-### 3.5 Aerial Image (Luftbild)
+### 3.5 Aerial Image
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Partielle Kohärenz (σ) → Abbe-Methode → Intensität      │
+│  Partial Coherence (σ) → Abbe Method → Intensity         │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- **Abbe-Methode:** Summation über Beleuchtungs-Quellpunkte
-- Partielle Kohärenz (σ 0.2–1.0)
-- Beleuchtungsmodi: Konventionell, Annular, Quasar, Dipol
-- **LithographySimulator:** Implementiert Abbe + diverse Modi
-- **High-NA EUV Sim:** Vollständig von Quelle→Aerial Image
+- **Abbe Method:** Summation over illumination source points
+- Partial coherence (σ 0.2–1.0)
+- Illumination modes: Conventional, Annular, Quasar, Dipole
+- **LithographySimulator:** Implements Abbe + various modes
+- **High-NA EUV Sim:** Complete from source→aerial image
 
 ### 3.6 Photoresist
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  EUV Photon → Photoelektron → Sekundärelektronen-Kaskade │
-│  → Säuregenerator → Chemische Verstärkung → Löslichkeit  │
+│  EUV Photon → Photoelectron → Secondary Electron Cascade │
+│  → Acid Generator → Chemical Amplification → Solubility  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- EUV-Photonen (92 eV) erzeugen primäre Photoelektronen
-- Sekundärelektronen-Kaskade (0–20 eV) – kürzere Reichweite als DUV
-- Stochastische Effekte (Rauschen) dominant bei <10 nm Strukturen
-- **TorchResist:** Open Source, differentiable Resist-Modellierung
-- **TU Delft MC-Sim:** Monte-Carlo für Metal-Oxide Resists
-- **Selbstbau:** Discrete Stochastic Model (DSM), gelöste Diffusionsgleichungen
+- EUV photons (92 eV) generate primary photoelectrons
+- Secondary electron cascade (0–20 eV) – shorter range than DUV
+- Stochastic effects (noise) dominant at <10 nm structures
+- **TorchResist:** Open source, differentiable resist modeling
+- **TU Delft MC Sim:** Monte Carlo for metal-oxide resists
+- **Custom build:** Discrete Stochastic Model (DSM), solved diffusion equations
 
-### 3.7 Prozess-Simulation (Development + Etch)
+### 3.7 Process Simulation (Development + Etch)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Entwicklerlösung → Löslichkeitskontrast → Ätzprofil     │
+│  Developer Solution → Solubility Contrast → Etch Profile │
 └─────────────────────────────────────────────────────────┘
 ```
 
-- Anisotropes/isotropes Ätzen
-- Mack-Modell (Entwicklungskinetik)
-- Kinetic Monte Carlo für raue Kanten (LER/LWR)
+- Anisotropic/isotropic etching
+- Mack model (development kinetics)
+- Kinetic Monte Carlo for rough edges (LER/LWR)
 
 ---
 
-## 4. 🥇 Empfohlene Architektur (Bauplan)
+## 4. 🥇 Recommended Architecture (Blueprint)
 
-Komponente | Empfohlener Ansatz | Open Source Basis
+Component | Recommended Approach | Open Source Basis
 -----------|-------------------|------------------
-**Plasmaquelle** | LPP Sn-Droplet, CO₂-Laser-Puls, 13.5 nm | FLYCHK/SPARTAN (Forschungscodes)
-**Kollektor** | 40° Grazing-Incidence, ellipsoid | OxiPhoton TMM + eigene Geometrie
-**Multilayer-Spiegel** | Mo/Si, 40–60 Paare, TMM-Simulation | OxiPhoton `multilayer_mirror.rs`
-**Maske** | Ta-Absorber auf Mo/Si, M3D rigoros oder CNN | **EUVlitho** / **ELitho**
-**Beleuchtung** | Kohärenz σ 0.2–0.8, Annular/Quasar | **LithographySimulator** (Abbe)
-**Projektion** | 4× Reduction, NA 0.33–0.55, anamorphotisch | **TorchLitho 2.0** (GPU)
+**Plasma Source** | LPP Sn Droplet, CO₂ laser pulse, 13.5 nm | FLYCHK/SPARTAN (research codes)
+**Collector** | 40° grazing incidence, ellipsoid | OxiPhoton TMM + custom geometry
+**Multilayer Mirror** | Mo/Si, 40–60 pairs, TMM simulation | OxiPhoton `multilayer_mirror.rs`
+**Mask** | Ta absorber on Mo/Si, M3D rigorous or CNN | **EUVlitho** / **ELitho**
+**Illumination** | Coherence σ 0.2–0.8, Annular/Quasar | **LithographySimulator** (Abbe)
+**Projection** | 4× reduction, NA 0.33–0.55, anamorphotic | **TorchLitho 2.0** (GPU)
 **Aerial Image** | Partial coherence, Abbe sum | **High-NA EUV Sim**
-**Resist** | CAR oder MOR, SE-Kaskade, stochastisch | **TorchResist** + TU Delft MC
-**Etch** | Anisotropic, Mack-Modell | Selbstbau (einfach)
+**Resist** | CAR or MOR, SE cascade, stochastic | **TorchResist** + TU Delft MC
+**Etch** | Anisotropic, Mack model | Custom build (simple)
 
 ---
 
-## 5. 🧪 Alternative / Nischen-Quellen
+## 5. 🧪 Alternative / Niche Sources
 
-| Quelle | Beschreibung |
+| Source | Description |
 |--------|-------------|
-| **PROLITH** (KLA) | Kommerziell, Goldstandard – aber nicht Open Source |
-| **S-Litho** (Synopsys) | Kommerziell, predictive lithography |
-| **DragonResist** | Production-Grade Resist (<3.5%), GitHub unbekannt |
-| **IMD Software** | Multilayer-Spiegel-Design (CXRO Berkeley) |
-| **CXRO / Berkeley Lab** | Center for X-Ray Optics, Rechnungen + Datenbanken |
-| **ARCNL** (Amsterdam) | Academic Research Center for Nanolithography – Public Codes |
-| **SPIE Advanced Lithography** | Jährliche Konferenz, Open-Access-Proceedings |
-| **arXiv cs.CE/cond-mat.mtrl-sci** | Neueste Preprints zu Litho-Simulation |
+| **PROLITH** (KLA) | Commercial, gold standard – but not open source |
+| **S-Litho** (Synopsys) | Commercial, predictive lithography |
+| **DragonResist** | Production-grade resist (<3.5%), GitHub unknown |
+| **IMD Software** | Multilayer mirror design (CXRO Berkeley) |
+| **CXRO / Berkeley Lab** | Center for X-Ray Optics, computations + databases |
+| **ARCNL** (Amsterdam) | Academic Research Center for Nanolithography – public codes |
+| **SPIE Advanced Lithography** | Annual conference, open-access proceedings |
+| **arXiv cs.CE/cond-mat.mtrl-sci** | Latest preprints on lithography simulation |
 
 ---
 
-## 6. ✅ Gap-Analyse
+## 6. ✅ Gap Analysis
 
-### Was es Open Source gibt ✅
-- [x] Rigorose EM-Simulation für Mask 3D (EUVlitho/ELitho)
-- [x] GPU-beschleunigte Lithographie-Simulation (TorchLitho, LithographySimulator)
-- [x] Inverse Lithography / Maskenoptimierung (OpenILT)
-- [x] Resist-Simulation (TorchResist, TU Delft)
-- [x] Multilayer-Optik-Simulation (OxiPhoton)
-- [x] Benchmarks & Metriken (OpenLithoHub)
+### What Exists Open Source ✅
+- [x] Rigorous EM simulation for Mask 3D (EUVlitho/ELitho)
+- [x] GPU-accelerated lithography simulation (TorchLitho, LithographySimulator)
+- [x] Inverse lithography / mask optimization (OpenILT)
+- [x] Resist simulation (TorchResist, TU Delft)
+- [x] Multilayer optics simulation (OxiPhoton)
+- [x] Benchmarks & metrics (OpenLithoHub)
 
-### Was fehlt / selbst gebaut werden muss ❌
-- [ ] **Plasmaquellen-Simulation** (Sn-Droplet, LPP, 13.5nm Emission) – keine Open-Source-Bibliothek
-- [ ] **Komplette anamorphotische Optik-Kette** (6–8 Spiegel) – teilweise in TorchLitho
-- [ ] **Gekoppelter Source→Wafer Workflow** – einzelne Module müssen integriert werden
-- [ ] **Experimentelle Validierung** – kein simulierter Output ohne Kalibrierung an echten Wafer-Daten
-- [ ] **Thermisches Management** – Spiegel heizen auf durch EUV (kein Modell)
-- [ ] **Kontamination** (Carbon-Cracking, Sn-Debris) – kein Modell
-- [ ] **Stochastische Effekte** (shot noise, LER/LWR) – teilweise in TorchResist
+### What Is Missing / Must Be Custom Built ❌
+- [ ] **Plasma source simulation** (Sn droplet, LPP, 13.5nm emission) – no open-source library
+- [ ] **Complete anamorphotic optics chain** (6–8 mirrors) – partially in TorchLitho
+- [ ] **Coupled source→wafer workflow** – individual modules must be integrated
+- [ ] **Experimental validation** – no simulated output without calibration against real wafer data
+- [ ] **Thermal management** – mirrors heat up from EUV (no model)
+- [ ] **Contamination** (carbon cracking, Sn debris) – no model
+- [ ] **Stochastic effects** (shot noise, LER/LWR) – partially in TorchResist
 
 ---
 
-## 7. 📚 Wissenschaftliche Basis (Paper)
+## 7. 📚 Scientific Basis (Papers)
 
-| Paper | DOI / Link | Fokus |
+| Paper | DOI / Link | Focus |
 |-------|-----------|-------|
-| H. Tanabe et al. (SPIE 2025) | [10.1117/1.JMM.24.2.024201](https://www.spiedigitallibrary.org/journals/journal-of-micro-nanopatterning-materials-and-metrology/volume-24/issue-2/024201) | Rigoroser EM-Sim + CNN für EUV |
-| Flow Physics of EUV Sources | [academic.oup.com/nsr](https://academic.oup.com/nsr/advance-article/doi/10.1093/nsr/nwag298) | Sn-Droplet-Strömungsphysik |
-| Microdroplet-Tin Plasma Sources | [10.1088/2040-8986/ac5a7e](https://iopscience.iop.org/article/10.1088/2040-8986/ac5a7e) | Code-Comparison Workshop |
-| Quantum Simulation for EUV | [arXiv:2602.20234](https://arxiv.org/html/2602.20234v1) | Quantenalgorithmen für Resist-Materialdesign |
+| H. Tanabe et al. (SPIE 2025) | [10.1117/1.JMM.24.2.024201](https://www.spiedigitallibrary.org/journals/journal-of-micro-nanopatterning-materials-and-metrology/volume-24/issue-2/024201) | Rigorous EM sim + CNN for EUV |
+| Flow Physics of EUV Sources | [academic.oup.com/nsr](https://academic.oup.com/nsr/advance-article/doi/10.1093/nsr/nwag298) | Sn droplet flow physics |
+| Microdroplet-Tin Plasma Sources | [10.1088/2040-8986/ac5a7e](https://iopscience.iop.org/article/10.1088/2040-8986/ac5a7e) | Code Comparison Workshop |
+| Quantum Simulation for EUV | [arXiv:2602.20234](https://arxiv.org/html/2602.20234v1) | Quantum algorithms for resist material design |
 
 ---
 
@@ -242,12 +242,12 @@ https://github.com/ShiningSord/TorchResist
 https://github.com/cool-japan/oxiphoton
 https://github.com/JiSeok1579/high-na-euv-sim
 
-# Portale
+# Portals
 https://openlithohub.com
-https://ar cnl.nl (ARCNL Amsterdam)
+https://arcnl.nl (ARCNL Amsterdam)
 https://cxro.lbl.gov (Center for X-Ray Optics)
 ```
 
 ---
 
-*Erstellt von Hermes Agent am 07.07.2026. Quellen: DuckDuckGo Lite, Startpage, GitHub API, SPIE Digital Library.*
+*Created by Hermes Agent on 2026-07-07. Sources: DuckDuckGo Lite, Startpage, GitHub API, SPIE Digital Library.*

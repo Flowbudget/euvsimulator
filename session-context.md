@@ -43,21 +43,22 @@ Secondary: Small fabs without KLA/ASML budget.
 4. ❌ Panoramic is niche player → ✅ **HyperLith v7 has TRIG, PanSEM, PanSO, ARMI.**
 5. ❌ Data 80% public → ✅ **~65% public, 20% fittable, 15% trade secrets.**
 
-## Roadmap Phase 1 (Months 0–6)
-```
-Phase 1 (W1-2):  Project Scaffold & Material Database
-Phase 2 (W3-4):  TMM Multilayer (ELitho)
-Phase 3 (W5-6):  RCWA 1D PyTorch (critical!)
-Phase 4 (W7-8):  GDSII I/O + Dummy Masks
-Phase 5 (W9-10): Aerial Image (Abbe) + Pupil
-Phase 6 (W11-12): FIRST E2E PIPELINE 🎉
-Phase 7 (W13-14): Plasma Source + Dose
-Phase 8 (W15-16): Resist (TorchResist)
-Phase 9 (W17-18): Resist Stochastic + LER
-Phase 10 (W19-20): REST API + OSS RELEASE 🚀
-Phase 11 (W21-22): Rust RCWA (rigorous)
-Phase 12 (W23-24): RCWA 2D
-```
+## Roadmap
+
+| Milestone | Description |
+|-----------|-------------|
+| Foundation | Project scaffold, constants, material database |
+| Optics Core | TMM multilayer mirror optics |
+| EM Simulation | RCWA 1D mask 3D solver (PyTorch) |
+| Layout Import | GDSII I/O + dummy mask generation |
+| Aerial Image | Abbe/Hopkins partially coherent imaging + pupil |
+| End-to-End | First complete simulation pipeline 🎉 |
+| Source Model | Plasma source model + dose calibration |
+| Resist Core | TorchResist-based photoresist model |
+| Stochastic Effects | Resist stochastics + LER/LWR |
+| REST API | REST server + SDK |
+| Production RCWA | Rust-based rigorous RCWA solver |
+| 2D RCWA | Full 2D mask simulation |
 
 ## Key Decisions (Session 2026-07-07)
 1. ✅ **Don't start with ELitho integration** – check BAFA first

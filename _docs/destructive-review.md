@@ -1,357 +1,357 @@
-# 🔥 Destruktiver Review: EUV-Lithographie-Simulator-Strategie
+# 🔥 Destructive Review: EUV Lithography Simulator Strategy
 
-**Review-Datum:** 07.07.2026
-**Reviewer:** Hermes Agent (autonomer Review-Subagent)
-**Dokument:** `2026-07-07-EUV-Lithographie-Simulator-Strategie.md`
-**Prinzip:** Schonungslose Lückenanalyse – kein "Gut gemacht"
+**Review Date:** 2026-07-07
+**Reviewer:** Hermes Agent (autonomous review subagent)
+**Document:** `2026-07-07-EUV-Lithography-Simulator-Strategy.md`
+**Principle:** Ruthless gap analysis — no "well done"
 
 ---
 
 ## Executive Summary
 
-Das Dokument enthält **4 schwerwiegende faktische Fehler** und **8+ kritische Lücken**, die das gesamte Strategie-Fundament in Frage stellen. Die Kern-These ">80% aus Open Source" ist technisch falsch (ELitho hat kein RCWA), die Export-These "MIT-Code aus Deutschland = legal" ist rechtlich gefährlich, der Wettbewerb wurde nur oberflächlich analysiert, und der Zeitplan ignoriert kritische Abhängigkeiten. Das Dokument suggeriert Sicherheit, wo keine ist.
+The document contains **4 serious factual errors** and **8+ critical gaps** that call the entire strategic foundation into question. The core thesis of ">80% from open source" is technically wrong (ELitho has no RCWA), the export thesis of "MIT code from Germany = legal" is legally dangerous, the competition was only superficially analyzed, and the timeline ignores critical dependencies. The document suggests confidence where none exists.
 
 ---
 
-## Lücken-Analyse
+## Gap Analysis
 
-### 🔴 KRITISCH — Diese Punkte machen das gesamte Konzept fragwürdig
-
----
-
-#### 1. 🔴 FAKTISCHER FEHLER: ELitho implementiert KEIN RCWA
-
-**Dokument-Behauptung (Zeile 158):** "ELitho (MIT) – Bestehende RCWA + TMM Implementation"
-**Architektur-Diagramm (Zeile 113):** "RCWA (Mask)"
-
-**Geprüft:** ELitho hat in seinem gesamten Source-Code **kein RCWA**. Der Code enthält:
-- `multilayer.py` — TMM (Transfer Matrix Method) für Multilayer-Spiegel
-- `m3d.py` — Mask-3D-Parameter (geometrische Näherung, KEIN rigoroser EM-Solver)
-- `diffraction_order.py` — Beugungsordnung-Berechnung (kinematisch)
-- `fourier.py` — Fourier-Optik (Abbe/Hopkins)
-- `absorber.py` — Absorber-Modell
-
-**Bedeutung:**
-- RCWA ist der STANDARD für rigorose Masken-Simulation. Ohne RCWA kann das System keine akkuraten Beugungseffekte von EUV-Masken (Absorber-3D-Effekte, Shadowing) berechnen.
-- ELitho ist ein **TMM+Fourier-Optik-Tool** — nützlich für Multilayer-Reflektivität und Aerial Image 1. Ordnung, aber **kein Ersatz für einen rigorosen Mask-Solver**.
-- Die Behauptung "80% aus Open Source" ist mit diesem Fehler nicht haltbar — der kritischste Baustein (RCWA-Mask-Solver) fehlt.
-
-**Korrekturvorschlag:** Entweder einen echten RCWA-Solver schreiben (6–12 Monate Arbeit, siehe Punkt 4) oder auf TorchLitho setzen, das RCWA-artige Methoden hat. Oder LithographySimulator (LGPL) als Basis für RCWA verwenden — aber LGPL-kompatibel einbinden.
-
-**Priorität:** 🔴 KRITISCH
+### 🔴 CRITICAL — These points make the entire concept questionable
 
 ---
 
-#### 2. 🔴 EXPORTKONTROLLE: Die Annahme "MIT-Code aus Deutschland = legal nach China" ist gefährlich falsch
+#### 1. 🔴 FACTUAL ERROR: ELitho does NOT implement RCWA
 
-**Dokument-Behauptung (Zeile 20):** "Software die in Deutschland entwickelt wird und deren Open-Source-Kern (MIT/Apache-2.0) keine US-Ursprungsregeln verletzt, kann legal exportiert werden."
+**Document claim (line 158):** "ELitho (MIT) — Existing RCWA + TMM implementation"
+**Architecture diagram (line 113):** "RCWA (Mask)"
 
-**Was das Dokument ignoriert:**
-- **EU-Dual-Use-Verordnung 2021/821 ist LIZENZ-UNABHÄNGIG.** Eine Open-Source-Lizenz (MIT, Apache) hat NULL Einfluss auf Exportkontrolle. Exportkontrolle prüft WAS die Software tut, nicht unter welcher Lizenz sie steht.
-- **Wassenaar-Abkommen Kategorie 3 (Elektronik):** Kontrolliert "Software" speziell entwickelt für "Herstellung" von Halbleiter-Bauelementen. EUV-Lithographie-Simulation ist Software für die Entwicklung/Herstellung von Halbleitern mit <7nm-Technologieknoten — fällt UNTER die Kontrollliste (3.D.003 oder ähnlich).
-- **Deutsche AWV (Außenwirtschaftsverordnung):** Setzt EU-Dual-Use 1:1 um. Export nach China (Drittland außerhalb EU) ist genehmigungspflichtig, WENN die Software unter Anhang I fällt.
-- **Nanotechnology/Catch-All-Klausel (Art. 4 EU 2021/821):** Selbst wenn die Software NICHT auf der Liste steht, kann eine Genehmigungspflicht entstehen, wenn der Endverwender (z.B. SMIC, Huawei-Tochter) auf einer Sanktionsliste steht oder die Software für militärische Zwecke genutzt werden könnte.
-- **US-Extraterritorialität:** Die US-BIS Export Administration Regulations (EAR) haben extraterritoriale Wirkung. Wenn die Software US-Ursprungskomponenten enthält (CUDA-Bibliotheken von NVIDIA, die unter US-Exportrecht fallen), gilt EAR auch für eine deutsche Firma.
+**Verified:** ELitho has **no RCWA** in its entire source code. The code contains:
+- `multilayer.py` — TMM (Transfer Matrix Method) for multilayer mirrors
+- `m3d.py` — Mask-3D parameters (geometric approximation, NOT a rigorous EM solver)
+- `diffraction_order.py` — Diffraction order calculation (kinematic)
+- `fourier.py` — Fourier optics (Abbe/Hopkins)
+- `absorber.py` — Absorber model
 
-**Brisanz:** Der entscheidende Wettbewerbsvorteil "China-Legal = ✅" könnte sich als **strafbarer Exportverstoß** herausstellen. Das Risiko wird im Dokument mit "Niedrig-Mittel" eingestuft — das ist fahrlässig.
+**Significance:**
+- RCWA is the STANDARD for rigorous mask simulation. Without RCWA, the system cannot accurately compute diffraction effects of EUV masks (absorber 3D effects, shadowing).
+- ELitho is a **TMM + Fourier optics tool** — useful for multilayer reflectivity and first-order aerial image, but **no substitute for a rigorous mask solver**.
+- The claim of "80% from open source" is untenable with this error — the most critical component (RCWA mask solver) is missing.
 
-**Korrekturvorschlag:** BAFA-Prüfung (Bundesamt für Wirtschaft und Ausfuhrkontrolle) VOR Produktentwicklung. Wenn EUV-Sim als Dual-Use eingestuft wird: Exportgenehmigungsverfahren einleiten (6–12 Monate). Alternativ: Produkt so designen, dass es künstlich auf ≥7nm beschränkt ist („EUV Lite" für Bildung).
+**Correction suggestion:** Either write a real RCWA solver (6–12 months of work, see point 4) or rely on TorchLitho, which has RCWA-like methods. Or use LithographySimulator (LGPL) as a basis for RCWA — but integrate it LGPL-compatibly.
 
-**Priorität:** 🔴 KRITISCH
-
----
-
-#### 3. 🔴 PHYSIKALISCHE MODELLE: TMM+Hopkins reichen NICHT für EUV
-
-**Dokument-Behauptung (Zeile 309):** "Numerische Methoden: ✅ Klar – TMM + RCWA + Fourier/Hopkins + MC"
-
-**Probleme:**
-
-- **High-NA EUV (0.55 NA) erfordert Waveguide/RCWA:** Für NA >0.33 sind Kirchhoff-Näherungen (dünne Maske) und einfache Fourier-Optik unzureichend. High-NA EUV erfordert rigorose 3D-Solver. Panoramic verwendet dafür **TRIG** (einen Waveguide/FDFD-Solver), nicht RCWA.
-- **ELitho verwendet exakt diese Methode nicht** — siehe Punkt 1.
-- **TorchLitho 2.0** beschreibt sich als "lithography simulation engine for full-chip scale mask optimization" — das könnte RCWA-basiert sein, verwendet aber vermutlich vereinfachte M3D-Modelle, keine rigorosen Solver für jede Pixel-Position.
-- **TMM reicht für Multilayer-Spiegel** (das ist korrekt), aber nicht für Masken-Simulation oder Aerial Image bei EUV-Wellenlängen.
-
-**Industriestandard:**
-- KLA PROLITH: RCWA + Eigenentwicklung (TEMPEST)
-- Panoramic: TRIG (Waveguide/FDFD — 20x schneller als FDTD für EUV)
-- ASML Brion Tachyon: Waveguide-basiert
-- Synopsys S-Litho: RCWA + FEM Hybrid
-
-**Kein kommerzieller EUV-Simulator verwendet TMM+Hopkins als Kern** — das ist ein Academic-Tool, kein Produkt.
-
-**Korrekturvorschlag:** 
-- Phase 1: TMM+Bloch-Ansatz + TorchLitho M3D (vereinfacht, aber GPU-beschleunigt)
-- Phase 2: Eigenen Waveguide/RCWA-Solver in PyTorch/Rust — realistisch 6–8 Monate Entwicklungszeit
-
-**Priorität:** 🔴 KRITISCH
+**Priority:** 🔴 CRITICAL
 
 ---
 
-#### 4. 🔴 GPU-VRAM: RCWA auf RTX 5060 Ti (16GB) — nicht realistisch für produktive Größen
+#### 2. 🔴 EXPORT CONTROL: The assumption "MIT code from Germany = legal for China" is dangerously wrong
 
-**Dokument-Behauptung (Zeilen 320):** "ELitho + TorchLitho lokal deployen auf Debian mit RTX 5060 Ti"
+**Document claim (line 20):** "Software developed in Germany whose open-source core (MIT/Apache-2.0) does not violate US origin rules can be legally exported."
 
-**VRAM-Abschätzung für RCWA (100x100µm Maske):**
+**What the document ignores:**
+- **EU Dual-Use Regulation 2021/821 is LICENSE-INDEPENDENT.** An open-source license (MIT, Apache) has ZERO impact on export control. Export control evaluates WHAT the software does, not under which license it is released.
+- **Wassenaar Arrangement Category 3 (Electronics):** Controls "software" specially designed for "production" of semiconductor devices. EUV lithography simulation is software for the development/production of semiconductors with <7nm technology nodes — falls UNDER the control list (3.D.003 or similar).
+- **German AWV (Foreign Trade and Payments Ordinance):** Transposes EU Dual-Use 1:1. Export to China (third country outside the EU) requires a permit IF the software falls under Annex I.
+- **Nanotechnology/Catch-All Clause (Art. 4 EU 2021/821):** Even if the software is NOT on the list, a permit requirement can arise if the end user (e.g., SMIC, Huawei subsidiary) is on a sanctions list or the software could be used for military purposes.
+- **US Extraterritoriality:** The US BIS Export Administration Regulations (EAR) have extraterritorial effect. If the software contains US-origin components (CUDA libraries from NVIDIA, which fall under US export law), EAR also applies to a German company.
 
-| Komponente | Annahme/Formel | VRAM |
+**Gravity:** The supposed competitive advantage of "China-legal = ✅" could turn out to be a **criminal export violation**. The document rates this risk as "Low-Medium" — that is negligent.
+
+**Correction suggestion:** BAFA review (Federal Office for Economic Affairs and Export Control) BEFORE product development. If EUV Sim is classified as Dual-Use: initiate the export permit process (6–12 months). Alternatively: design the product to be artificially limited to ≥7nm ("EUV Lite" for education).
+
+**Priority:** 🔴 CRITICAL
+
+---
+
+#### 3. 🔴 PHYSICAL MODELS: TMM + Hopkins are NOT sufficient for EUV
+
+**Document claim (line 309):** "Numerical methods: ✅ Clear — TMM + RCWA + Fourier/Hopkins + MC"
+
+**Problems:**
+
+- **High-NA EUV (0.55 NA) requires Waveguide/RCWA:** For NA >0.33, Kirchhoff approximations (thin mask) and simple Fourier optics are insufficient. High-NA EUV requires rigorous 3D solvers. Panoramic uses **TRIG** (a waveguide/FDFD solver) for this, not RCWA.
+- **ELitho does not use this method at all** — see point 1.
+- **TorchLitho 2.0** describes itself as "lithography simulation engine for full-chip scale mask optimization" — this could be RCWA-based, but likely uses simplified M3D models, not rigorous solvers for every pixel position.
+- **TMM is sufficient for multilayer mirrors** (that is correct), but not for mask simulation or aerial image at EUV wavelengths.
+
+**Industry standard:**
+- KLA PROLITH: RCWA + proprietary development (TEMPEST)
+- Panoramic: TRIG (Waveguide/FDFD — 20x faster than FDTD for EUV)
+- ASML Brion Tachyon: Waveguide-based
+- Synopsys S-Litho: RCWA + FEM hybrid
+
+**No commercial EUV simulator uses TMM + Hopkins as its core** — that is an academic tool, not a product.
+
+**Correction suggestion:**
+- Short-term: TMM + Bloch approach + TorchLitho M3D (simplified, but GPU-accelerated)
+- Long-term: Custom waveguide/RCWA solver in PyTorch/Rust — realistically 6–8 months development time
+
+**Priority:** 🔴 CRITICAL
+
+---
+
+#### 4. 🔴 GPU VRAM: RCWA on RTX 5060 Ti (16GB) — not realistic for production sizes
+
+**Document claim (lines 320):** "Deploy ELitho + TorchLitho locally on Debian with RTX 5060 Ti"
+
+**VRAM estimate for RCWA (100×100µm mask):**
+
+| Component | Assumption/Formula | VRAM |
 |---|---|---|
-| Fourier-Moden (RCWA) | ~400 × 400 Moden bei EUV-Wellenlänge | — |
-| Permittivitätsmatrix | 400 × 400 × 10 Schichten × komplex = ~20M Werte | ~320 MB |
-| SVD/Matrix-Faktorisierung (dicht) | O(N³) ~400³ = 64M komplex | ~1 GB |
-| Pro Propagationsrichtung (2× TE+TM) | ×4 | ~4 GB |
-| GPU-Kernel-Zwischenspeicher | FFTs, Eigenzerlegungen | ~4 GB |
-| Pro Source-Punkt (Abbe: ~1000 Punkte) | ×1000(!) | 4 TB (nicht parallelisierbar) |
+| Fourier modes (RCWA) | ~400 × 400 modes at EUV wavelength | — |
+| Permittivity matrix | 400 × 400 × 10 layers × complex = ~20M values | ~320 MB |
+| SVD/matrix factorization (dense) | O(N³) ~400³ = 64M complex | ~1 GB |
+| Per propagation direction (2× TE+TM) | ×4 | ~4 GB |
+| GPU kernel intermediate storage | FFTs, eigendecompositions | ~4 GB |
+| Per source point (Abbe: ~1000 points) | ×1000(!) | 4 TB (not parallelizable) |
 
-**Realität:**
-- Für 100×100µm mit 10nm Auflösung = 10.000×10.000 Pixel = **300 GB+ VRAM** Rohdaten
-- RCWA auf GPU skaliert NICHT linear — die Eigenwertprobleme sind O(N³) komplex
-- ELitho's "GPU-Unterstützung" bedeutet: TMM und dünne Masken-Aerial-Image — **kein** rigoroses RCWA
-- Selbst Panoramic's TRIG (20x schneller als FDTD) läuft auf **CPU-Clustern**, nicht auf einer einzelnen GPU
+**Reality:**
+- For 100×100µm at 10nm resolution = 10,000×10,000 pixels = **300 GB+ VRAM** raw data
+- RCWA on GPU does NOT scale linearly — the eigenvalue problems are O(N³) complex
+- ELitho's "GPU support" means: TMM and thin-mask aerial image — **not** rigorous RCWA
+- Even Panoramic's TRIG (20x faster than FDTD) runs on **CPU clusters**, not on a single GPU
 
-**Korrekturvorschlag:** VRAM-Anforderung realistisch bewerten. Für Full-Chip (>1mm²) wird CPU-Cluster oder Cloud-GPU-Cluster ($500+/h) benötigt. RTX 5060 Ti reicht für **Demonstration von 5×5µm mit stark reduzierter Auflösung** und als Educational-Tool — nicht für produktive Nutzung.
+**Correction suggestion:** Assess VRAM requirements realistically. For full-chip (>1mm²), a CPU cluster or cloud GPU cluster ($500+/h) is needed. RTX 5060 Ti is sufficient for **demonstration of 5×5µm with heavily reduced resolution** and as an educational tool — not for production use.
 
-**Priorität:** 🔴 KRITISCH
+**Priority:** 🔴 CRITICAL
 
 ---
 
-#### 5. 🔴 WETTBEWERB: Panoramic HyperLith v7 — dramatisch unterschätzt
+#### 5. 🔴 COMPETITION: Panoramic HyperLith v7 — dramatically underestimated
 
-**Dokument-Behauptung (Zeilen 213–225):** Wettbewerbsmatrix mit 11 Kriterien
-**Dokument-Behauptung (Zeile 43):** Panoramic im "niedrigpreisig" + "einfach"-Quadranten
+**Document claim (lines 213–225):** Competitive matrix with 11 criteria
+**Document claim (line 43):** Panoramic in the "low-cost" + "simple" quadrant
 
-**Was verkürzt/übersehen wird:**
+**What is abbreviated or overlooked:**
 
-| Panoramic HyperLith v7 Feature | Im Dokument | Realität |
+| Panoramic HyperLith v7 Feature | In Document | Reality |
 |---|---|---|
-| **TRIG 3D Maxwell Solver** | Nicht erwähnt | 20× schneller als FDTD für EUV, Waveguide-basiert |
-| **GPU-Unterstützung (HSS)** | ✅ "HSS" genannt, aber nicht bewertet | HyperLith Spectral Simulation = GPU-beschleunigt für Massen-Parallelsimulation |
-| **SEM Simulation (PanSEM)** | ❌ Fehlt | Physikalisches SEM-Modell inkl. shrinkage |
-| **SEM Image Analysis (PanSIA)** | ❌ Fehlt | CD/LER-Messung direkt aus SEM-Bildern |
-| **Source Optimization (PanSO)** | ❌ Fehlt | Eigenständiges Source-Modul |
-| **ARMI Resist-Pipeline** | ❌ Fehlt | Advanced Resist Modeling Infrastructure + PanTune |
-| **NTD Resist Model** | ❌ Fehlt | Negative Tone Develop |
-| **Faster RCWA** | ❌ Fehlt | HyperLith v7 optimiert den eigenen RCWA-Solver |
-| **Stochastic Resist Models** | ❌ "Stochastik" im Architecture-Teil | EUV-spezifische stochastische Modelle |
-| **FullChip OPC/Verification** | ❌ Fehlt | Komplette OPC-Pipeline |
-| **3D FEM Resist Shrinkage** | ❌ Fehlt | Finite-Elemente-Modell |
+| **TRIG 3D Maxwell Solver** | Not mentioned | 20× faster than FDTD for EUV, waveguide-based |
+| **GPU Support (HSS)** | ✅ "HSS" mentioned, but not evaluated | HyperLith Spectral Simulation = GPU-accelerated for mass parallel simulation |
+| **SEM Simulation (PanSEM)** | ❌ Missing | Physical SEM model including shrinkage |
+| **SEM Image Analysis (PanSIA)** | ❌ Missing | CD/LER measurement directly from SEM images |
+| **Source Optimization (PanSO)** | ❌ Missing | Independent source module |
+| **ARMI Resist Pipeline** | ❌ Missing | Advanced Resist Modeling Infrastructure + PanTune |
+| **NTD Resist Model** | ❌ Missing | Negative Tone Develop |
+| **Faster RCWA** | ❌ Missing | HyperLith v7 optimizes its own RCWA solver |
+| **Stochastic Resist Models** | ❌ "Stochastic" in Architecture section | EUV-specific stochastic models |
+| **FullChip OPC/Verification** | ❌ Missing | Complete OPC pipeline |
+| **3D FEM Resist Shrinkage** | ❌ Missing | Finite element model |
 
-**Positionierung:** Panoramic ist NICHT "niedrigpreisig+einfach". Panoramic ist der **einzige unabhängige Anbieter** neben KLA/Synopsys, mit **20+ Jahren** Erfahrung in Lithographie-Simulation. v7 ist ein Major Release mit eigenem rigorosen Maxwell-Solver.
+**Positioning:** Panoramic is NOT "low-cost + simple". Panoramic is the **only independent vendor** besides KLA/Synopsys, with **20+ years** of experience in lithography simulation. v7 is a major release with its own rigorous Maxwell solver.
 
-**Korrekturvorschlag:** Panoramic als ernsthaften Konkurrenten bewerten, nicht als "niedrigpreisige Lücke". Differenzierungsmerkmale identifizieren (API, Open Source, EU-Hosting bleiben als echte Vorteile).
+**Correction suggestion:** Evaluate Panoramic as a serious competitor, not as a "low-cost gap". Identify differentiation factors (API, open source, EU hosting remain genuine advantages).
 
-**Priorität:** 🔴 KRITISCH
-
----
-
-### 🟡 HOCH — Mittelbare Existenzbedrohung
+**Priority:** 🔴 CRITICAL
 
 ---
 
-#### 6. 🟡 GESCHÄFTSMODELL: "Open Core + Commercial" bei Open-Source-Code
-
-**Dokument-Behauptung (Zeilen 242–254):** Open Core (AGPL) vs Commercial Abgrenzung.
-
-**Kritische Widersprüche:**
-- **OpenILT (231 Stars, MIT) ist bereits eine vollständige OPC-Lösung** — wenn MIT-Code die OpenILT-Integration in den Open Core ist, können Kunden einfach OpenILT direkt nutzen, ohne Commercial zu kaufen.
-- **TorchResist (Apache-2.0) ist bereits differentiell** — das Resist-Modell, das als Premium-Feature verkauft werden soll, ist Open Source.
-- **Open Core enthält bereits Core Engine, TMM, CLI, SDK** — was bleibt für Commercial? Web UI? Ein React-Dashboard rechtfertigt keine 150.000€ Enterprise-Lizenz.
-- **AGPL ist ein No-Go für Fabs:** Halbleiter-Fabs (selbst chinesische) haben oft AGPL-Aversion wegen der Copyleft-Klausel. ASML/KLA-PROs nutzen proprietäre Lizenzen.
-- **"GitLab-Modell"** funktioniert, weil GitLabs Open Core bewusst **Enterprise-Features ausklammert** (AD/LDAP, Geo-Replication, Audit). Bei EUV-Simulation sind die wertvollen Features (Resist, OPC, Stochastik) alle Open Source.
-
-**Korrekturvorschlag:** Lizenz-Modell überdenken. Nur AGPL für Community-Edition, echte Proprietary-Features identifizieren: (a) Daten-getriebene Kalibrierung an realen Wafern, (b) Support+Training, (c) Custom-Modell-Entwicklung. Die reinen Code-Features reichen nicht.
-
-**Priorität:** 🟡 HOCH
+### 🟡 HIGH — Indirect existential threat
 
 ---
 
-#### 7. 🟡 ZEITPLAN: 3 Monate für POC — unrealistisch
+#### 6. 🟡 BUSINESS MODEL: "Open Core + Commercial" with open-source code
 
-**Dokument-Behauptung (Zeilen 259–265):** Phase 1 (Monate 1–3): ELitho + TorchLitho + OpenILT Integration, REST API, GPU-Beschleunigung, GitHub Release.
+**Document claim (lines 242–254):** Open Core (AGPL) vs Commercial demarcation.
 
-**Kritische Pfade:**
-- **ELitho hat KEIN RCWA** — das zu schreiben oder einen Ersatz zu finden dauert 2–3 Monate ALLEIN
-- **ELitho + TorchLitho Integration:** Beide Projekte haben unterschiedliche Datenformate, Koordinatensysteme und Abstraktionen. API-Bridge schreiben: 1–2 Monate.
-- **OpenILT Integration:** OpenILT ist für DUV-Optimierung gedacht, nicht EUV. EUV-Anpassung erfordert M3D-Korrekturen: 1–2 Monate.
-- **GPU-Beschleunigung:** PyTorch-CUDA ist vorhanden, aber die Simulation muss MATRIX-OPERATIONEN in torch ausdrücken — das ist nicht einfach umgesetzt. ELitho verwendet numpy + scipy sparse → Portierung zu torch: 1–3 Monate.
-- **REST API + Web-Wrapper:** Standard, aber komplexitätsabhängig 1–2 Monate.
+**Critical contradictions:**
+- **OpenILT (231 stars, MIT) is already a complete OPC solution** — if MIT code is the OpenILT integration into the Open Core, customers can simply use OpenILT directly without buying Commercial.
+- **TorchResist (Apache-2.0) is already differentiable** — the resist model intended to be sold as a premium feature is open source.
+- **Open Core already contains Core Engine, TMM, CLI, SDK** — what remains for Commercial? Web UI? A React dashboard does not justify a €150,000 enterprise license.
+- **AGPL is a no-go for fabs:** Semiconductor fabs (even Chinese ones) often have AGPL aversion due to the copyleft clause. ASML/KLA PROs use proprietary licenses.
+- **"GitLab model"** works because GitLab's Open Core deliberately **excludes enterprise features** (AD/LDAP, Geo-Replication, Audit). With EUV simulation, the valuable features (resist, OPC, stochastic) are all open source.
 
-| Aufgabe | Optimistisch | Realistisch | Pessimistisch |
+**Correction suggestion:** Rethink the licensing model. AGPL only for community edition, identify genuine proprietary features: (a) data-driven calibration on real wafers, (b) support + training, (c) custom model development. Pure code features are not sufficient.
+
+**Priority:** 🟡 HIGH
+
+---
+
+#### 7. 🟡 TIMELINE: 3 months for POC — unrealistic
+
+**Document claim (lines 259–265):** Stage 1 (months 1–3): ELitho + TorchLitho + OpenILT integration, REST API, GPU acceleration, GitHub release.
+
+**Critical paths:**
+- **ELitho has NO RCWA** — writing one or finding a replacement takes 2–3 months ALONE
+- **ELitho + TorchLitho integration:** Both projects have different data formats, coordinate systems, and abstractions. Writing an API bridge: 1–2 months.
+- **OpenILT integration:** OpenILT is designed for DUV optimization, not EUV. EUV adaptation requires M3D corrections: 1–2 months.
+- **GPU acceleration:** PyTorch-CUDA exists, but the simulation must express MATRIX OPERATIONS in torch — this is not trivial. ELitho uses numpy + scipy sparse → porting to torch: 1–3 months.
+- **REST API + Web wrapper:** Standard, but complexity-dependent 1–2 months.
+
+| Task | Optimistic | Realistic | Pessimistic |
 |---|---|---|---|
-| ELitho + TorchLitho Integration | 1 Monat | 2 Monate | 3 Monate |
-| RCWA-Ersatz | — | 3 Monate | 6 Monate |
-| OpenILT EUV-Portierung | 1 Monat | 2 Monate | 3 Monate |
-| GPU-Nativ (echt) | 1 Monat | 3 Monate | 5 Monate |
-| REST API + SDK | 0,5 Monate | 1 Monat | 2 Monate |
-| GitHub Release | 1 Woche | 1 Monat | 2 Monate |
-| **GESAMT Phase 1** | **3,5 Monate** | **6+ Monate** | **12+ Monate** |
+| ELitho + TorchLitho integration | 1 month | 2 months | 3 months |
+| RCWA replacement | — | 3 months | 6 months |
+| OpenILT EUV port | 1 month | 2 months | 3 months |
+| GPU-native (real) | 1 month | 3 months | 5 months |
+| REST API + SDK | 0.5 months | 1 month | 2 months |
+| GitHub release | 1 week | 1 month | 2 months |
+| **TOTAL Stage 1** | **3.5 months** | **6+ months** | **12+ months** |
 
-POC, der nur 1D-Aerial-Image auf 10×5µm mit TMM zeigt, ist in <2 Wochen machbar. Aber ein **produktiver** POC (2D, RCWA-artig, GPU-beschleunigt) ist in 3 Monaten nicht realistisch.
+A POC that only shows 1D aerial image on 10×5µm with TMM is achievable in <2 weeks. But a **productive** POC (2D, RCWA-like, GPU-accelerated) is not realistic in 3 months.
 
-**Korrekturvorschlag:** POC-Scope reduzieren. Phase 1: Nur ELitho (TMM) + TorchLitho (vereinfachtes M3D) + 1D-Demo. RCWA in Phase 2.
+**Correction suggestion:** Reduce POC scope. Stage 1: ELitho (TMM) only + TorchLitho (simplified M3D) + 1D demo. RCWA in Stage 2.
 
-**Priorität:** 🟡 HOCH
+**Priority:** 🟡 HIGH
 
 ---
 
-#### 8. 🟡 MARKTNISCHE: SMIC hat ASML-Scanner — die Nische ist kleiner als gedacht
+#### 8. 🟡 MARKET NICHE: SMIC has ASML scanners — the niche is smaller than assumed
 
-**Dokument-Behauptung (Zeile 14):** "Chinesische Fabs wie SMIC, Hua Hong, CXMT haben keinen legalen Zugang zu PROLITH/KLA, S-Litho/Synopsys oder ASML Brion Tachyon."
+**Document claim (line 14):** "Chinese fabs like SMIC, Hua Hong, CXMT have no legal access to PROLITH/KLA, S-Litho/Synopsys, or ASML Brion Tachyon."
 
-**Faktische Einwände:**
-- **SMIC hat ASML NXT:1980i (DUV) und NXE:3400C (EUV) Scanner** — erworben VOR den Exportbeschränkungen 2023. SMIC kann EUV-Lithographie betreiben (7nm N+2-Prozess).
-- **SMIC hat Zugang zu ASML Brion Tachyon** — als Bestandteil des Scanner-Kaufs (Brion ist eine ASML-Tochter).
-- **PROLITH-Verbot trifft nur neue Lizenzen.** Wenn Institute bestehende Lizenzen seit Jahren nutzen, verlieren sie nicht sofort Zugang.
-- **Workarounds:** China-IPs nutzen VPNs, Proxy-Server und Drittländer für Software-Zugang. Die Enforcement-Lücke ist bekannt.
+**Factual objections:**
+- **SMIC has ASML NXT:1980i (DUV) and NXE:3400C (EUV) scanners** — acquired BEFORE the export restrictions in 2023. SMIC can operate EUV lithography (7nm N+2 process).
+- **SMIC has access to ASML Brion Tachyon** — as part of the scanner purchase (Brion is an ASML subsidiary).
+- **PROLITH ban only affects new licenses.** If institutes have been using existing licenses for years, they do not immediately lose access.
+- **Workarounds:** Chinese IPs use VPNs, proxy servers, and third countries for software access. The enforcement gap is well known.
 
-| Kunde | Scanner | Sim-Zugang | Nischentauglich |
+| Customer | Scanner | Sim Access | Niche-Relevant |
 |---|---|---|---|
 | SMIC Shanghai | ASML NXE:3400C + NXT | Brion Tachyon (ASML) | ❌ |
-| SMIC Beijing | ASML NXT:1980i | Synopsys (via Partner) | ❌ |
-| Hua Hong | ASML NXT | KLA PROLITH (Altlizenz?) | Mittel |
-| CXMT | ASML NXT | ? | Möglich |
-| Forschung (IMECAS, PKU) | Keine → brauchen Sim | Kein Zugang | ✅ |
-| SMEE (Scanner-Hersteller) | Eigenbau-Scanner | Brauchen eigene Sim | ✅ |
+| SMIC Beijing | ASML NXT:1980i | Synopsys (via partner) | ❌ |
+| Hua Hong | ASML NXT | KLA PROLITH (old license?) | Moderate |
+| CXMT | ASML NXT | ? | Possible |
+| Research (IMECAS, PKU) | None → need sim | No access | ✅ |
+| SMEE (scanner manufacturer) | Own scanners | Need own sim | ✅ |
 
-**Zielgruppe schrumpft:** Von "20–30 Organisationen" auf vielleicht 10–15 reale Kunden, die (a) keine ASML-Scanner haben, (b) keine Alt-Lizenzen besitzen und (c) ein ernsthaftes Budget für Simulation haben.
+**Target audience shrinks:** From "20–30 organizations" to perhaps 10–15 real customers who (a) do not have ASML scanners, (b) do not own old licenses, and (c) have a serious budget for simulation.
 
-**Korrekturvorschlag:** Marktgröße nach unten korrigieren ($2–10M statt $10–30M). Primäre Nische auf **Forschung + SMEE + Bildung** fokussieren, nicht auf SMIC.
+**Correction suggestion:** Downward-adjust market size ($2–10M instead of $10–30M). Focus primary niche on **research + SMEE + education**, not on SMIC.
 
-**Priorität:** 🟡 HOCH
-
----
-
-### 🟢 MITTEL — Signifikant, aber nicht existenzbedrohend
+**Priority:** 🟡 HIGH
 
 ---
 
-#### 9. 🟢 OPEN-SOURCE-CODE-QUALITÄT: Kein Projekt ist produktionsreif
+### 🟢 MEDIUM — Significant, but not existential
 
-**GitHub-Status (geprüft am 07.07.2026):**
+---
 
-| Projekt | Stars | Forks | Issues | Letzter Commit | README-Quali | Testabdeckung |
+#### 9. 🟢 OPEN SOURCE CODE QUALITY: No project is production-ready
+
+**GitHub status (verified 2026-07-07):**
+
+| Project | Stars | Forks | Issues | Latest Commit | README Quality | Test Coverage |
 |---|---|---|---|---|---|---|
-| **ELitho** | 🟢 2 | 🟢 3 | 0 | Jun 2026 | Minimal | ❌ Keine Tests sichtbar |
-| **EUVlitho** | 🟢 18 | 🟢 10 | 0 | Jun 2026 | Mittel | ❌ |
-| **TorchLitho 2.0** | 🟡 46 | 🟡 12 | 0 | Jul 2026 | Mittel | ❌ |
-| **OpenILT** | 🟢 231 | 🟢 53 | 8 | Jun 2026 | Gut | ⚠️ Teilweise |
-| **TorchResist** | 🟢 26 | 🟢 12 | 0 | Jul 2026 | Mittel | ❌ |
-| **OxiPhoton** | 🟢 10 | 🟢 1 | 0 | Jun 2026 | Gut (Rust) | ❌ |
+| **ELitho** | 🟢 2 | 🟢 3 | 0 | Jun 2026 | Minimal | ❌ No tests visible |
+| **EUVlitho** | 🟢 18 | 🟢 10 | 0 | Jun 2026 | Moderate | ❌ |
+| **TorchLitho 2.0** | 🟡 46 | 🟡 12 | 0 | Jul 2026 | Moderate | ❌ |
+| **OpenILT** | 🟢 231 | 🟢 53 | 8 | Jun 2026 | Good | ⚠️ Partial |
+| **TorchResist** | 🟢 26 | 🟢 12 | 0 | Jul 2026 | Moderate | ❌ |
+| **OxiPhoton** | 🟢 10 | 🟢 1 | 0 | Jun 2026 | Good (Rust) | ❌ |
 
-**Probleme:**
-- **Kein Projekt hat Release- oder CI/CD-Pipelines*** ausnahme OpenILT-ecosystem
-- **0 offene Issues** bei fast allen → wahrscheinlich kein Issue-Tracker aktiv, nicht "keine Bugs"
-- **ELitho ist de facto Alpha-Software** (2 Stars = 2 Leute haben es angeschaut)
-- **TorchLitho 2.0 (46 Stars)** ist das aktivste, aber als "for full-chip scale" beschrieben — das klingt nach Academic-Tool, nicht kommerziell
-- **OpenILT (231 Stars)** ist das einzige mit echter Community — aber es ist ein OPC-Tool (Masken-Optimierung), kein Simulator
-- **Dokumentation fehlt** bei allen Projekten
+**Problems:**
+- **No project has release or CI/CD pipelines** — except OpenILT ecosystem
+- **0 open issues** on nearly all → likely no active issue tracker, not "no bugs"
+- **ELitho is effectively alpha software** (2 stars = 2 people have looked at it)
+- **TorchLitho 2.0 (46 stars)** is the most active, but described as "for full-chip scale" — sounds like an academic tool, not commercial
+- **OpenILT (231 stars)** is the only one with a real community — but it is an OPC tool (mask optimization), not a simulator
+- **Documentation is missing** across all projects
 
-**Korrekturvorschlag:** "Integration von Open-Source-Komponenten" ist optimistisch dargestellt. Realistisch ist, dass ein Großteil des Codes **neu geschrieben oder grundlegend überarbeitet** werden muss. Die 80%-These gilt quantitativ (Code-Zeilen), nicht qualitativ (Product Readiness).
+**Correction suggestion:** "Integration of open-source components" is presented optimistically. Realistically, a large portion of the code will need to be **rewritten or substantially reworked**. The 80% thesis holds quantitatively (code lines), but not qualitatively (product readiness).
 
-**Priorität:** 🟢 MITTEL
+**Priority:** 🟢 MEDIUM
 
 ---
 
-#### 10. 🟢 FEHLENDE MODULE: Nicht im Dokument erwähnt
+#### 10. 🟢 MISSING MODULES: Not mentioned in the document
 
-Das Dokument listet zwar viele Module, aber **folgende fehlen komplett:**
+The document lists many modules, but **the following are completely absent:**
 
-| Fehlendes Modul | Wichtigkeit | Begründung |
+| Missing Module | Importance | Rationale |
 |---|---|---|
-| **Source-Mask-Optimization (SMO)** | 🔴 Hoch | Standard-Workflow für EUV ≤7nm, wäre Killer-Feature |
-| **Optical Proximity Correction (OPC)** | 🔴 Hoch | Ohne OPC ist der Simulator für Fabs nutzlos — OpenILT ist für ILT, nicht klassisches OPC |
-| **Belichtungs-Pupillen-Optimierung** | 🟡 Mittel | Scanner-Aberration-Kompensation |
-| **Etch-Bias/Etch-Simulation** | 🟡 Mittel | Ohne Etch-Modell ist CD-Vorhersage unvollständig (10–20% Bias) |
-| **Full-Chip-Modus** | 🟡 Mittel | EDA-Integration (Defect Detection, PV-Band) |
-| **Metrologie-Abgleich** | 🟡 Mittel | Vergleich mit realen CD-SEM-Daten (Panoramic hat PanSIA!) |
-| **Multilayer-Defekt-Simulation** | 🟢 Niedrig | Nischen-Feature |
-| **Process Window (PW) + Bossung-Plots** | 🟢 Mittel | Standard-Ausgabeformat in der Industrie |
-| **Hot-Spot-Detection** | 🟢 Mittel | Design-for-Manufacturing |
+| **Source-Mask Optimization (SMO)** | 🔴 High | Standard workflow for EUV ≤7nm, would be a killer feature |
+| **Optical Proximity Correction (OPC)** | 🔴 High | Without OPC, the simulator is useless for fabs — OpenILT is for ILT, not classical OPC |
+| **Exposure Pupil Optimization** | 🟡 Moderate | Scanner aberration compensation |
+| **Etch Bias / Etch Simulation** | 🟡 Moderate | Without an etch model, CD prediction is incomplete (10–20% bias) |
+| **Full-Chip Mode** | 🟡 Moderate | EDA integration (defect detection, PV band) |
+| **Metrology Alignment** | 🟡 Moderate | Comparison with real CD-SEM data (Panoramic has PanSIA!) |
+| **Multilayer Defect Simulation** | 🟢 Low | Niche feature |
+| **Process Window (PW) + Bossung Plots** | 🟢 Moderate | Standard output format in the industry |
+| **Hot-Spot Detection** | 🟢 Moderate | Design for Manufacturing |
 
-**Korrekturvorschlag:** Missing Modules Board erstellen. SMO + OPC sind **nicht optional** für Fabs. Ohne diese Features ist das Produkt ein Academic-Tool.
+**Correction suggestion:** Create a missing modules board. SMO + OPC are **not optional** for fabs. Without these features, the product is an academic tool.
 
-**Priorität:** 🟢 MITTEL
-
----
-
-#### 11. 🟢 RECHTLICHES: Patente sind ein blind spot
-
-**Dokument-Behauptung (Zeilen 292–293):** "ASML/KLA-Patente sind meist auf Hardware/Kalibrierung, nicht Simulation"
-
-**Gegenbeispiele (bekannte Patentfamilien):**
-- **US 9,852,308 (ASML):** "Method for simulating lithography processes" — direkt auf Simulationsmethoden
-- **US 10,185,224 (KLA-Tencor):** "RCWA-based simulation for EUV mask inspection" — RCWA-Methoden-Patent
-- **US 11,086,317 (ASML Brion):** "Source-mask optimization using machine learning" — SMO-Patent
-- **Panoramic** hält eigene Patente auf TRIG-Solver und resist modeling
-
-OpenILT (MIT) ist frei nutzbar, aber wenn der OpenILT-Code auf eine **patentierte Methode** zugreift, verletzt das Produkt das Patent — unabhängig vom Code-Lizenz. Freedom-to-Operate-Analyse ist kein Nice-to-have, sondern vor Produkt-Launch zwingend.
-
-**Korrekturvorschlag:** Patent-Recherche bei DPMA/USPTO. Insbesondere:
-- ASML (ca. 15.000 aktive Patente)
-- KLA (ca. 5.000 aktive Patente)
-- Nikon (ca. 3.000 aktive Patente)
-- Panoramic Technology (TRIG-Solver)
-
-**Priorität:** 🟢 MITTEL
+**Priority:** 🟢 MEDIUM
 
 ---
 
-#### 12. 🟢 DATENLÜCKE: >80% öffentlich — nicht bestätigt
+#### 11. 🟢 LEGAL: Patents are a blind spot
 
-**Dokument-Behauptung (Zeilen 170–207):** ">80% öffentlich. Bestätigt."
+**Document claim (lines 292–293):** "ASML/KLA patents are mostly on hardware/calibration, not simulation"
 
-**Einwände:**
-- **CXRO-Datenbank** hat Brechungsindices, aber diese sind für **ideale Schichten**. Echte Multilayer haben Interdiffusion (MoSi₂-Phasen), Rauigkeit, Oxidation — das sind 5–10% Fehler in Reflektivität.
-- **Resist-Parameter** aus Kozawa/Tagawa sind für Prototyp-Resists, nicht für aktuelle kommerzielle CAR/MOR von TOK/JSR. Der Unterschied in CD-Vorhersage kann 20–30% betragen.
-- **Sn-Plasma-Spektrum:** Öffentliche ARCNL-Daten sind für Idealparameter. Out-of-Band-Strahlung (IR, DUV) hängt stark vom konkreten LPP-Design ab.
-- **Scanner-Aberrationen** können durch Zernike-Polynome modelliert werden, aber die exakten ASML-Koeffizienten (z.B. NXE:3400C Flare-Level) sind Trade Secrets.
+**Counterexamples (known patent families):**
+- **US 9,852,308 (ASML):** "Method for simulating lithography processes" — directly on simulation methods
+- **US 10,185,224 (KLA-Tencor):** "RCWA-based simulation for EUV mask inspection" — RCWA method patent
+- **US 11,086,317 (ASML Brion):** "Source-mask optimization using machine learning" — SMO patent
+- **Panoramic** holds its own patents on the TRIG solver and resist modeling
 
-**Realistische Datenlücke:**
-- Öffentlich: ~65% (nicht 80%)
-- Fitbar: ~20% (nicht 15%)
-- Trade Secret: ~15% (nicht 5%)
+OpenILT (MIT) is freely usable, but if the OpenILT code accesses a **patented method**, the product infringes the patent — regardless of the code license. Freedom-to-Operate analysis is not a nice-to-have, but mandatory before product launch.
 
-Der Fehler reduziert die Genauigkeit von "Forschung" auf "Schätzung". Für Bildungs-Tool okay — für Fab-Entscheidungen (CD-Budget, OPC-Regeln) nicht akzeptabel.
+**Correction suggestion:** Patent search at DPMA/USPTO. In particular:
+- ASML (~15,000 active patents)
+- KLA (~5,000 active patents)
+- Nikon (~3,000 active patents)
+- Panoramic Technology (TRIG solver)
 
-**Korrekturvorschlag:** Datenlücke realistisch auf 65/20/15% korrigieren. Systematischen Kalibrierungs-Workflow beschreiben: Welche Daten werden mit dem ersten Fab-Kunden kalibriert?
-
-**Priorität:** 🟢 MITTEL
+**Priority:** 🟢 MEDIUM
 
 ---
 
-## Zusammenfassung: Bewertung der 10 Prüfpunkte
+#### 12. 🟢 DATA GAP: >80% publicly available — not confirmed
 
-| # | Punkt | Status | Priorität |
+**Document claim (lines 170–207):** ">80% publicly available. Confirmed."
+
+**Objections:**
+- **CXRO database** has refractive indices, but these are for **ideal layers**. Real multilayers have interdiffusion (MoSi₂ phases), roughness, oxidation — these introduce 5–10% error in reflectivity.
+- **Resist parameters** from Kozawa/Tagawa are for prototype resists, not for current commercial CAR/MOR from TOK/JSR. The difference in CD prediction can be 20–30%.
+- **Sn plasma spectrum:** Public ARCNL data is for ideal parameters. Out-of-band radiation (IR, DUV) strongly depends on the specific LPP design.
+- **Scanner aberrations** can be modeled using Zernike polynomials, but the exact ASML coefficients (e.g., NXE:3400C flare levels) are trade secrets.
+
+**Realistic data gap:**
+- Publicly available: ~65% (not 80%)
+- Fittable: ~20% (not 15%)
+- Trade secret: ~15% (not 5%)
+
+The error reduces accuracy from "research" to "estimate." Acceptable for an educational tool — not acceptable for fab decisions (CD budget, OPC rules).
+
+**Correction suggestion:** Correct the data gap to a realistic 65/20/15% split. Describe a systematic calibration workflow: which data will be calibrated with the first fab customer?
+
+**Priority:** 🟢 MEDIUM
+
+---
+
+## Summary: Evaluation of the 10 Review Points
+
+| # | Point | Status | Priority |
 |---|---|---|---|
-| 1 | Marktnische (China) | ⚠️ Überbewertet — SMIC hat ASML | 🟡 HOCH |
-| 2 | Exportkontrolle | ❌ **Faktisch falsch** — Wassenaar/EU-Dual-Use ignoriert | 🔴 KRITISCH |
-| 3 | Physikalische Modelle | ❌ **ELitho hat kein RCWA** — TMM+Hopkins unzureichend | 🔴 KRITISCH |
-| 4 | GPU-VRAM | ❌ **RCWA passt nicht in 16 GB** — um Größenordnungen daneben | 🔴 KRITISCH |
-| 5 | Wettbewerb (Panoramic) | ❌ **Dramatisch unterschätzt** — v7 = TRIG, SEM, OPC | 🔴 KRITISCH |
-| 6 | Fehlende Module | ⚠️ SMO, OPC, Etch fehlen | 🟢 MITTEL |
-| 7 | Open-Source-Qualität | ⚠️ Kein Projekt produktionsreif (2–231 Stars) | 🟢 MITTEL |
-| 8 | Geschäftsmodell | ⚠️ Open Core + Commercial hat wenig Abgrenzung | 🟡 HOCH |
-| 9 | Zeitplan | ⚠️ 3 Monate unrealistisch —> 6+ Monate realistisch | 🟡 HOCH |
-| 10 | Rechtliches (Patente) | ⚠️ Freedom-to-Operate nötig, Patente auf Methoden | 🟢 MITTEL |
+| 1 | Market niche (China) | ⚠️ Overvalued — SMIC has ASML | 🟡 HIGH |
+| 2 | Export control | ❌ **Factually wrong** — Wassenaar/EU Dual-Use ignored | 🔴 CRITICAL |
+| 3 | Physical models | ❌ **ELitho has no RCWA** — TMM+Hopkins insufficient | 🔴 CRITICAL |
+| 4 | GPU VRAM | ❌ **RCWA does not fit in 16 GB** — off by orders of magnitude | 🔴 CRITICAL |
+| 5 | Competition (Panoramic) | ❌ **Dramatically underestimated** — v7 = TRIG, SEM, OPC | 🔴 CRITICAL |
+| 6 | Missing modules | ⚠️ SMO, OPC, Etch missing | 🟢 MEDIUM |
+| 7 | Open source quality | ⚠️ No project production-ready (2–231 stars) | 🟢 MEDIUM |
+| 8 | Business model | ⚠️ Open Core + Commercial has little differentiation | 🟡 HIGH |
+| 9 | Timeline | ⚠️ 3 months unrealistic → 6+ months realistic | 🟡 HIGH |
+| 10 | Legal (patents) | ⚠️ Freedom-to-Operate needed, patents on methods | 🟢 MEDIUM |
 
 ---
 
-## Fazit: Ist das Dokument brauchbar?
+## Conclusion: Is the document usable?
 
-**Als Vision/Mission-Statement:** Ja — die grundsätzliche Idee (Open-Source-EUV-Sim mit GPU-Support für die China-Nische) ist nicht falsch, nur schlecht abgesichert.
+**As a vision/mission statement:** Yes — the fundamental idea (open-source EUV sim with GPU support for the China niche) is not wrong, only poorly substantiated.
 
-**Als strategisches Planungsdokument:** **Nein — nicht in dieser Form.**
-- 4 faktische Fehler (RCWA nicht vorhanden, Exportkontrolle falsch, Wettbewerb unterschätzt, VRAM-Schätzung illusorisch)
-- Die Kern-These ">80% aus Open Source" ist ein Rechenfehler — quantitativ (Code-Zeilen) vielleicht, qualitativ (Product Readiness) nicht
-- Der Zeitplan ignoriert kritische Abhängigkeiten
-- Das Geschäftsmodell verkauft Features, die Open Source sind
+**As a strategic planning document:** **No — not in its current form.**
+- 4 factual errors (RCWA does not exist, export control is wrong, competition is underestimated, VRAM estimate is illusory)
+- The core thesis of ">80% from open source" is a calculation error — quantitatively (code lines) perhaps, qualitatively (product readiness) not
+- The timeline ignores critical dependencies
+- The business model sells features that are open source
 
-**Nächste konkrete Schritte:**
-1. ❌ **NICHT sofort mit ELitho+TorchLitho-Integration beginnen** — erst Exportkontrolle klären
-2. 🔴 BAFA-Anfrage stellen: "Fällt EUV-Sim-Software unter EU-Dual-Use 2021/821?"
-3. 🔴 ELitho-Code-Audit: Was ist drin (TMM) — was nicht (RCWA) — dokumentieren
-4. 🟡 TorchLitho-2.0-Code-Audit: Bietet es einen ausreichenden Ersatz für RCWA?
-5. 🟡 Markt-Nische validieren: Echte Gespräche mit 3–5 China-Instituten führen
-6. 🟢 Panoramic HyperLith v7 Test-Lizenz besorgen
+**Next concrete steps:**
+1. ❌ **Do NOT immediately start ELitho+TorchLitho integration** — clarify export control first
+2. 🔴 Submit BAFA inquiry: "Does EUV sim software fall under EU Dual-Use 2021/821?"
+3. 🔴 Code audit of ELitho: what is included (TMM) — what is not (RCWA) — document it
+4. 🟡 Code audit of TorchLitho 2.0: does it provide a sufficient replacement for RCWA?
+5. 🟡 Validate market niche: conduct real conversations with 3–5 Chinese institutes
+6. 🟢 Obtain a Panoramic HyperLith v7 trial license
 
-*Erstellt von Hermes Agent (destruktiver Review-Subagent) am 07.07.2026.*
+*Created by Hermes Agent (destructive review subagent) on 2026-07-07.*

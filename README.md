@@ -35,18 +35,19 @@ src/euv/
 
 ## Status
 
-| Module | Status | Phase |
-|--------|--------|-------|
-| Materials DB | ✅ Done | P1 |
-| TMM Multilayer | ⏳ WIP | P2 |
-| RCWA 1D | ❌ | P3 |
-| GDSII I/O | ❌ | P4 |
-| Aerial Image | ❌ | P5 |
-| End-to-End | ❌ | P6 |
-| Plasma Source | ❌ | P7 |
-| Resist | ❌ | P8 |
-| REST API | ❌ | P10 |
-| 1st OSS Release | ❌ | P10 |
+| Module | Status | Milestone |
+|--------|--------|-----------|
+| Material Database | ✅ Done | Foundation |
+| Multilayer Optics | ✅ Done | Optics Core |
+| Mask 3D Solver | ❌ | EM Simulation |
+| Layout I/O | ❌ | Layout Import |
+| Aerial Image | ❌ | Aerial Image |
+| Full Pipeline | ❌ | End-to-End |
+| Plasma Source | ❌ | Source Model |
+| Resist Model | ❌ | Resist Core |
+| Resist Stochastics | ❌ | Stochastic Effects |
+| REST API | ❌ | REST API |
+| First OSS Release | ❌ | Public Release |
 
 ## License
 
