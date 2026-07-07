@@ -37,25 +37,43 @@ if [[ -z "$TOKEN" ]]; then
     exit 1
 fi
 
-auth=(-H "Authorization: Bearer ${TOKEN}" -H "Accept: application/vnd.github+json")
+auth=(-H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json")
+
+# Fail loudly on a permission error instead of silently continuing.
+require_ok () {
+  local code="$1" what="$2"
+  if [[ "$code" == "403" ]]; then
+    echo "    ERROR ($code): token lacks the permission for: $what" >&2
+    echo "    -> grant the missing repository permission and re-run." >&2
+    return 1
+  fi
+}
 
 echo "==> Repository metadata"
-curl -sS -X PATCH "${auth[@]}" "$API" -d '{
+code=$(curl -sS -o /dev/null -w "%{http_code}" -X PATCH "${auth[@]}" "$API" -d '{
   "description": "Open Source EUV Lithography Simulator — RCWA, TMM, Abbe/Hopkins imaging, resist modelling. GPU-native, Apache-2.0.",
   "homepage": "https://openeuv.readthedocs.io/"
-}' >/dev/null && echo "    description + homepage set"
+}')
+require_ok "$code" "Administration (description/homepage)" && echo "    description + homepage set ($code)"
 
 echo "==> Topics"
-curl -sS -X PUT "${auth[@]}" "$API/topics" -d '{
+code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT "${auth[@]}" "$API/topics" -d '{
   "names": ["lithography","euv","semiconductor","rcwa","optics","simulation",
             "pytorch","photonics","open-source","scientific-computing"]
-}' >/dev/null && echo "    topics set"
+}')
+require_ok "$code" "Administration (topics)" && echo "    topics set ($code)"
 
 echo "==> Milestones (human-readable, function-describing names)"
 create_milestone () {
-  curl -sS -X POST "${auth[@]}" "$API/milestones" \
-    -d "{\"title\": \"$1\", \"description\": \"$2\"}" \
-    | python3 -c "import sys,json;d=json.load(sys.stdin);print('    +', d.get('title', d.get('message','?')))"
+  local resp code
+  resp=$(curl -sS -w "\n%{http_code}" -X POST "${auth[@]}" "$API/milestones" \
+    -d "{\"title\": \"$1\", \"description\": \"$2\"}")
+  code=$(printf '%s' "$resp" | tail -n1)
+  if [[ "$code" == "403" ]]; then
+    echo "    SKIP '$1' -> 403 (token lacks Issues permission)"
+  else
+    printf '%s' "$resp" | sed '$d' | python3 -c "import sys,json;d=json.load(sys.stdin);print('    +', d.get('title', d.get('message','?')))"
+  fi
 }
 create_milestone "Foundation"              "Project scaffold, CXRO material database, physical constants, CLI"
 create_milestone "Multilayer Optics"       "S-matrix transfer-matrix method, Mo/Si Bragg stack, collector"
@@ -81,9 +99,15 @@ create_milestone "Public Release"          "Continuous integration, PyPI packagi
 
 echo "==> Labels"
 create_label () {
-  curl -sS -X POST "${auth[@]}" "$API/labels" \
-    -d "{\"name\": \"$1\", \"color\": \"$2\", \"description\": \"$3\"}" \
-    | python3 -c "import sys,json;d=json.load(sys.stdin);print('    +', d.get('name', d.get('message','?')))"
+  local resp code
+  resp=$(curl -sS -w "\n%{http_code}" -X POST "${auth[@]}" "$API/labels" \
+    -d "{\"name\": \"$1\", \"color\": \"$2\", \"description\": \"$3\"}")
+  code=$(printf '%s' "$resp" | tail -n1)
+  if [[ "$code" == "403" ]]; then
+    echo "    SKIP '$1' -> 403 (token lacks Issues permission)"
+  else
+    printf '%s' "$resp" | sed '$d' | python3 -c "import sys,json;d=json.load(sys.stdin);print('    +', d.get('name', d.get('message','?')))"
+  fi
 }
 create_label "physics engine"    "1d76db" "RCWA, TMM, aerial imaging, resist models"
 create_label "numerics"          "5319e7" "Convergence, stability, eigen-solvers"
