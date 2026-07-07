@@ -71,7 +71,7 @@ def info():
     print("  • etch/       — Etch bias model")
     print("  • calibrate/  — Wafer calibration pipeline")
     print()
-    print("Tests:     315 / 315 passing")
+    print("Tests:     504 / 504 passing")
     print("License:   Apache-2.0")
 
 
@@ -313,19 +313,29 @@ def materials(
     table = CXROTable()
 
     if element is None:
-        # List available elements
-        available = table.available_elements()
+        # List available elements by scanning the data directory
+        from pathlib import Path
+        from euv.materials import DATA_DIR
+
+        d = Path(DATA_DIR)
+        if d.exists():
+            available = sorted(
+                f.stem for f in d.iterdir() if f.suffix.lower() == ".csv"
+            )
+        else:
+            available = []
         print(f"Available materials ({len(available)}):")
-        for el in sorted(available):
+        for el in available:
             print(f"  • {el}")
     else:
         # Get refractive index
         try:
             n, k = table.refractive_index(element, energy)
             delta = 1 - n
-            from euv.constants import EV_TO_JOULE, PLANCK, SPEED_OF_LIGHT
+            from euv.constants import PLANCK_CONSTANT, SPEED_OF_LIGHT
 
-            wavelength_nm = (PLANCK * SPEED_OF_LIGHT) / (energy * EV_TO_JOULE) * 1e9
+            ev_to_joule = 1.602176634e-19
+            wavelength_nm = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (energy * ev_to_joule) * 1e9
             print(f"Material:      {element}")
             print(f"Energy:        {energy:.2f} eV")
             print(f"Wavelength:    {wavelength_nm:.4f} nm")

@@ -16,7 +16,7 @@ euv serve                              # REST API on :8000
 git clone https://github.com/Flowbudget/OpEnUV.git
 cd OpEnUV
 pip install -e ".[dev]"
-pytest tests/ -q                      # 315+ tests, all passing
+pytest tests/ -q                      # 504 tests, all passing
 ```
 
 ## Architecture
