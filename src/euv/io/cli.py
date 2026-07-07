@@ -19,6 +19,8 @@ from typing import Optional
 
 import typer
 
+from euv.materials import DATA_DIR
+
 app = typer.Typer(
     name="euv",
     help="OpEnUV — Open Source EUV Lithography Simulator",
@@ -314,9 +316,6 @@ def materials(
 
     if element is None:
         # List available elements by scanning the data directory
-        from pathlib import Path
-        from euv.materials import DATA_DIR
-
         d = Path(DATA_DIR)
         if d.exists():
             available = sorted(f.stem for f in d.iterdir() if f.suffix.lower() == ".csv")
