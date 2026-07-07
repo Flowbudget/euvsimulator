@@ -46,7 +46,7 @@ src/euv/
 | Aerial Image | ✅ Done | Aerial Image |
 | Full Pipeline | ❌ | End-to-End |
 | Plasma Source | ✅ Done | Source Model |
-| Resist Model | ❌ | Resist Core |
+| Resist Model | ✅ Done | Resist Core |
 | Resist Stochastics | ❌ | Stochastic Effects |
 | REST API | ❌ | REST API |
 | First OSS Release | ❌ | Public Release |
