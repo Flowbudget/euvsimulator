@@ -1,0 +1,3 @@
+include src/euv/data/henke/*.nff
+include LICENSE
+include README.md

@@ -1,0 +1,342 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.accel.vram_budget &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.accel.vram_budget</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.accel.vram_budget</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Analytical VRAM estimators for RCWA and Abbe imaging.</span>
+
+<span class="sd">All formulas are based on the dominant tensor allocations for each</span>
+<span class="sd">kernel.  Use these estimates to pre-check whether a configuration</span>
+<span class="sd">will fit on the target GPU before launching the solver.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+
+
+<div class="viewcode-block" id="estimate_rcma_vram">
+<a class="viewcode-back" href="../../../api/modules.html#euv.accel.vram_budget.estimate_rcma_vram">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">estimate_rcma_vram</span><span class="p">(</span>
+    <span class="n">n_orders</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n_layers</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">dtype_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Estimate the GPU memory required for an RCWA solve.</span>
+
+<span class="sd">    Dominant allocation: the per-layer eigenproblem in the Fourier</span>
+<span class="sd">    modal method.  The eigenvalue matrix has shape ``(M, M)`` where</span>
+<span class="sd">    ``M = 2 * n_orders + 1``, and the S-matrix cascade stores a</span>
+<span class="sd">    handful of ``(M, M)`` matrices per layer.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    n_orders : int</span>
+<span class="sd">        Number of Fourier orders (positive integer, :math:`M = 2n+1`).</span>
+<span class="sd">    n_layers : int</span>
+<span class="sd">        Number of vertical layers in the mask stack.</span>
+<span class="sd">    dtype_bytes : int</span>
+<span class="sd">        Bytes per complex element (default 16 for ``complex128``).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    int</span>
+<span class="sd">        Estimated memory in bytes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">n_orders</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="c1"># Per layer: eigenvalue matrix A (M×M), eigenvectors W (M×M),</span>
+    <span class="c1"># eigenvalues q² (M,), S-matrix cascade (a few M×M).</span>
+    <span class="c1"># Rough rule: 4 × M² per layer.</span>
+    <span class="n">bytes_per_layer</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">M</span> <span class="o">*</span> <span class="n">M</span> <span class="o">*</span> <span class="n">dtype_bytes</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="n">n_layers</span> <span class="o">*</span> <span class="n">bytes_per_layer</span>
+
+    <span class="c1"># Additional overhead for the profile and Toeplitz matrices</span>
+    <span class="n">overhead</span> <span class="o">=</span> <span class="mi">128</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span>  <span class="c1"># 128 MB safety margin</span>
+    <span class="k">return</span> <span class="n">total</span> <span class="o">+</span> <span class="n">overhead</span></div>
+
+
+
+<div class="viewcode-block" id="estimate_abbe_vram">
+<a class="viewcode-back" href="../../../api/modules.html#euv.accel.vram_budget.estimate_abbe_vram">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">estimate_abbe_vram</span><span class="p">(</span>
+    <span class="n">grid_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n_source_points</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">dtype_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Estimate the GPU memory for a full Abbe aerial-image solve.</span>
+
+<span class="sd">    The dominant memory comes from the intermediate coherent images</span>
+<span class="sd">    accumulated over source points (each image is ``grid_size ×</span>
+<span class="sd">    grid_size × dtype_bytes``).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    grid_size : int</span>
+<span class="sd">        Pixel grid dimension (``G × G``).</span>
+<span class="sd">    n_source_points : int</span>
+<span class="sd">        Number of non-zero illumination source points.</span>
+<span class="sd">    dtype_bytes : int</span>
+<span class="sd">        Bytes per element of the accumulated image (default 8 for</span>
+<span class="sd">        ``float64``).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    int</span>
+<span class="sd">        Estimated memory in bytes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Per source point: shifted spectrum (G×G complex128), filtered</span>
+    <span class="c1"># (G×G complex128), IFFT (G×G complex128), intensity (G×G float64).</span>
+    <span class="c1"># The accumulation buffer is G×G float64.</span>
+    <span class="c1"># Roughly 4 × G² × 16 + G² × 8 bytes per iteration,</span>
+    <span class="c1"># but we estimate total peak as the sum of one iteration&#39;s working</span>
+    <span class="c1"># set plus the accumulation buffer.</span>
+    <span class="n">gb_per_source</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">grid_size</span> <span class="o">*</span> <span class="n">grid_size</span> <span class="o">*</span> <span class="mi">16</span>  <span class="c1"># 4 complex buffers</span>
+    <span class="n">acc_buf</span> <span class="o">=</span> <span class="n">grid_size</span> <span class="o">*</span> <span class="n">grid_size</span> <span class="o">*</span> <span class="mi">8</span>  <span class="c1"># float64 accumulator</span>
+    <span class="n">peak</span> <span class="o">=</span> <span class="n">gb_per_source</span> <span class="o">+</span> <span class="n">acc_buf</span>
+    <span class="c1"># Overhead: pupil, source, coordinate grids</span>
+    <span class="n">overhead</span> <span class="o">=</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span>  <span class="c1"># 64 MB</span>
+    <span class="k">return</span> <span class="n">peak</span> <span class="o">+</span> <span class="n">overhead</span></div>
+
+
+
+<div class="viewcode-block" id="max_harmonics_for_vram">
+<a class="viewcode-back" href="../../../api/modules.html#euv.accel.vram_budget.max_harmonics_for_vram">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">max_harmonics_for_vram</span><span class="p">(</span>
+    <span class="n">vram_budget_gb</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">14</span><span class="p">,</span>
+    <span class="n">n_layers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the maximum number of Fourier orders (:math:`M`) that fit</span>
+<span class="sd">    in *vram_budget_gb*.</span>
+
+<span class="sd">    Uses the RCWA estimate (dominant memory scales as</span>
+<span class="sd">    :math:`M^2`).  Walks upward from ``M = 3`` until the budget is</span>
+<span class="sd">    exceeded.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    vram_budget_gb : float</span>
+<span class="sd">        Available GPU memory in GiB (default 14 — typical consumer</span>
+<span class="sd">        card with 16 GB physical and ~2 GB reserved by the OS).</span>
+<span class="sd">    n_layers : int</span>
+<span class="sd">        Number of RCWA layers (default 12).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    int</span>
+<span class="sd">        Maximum odd *M* (number of Fourier orders) that fits.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">budget_bytes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">vram_budget_gb</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">))</span>
+
+    <span class="c1"># RCWA orders: M = 2 * n_orders + 1, so n_orders = (M-1)//2</span>
+    <span class="c1"># We search for the largest odd M that fits.</span>
+    <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span>
+    <span class="c1"># Exponential probe</span>
+    <span class="k">while</span> <span class="n">estimate_rcma_vram</span><span class="p">((</span><span class="n">hi</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">n_layers</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">budget_bytes</span><span class="p">:</span>
+        <span class="n">hi</span> <span class="o">*=</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="n">hi</span> <span class="o">&gt;</span> <span class="mi">2000</span><span class="p">:</span>  <span class="c1"># safety cap</span>
+            <span class="k">break</span>
+
+    <span class="n">best</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="k">while</span> <span class="n">lo</span> <span class="o">&lt;=</span> <span class="n">hi</span><span class="p">:</span>
+        <span class="n">mid</span> <span class="o">=</span> <span class="p">(</span><span class="n">lo</span> <span class="o">+</span> <span class="n">hi</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="n">mid</span> <span class="k">if</span> <span class="n">mid</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">mid</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># ensure odd</span>
+        <span class="n">n_orders</span> <span class="o">=</span> <span class="p">(</span><span class="n">M</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="n">estimate_rcma_vram</span><span class="p">(</span><span class="n">n_orders</span><span class="p">,</span> <span class="n">n_layers</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">budget_bytes</span><span class="p">:</span>
+            <span class="n">best</span> <span class="o">=</span> <span class="n">M</span>
+            <span class="n">lo</span> <span class="o">=</span> <span class="n">M</span> <span class="o">+</span> <span class="mi">2</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">hi</span> <span class="o">=</span> <span class="n">M</span> <span class="o">-</span> <span class="mi">2</span>
+    <span class="k">return</span> <span class="n">best</span></div>
+
+
+
+<div class="viewcode-block" id="check_oom">
+<a class="viewcode-back" href="../../../api/modules.html#euv.accel.vram_budget.check_oom">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_oom</span><span class="p">(</span><span class="n">total_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vram_gb</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">14</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raise :class:`MemoryError` if *total_bytes* exceeds the VRAM</span>
+<span class="sd">    budget.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    total_bytes : int</span>
+<span class="sd">        Estimated memory requirement in bytes.</span>
+<span class="sd">    vram_gb : float</span>
+<span class="sd">        Available VRAM in GiB (default 14).</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    MemoryError</span>
+<span class="sd">        If the estimated memory exceeds the budget.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">budget</span> <span class="o">=</span> <span class="n">vram_gb</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">total_bytes</span> <span class="o">&gt;</span> <span class="n">budget</span><span class="p">:</span>
+        <span class="n">used_gb</span> <span class="o">=</span> <span class="n">total_bytes</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">MemoryError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Estimated memory </span><span class="si">{</span><span class="n">used_gb</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> GiB exceeds &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;budget of </span><span class="si">{</span><span class="n">vram_gb</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> GiB.  Reduce problem size &quot;</span>
+            <span class="s2">&quot;(e.g. fewer Fourier orders, fewer layers, or smaller &quot;</span>
+            <span class="s2">&quot;grid) or switch to chunked processing.&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="vram_report">
+<a class="viewcode-back" href="../../../api/modules.html#euv.accel.vram_budget.vram_report">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">vram_report</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a formatted string with VRAM estimates for common</span>
+<span class="sd">    OpEnUV configurations.</span>
+
+<span class="sd">    The report tabulates the RCWA and Abbe memory footprints</span>
+<span class="sd">    across a range of typical problem sizes so the user can</span>
+<span class="sd">    quickly gauge hardware requirements.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">72</span><span class="p">,</span>
+        <span class="s2">&quot;  OpEnUV — VRAM Budget Report&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">72</span><span class="p">,</span>
+        <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;  RCWA estimates (complex128, 12 layers):&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;  &quot;</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="s1">&#39;Orders&#39;</span><span class="si">:</span><span class="s2">&gt;8</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;M&#39;</span><span class="si">:</span><span class="s2">&gt;5</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Est. VRAM&#39;</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;    &quot;</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">30</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">for</span> <span class="n">n_orders</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">11</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">41</span><span class="p">,</span> <span class="mi">51</span><span class="p">]:</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">n_orders</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">est</span> <span class="o">=</span> <span class="n">estimate_rcma_vram</span><span class="p">(</span><span class="n">n_orders</span><span class="p">,</span> <span class="n">n_layers</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+        <span class="n">est_gb</span> <span class="o">=</span> <span class="n">est</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">n_orders</span><span class="si">:</span><span class="s2">&gt;8</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="n">M</span><span class="si">:</span><span class="s2">&gt;5</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="n">est_gb</span><span class="si">:</span><span class="s2">&gt;10.2f</span><span class="si">}</span><span class="s2"> GiB&quot;</span><span class="p">)</span>
+
+    <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+        <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;  Abbe estimates (complex128, float64 accumulator):&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;  &quot;</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="s1">&#39;Grid&#39;</span><span class="si">:</span><span class="s2">&gt;8</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Src pts&#39;</span><span class="si">:</span><span class="s2">&gt;8</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Est. VRAM&#39;</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;    &quot;</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">30</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">for</span> <span class="n">grid</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1024</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">n_src</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">100</span><span class="p">,</span> <span class="mi">500</span><span class="p">]:</span>
+            <span class="n">est</span> <span class="o">=</span> <span class="n">estimate_abbe_vram</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">n_src</span><span class="p">)</span>
+            <span class="n">est_gb</span> <span class="o">=</span> <span class="n">est</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    </span><span class="si">{</span><span class="n">grid</span><span class="si">:</span><span class="s2">&gt;4</span><span class="si">}</span><span class="s2">²  </span><span class="si">{</span><span class="n">n_src</span><span class="si">:</span><span class="s2">&gt;8</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="n">est_gb</span><span class="si">:</span><span class="s2">&gt;10.2f</span><span class="si">}</span><span class="s2"> GiB&quot;</span><span class="p">)</span>
+
+    <span class="n">lines</span> <span class="o">+=</span> <span class="p">[</span>
+        <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;  Max Fourier orders (M) for 14 GiB budget:&quot;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;    M_max = </span><span class="si">{</span><span class="n">max_harmonics_for_vram</span><span class="p">(</span><span class="mi">14</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">72</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

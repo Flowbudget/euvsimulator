@@ -234,17 +234,17 @@ class LPPPlasmaSource:
     # ── Angular distribution ────────────────────────────
 
     def angular_factor(self, theta_deg: float | np.ndarray) -> float | np.ndarray:
-        """Angular emission factor *I*(θ) = *I*\ (0) · *f*(θ).
+        """Angular emission factor I(theta) = I(0) * f(theta).
 
         Parameters
         ----------
         theta_deg : float or ndarray
-            Polar angle measured from the surface normal [°].
+            Polar angle measured from the surface normal [degrees].
 
         Returns
         -------
         factor : float or ndarray
-            *f*(θ) — dimensionless, *f*(0) = 1.
+            f(theta) — dimensionless, f(0) = 1.
         """
         return self._angular_factor(theta_deg)
 

@@ -1,0 +1,402 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.resist.exposure &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.resist.exposure</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.resist.exposure</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;EUV exposure model — Dill ABC photoacid generation with SE blur.</span>
+
+<span class="sd">Theory</span>
+<span class="sd">------</span>
+<span class="sd">EUV photons (13.5 nm, 91.84 eV) are absorbed by the resist according to</span>
+<span class="sd">Beer–Lambert attenuation.  Each absorbed photon can produce multiple</span>
+<span class="sd">photoacid molecules via the **Dill ABC model**:</span>
+
+<span class="sd">    A(z)   = A₀ · exp[−(B + C · I) · z]</span>
+<span class="sd">    M(z,t) = exp[−C · I(z) · t]              (PAC concentration)</span>
+
+<span class="sd">where the three Dill parameters represent:</span>
+
+<span class="sd">    A  — bleachable absorption coefficient  [1/µm]</span>
+<span class="sd">    B  — non-bleachable absorption           [1/µm]</span>
+<span class="sd">    C  — photo-rate constant (dose-to-acid sensitivity) [cm²/mJ]</span>
+
+<span class="sd">For EUV, **secondary-electron (SE) blur** is a critical effect: photoelectrons</span>
+<span class="sd">and Auger electrons generated by primary absorption undergo random walks</span>
+<span class="sd">before creating photoacid, effectively blurring the aerial image.  This is</span>
+<span class="sd">modelled as a 2D Gaussian PSF with sigma in the range 2–10 nm.</span>
+
+<span class="sd">The final acid concentration is computed by convolving the blur kernel with</span>
+<span class="sd">the local dose and multiplying by the Dill C parameter.</span>
+
+<span class="sd">All operations use PyTorch tensors and are fully differentiable.</span>
+
+<span class="sd">References</span>
+<span class="sd">----------</span>
+<span class="sd">F.H. Dill et al., &quot;Characterization of positive photoresist&quot;,</span>
+<span class="sd">    IEEE Trans. Electron Devices 22(7), 445–452 (1975).</span>
+<span class="sd">R.L. Brainard et al., &quot;Photons, electrons, and acid yields in EUV</span>
+<span class="sd">    photoresists&quot;, J. Photopolym. Sci. Technol. 21(3), 421–428 (2008).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Dill ABC exposure model</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="dill_abc_exposure">
+<a class="viewcode-back" href="../../../api/modules.html#euv.resist.exposure.dill_abc_exposure">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dill_abc_exposure</span><span class="p">(</span>
+    <span class="n">dose</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">A</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">B</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
+    <span class="n">C</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">0.01</span><span class="p">,</span>
+    <span class="n">z_positions</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">thickness</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">n_layers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute Dill ABC photoacid generation.</span>
+
+<span class="sd">    Models the depth-dependent absorption and photoacid generation in a</span>
+<span class="sd">    positive-tone chemically amplified resist (CAR) during EUV exposure.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dose : torch.Tensor</span>
+<span class="sd">        Aerial image dose in [mJ/cm²].  Shape ``(H, W)`` or ``(B, H, W)``.</span>
+<span class="sd">    A : float or torch.Tensor</span>
+<span class="sd">        Bleachable absorption coefficient [1/µm].  Default 0.5.</span>
+<span class="sd">    B : float or torch.Tensor</span>
+<span class="sd">        Non-bleachable absorption coefficient [1/µm].  Default 0.2.</span>
+<span class="sd">    C : float or torch.Tensor</span>
+<span class="sd">        Photo-rate constant [cm²/mJ].  Default 0.01.</span>
+<span class="sd">    z_positions : torch.Tensor, optional</span>
+<span class="sd">        Depth positions in [µm] along the resist thickness.  Shape ``(N,)``.</span>
+<span class="sd">        If ``None``, ``n_layers`` equally spaced positions are used.</span>
+<span class="sd">    thickness : float</span>
+<span class="sd">        Total resist thickness [µm].  Default 0.1 (100 nm).</span>
+<span class="sd">    n_layers : int</span>
+<span class="sd">        Number of vertical layers when *z_positions* is not given.  Default 1</span>
+<span class="sd">        (2D simulation, no depth dimension).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    acid : torch.Tensor</span>
+<span class="sd">        3D photoacid concentration [a.u.].  Shape ``(N, H, W)`` or</span>
+<span class="sd">        ``(B, N, H, W)``.</span>
+<span class="sd">    inhibitor : torch.Tensor</span>
+<span class="sd">        Normalised inhibitor (PAC) concentration ``M(z,t)``.  Same shape as</span>
+<span class="sd">        *acid*.  Range ``[0, 1]`` — 1 = fully inhibited, 0 = fully</span>
+<span class="sd">        exposed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># --- input normalisation ---</span>
+    <span class="n">has_batch</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="k">if</span> <span class="n">dose</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">dose</span> <span class="o">=</span> <span class="n">dose</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># (1, H, W)</span>
+        <span class="n">has_batch</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">elif</span> <span class="n">dose</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">has_batch</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected 2D or 3D dose, got </span><span class="si">{</span><span class="n">dose</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">D&quot;</span><span class="p">)</span>
+
+    <span class="n">B</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">dose</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1"># depth positions</span>
+    <span class="k">if</span> <span class="n">z_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">thickness</span><span class="p">,</span> <span class="n">n_layers</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">dose</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="n">z_positions</span>
+        <span class="n">n_layers</span> <span class="o">=</span> <span class="n">z</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># --- depth-dependent dose ---</span>
+    <span class="c1"># Beer–Lambert: I(z) = I₀ · exp[−(A+B)·z]</span>
+    <span class="n">alpha</span> <span class="o">=</span> <span class="n">A</span> <span class="o">+</span> <span class="n">B</span>  <span class="c1"># total absorption [1/µm]</span>
+    <span class="n">dose_z</span> <span class="o">=</span> <span class="n">dose</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">alpha</span> <span class="o">*</span> <span class="n">z</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="c1"># shape: (B, N, H, W)</span>
+
+    <span class="c1"># --- inhibitor concentration M(z,t) ---</span>
+    <span class="n">inhibitor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">C</span> <span class="o">*</span> <span class="n">dose_z</span><span class="p">)</span>
+
+    <span class="c1"># --- acid concentration [H⁺] ---</span>
+    <span class="n">acid</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">inhibitor</span><span class="p">)</span> <span class="o">*</span> <span class="n">A</span>
+
+    <span class="c1"># restore input dims: (N, H, W) for 2D input, (B, N, H, W) for batched</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">has_batch</span><span class="p">:</span>
+        <span class="n">acid</span> <span class="o">=</span> <span class="n">acid</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">inhibitor</span> <span class="o">=</span> <span class="n">inhibitor</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">acid</span><span class="p">,</span> <span class="n">inhibitor</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Secondary-electron blur (Gaussian PSF)</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="gaussian_se_blur">
+<a class="viewcode-back" href="../../../api/modules.html#euv.resist.exposure.gaussian_se_blur">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">gaussian_se_blur</span><span class="p">(</span>
+    <span class="n">image</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+    <span class="n">kernel_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">dx</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">truncate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">3.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply secondary-electron Gaussian blur to a 2D dose/acid map.</span>
+
+<span class="sd">    The SE-blur PSF is a 2D Gaussian:</span>
+
+<span class="sd">        G(x, y) = (1 / 2πσ²) · exp[−(x² + y²) / (2σ²)]</span>
+
+<span class="sd">    This is applied via depthwise separable convolution for efficiency.</span>
+<span class="sd">    If the image dimensions are smaller than the kernel, sigma is reduced</span>
+<span class="sd">    accordingly to prevent padding errors.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    image : torch.Tensor</span>
+<span class="sd">        Input tensor.  Shape ``(H, W)``, ``(B, H, W)``, or</span>
+<span class="sd">        ``(B, C, H, W)``.  Values are assumed to be on a uniform</span>
+<span class="sd">        spatial grid.</span>
+<span class="sd">    sigma : float or torch.Tensor</span>
+<span class="sd">        Gaussian sigma in grid units (nm when *dx* = 1 nm).</span>
+<span class="sd">        Typical EUV range: 2–10 nm.  Default 5.0.</span>
+<span class="sd">    kernel_size : int, optional</span>
+<span class="sd">        Kernel size (odd).  Computed from *sigma* × *truncate* if</span>
+<span class="sd">        not given.</span>
+<span class="sd">    dx : float</span>
+<span class="sd">        Grid spacing [nm/pixel].  Default 1.0.</span>
+<span class="sd">    truncate : float</span>
+<span class="sd">        Truncation radius in units of *sigma*.  Default 3.0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    blurred : torch.Tensor</span>
+<span class="sd">        Blurred output, same shape as *image*.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sigma_px</span> <span class="o">=</span> <span class="n">sigma</span> <span class="o">/</span> <span class="n">dx</span>
+
+    <span class="k">if</span> <span class="n">kernel_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">radius</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">truncate</span> <span class="o">*</span> <span class="n">sigma_px</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span>
+        <span class="n">kernel_size</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">radius</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">kernel_size</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">kernel_size</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="c1"># --- convert to 4D and check dimensions ---</span>
+    <span class="n">orig_ndim</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">ndim</span>
+    <span class="k">if</span> <span class="n">orig_ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">img_4d</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># (1, 1, H, W)</span>
+    <span class="k">elif</span> <span class="n">orig_ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">img_4d</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (B, 1, H, W)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">img_4d</span> <span class="o">=</span> <span class="n">image</span>
+
+    <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">img_4d</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1"># Clamp kernel_size to be no larger than image dimensions</span>
+    <span class="n">max_dim</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">kernel_size</span> <span class="o">&gt;</span> <span class="n">max_dim</span><span class="p">:</span>
+        <span class="n">kernel_size</span> <span class="o">=</span> <span class="n">max_dim</span> <span class="k">if</span> <span class="n">max_dim</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">max_dim</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span>
+
+    <span class="c1"># --- build 1D Gaussian kernel ---</span>
+    <span class="n">radius</span> <span class="o">=</span> <span class="n">kernel_size</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="c1"># Match input dtype — F.conv2d requires kernel and input to have the same dtype</span>
+    <span class="n">working_dtype</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">dtype</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span>
+        <span class="o">-</span><span class="n">radius</span><span class="p">,</span> <span class="n">radius</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">image</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">working_dtype</span>
+    <span class="p">)</span>
+    <span class="n">kernel_1d</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">/</span> <span class="n">sigma_px</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">kernel_1d</span> <span class="o">=</span> <span class="n">kernel_1d</span> <span class="o">/</span> <span class="p">(</span><span class="n">kernel_1d</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">+</span> <span class="mf">1e-12</span><span class="p">)</span>
+
+    <span class="c1"># separable convolution</span>
+    <span class="n">col_k</span> <span class="o">=</span> <span class="n">kernel_1d</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">C</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">row_k</span> <span class="o">=</span> <span class="n">kernel_1d</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">C</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">pad_col</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">img_4d</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="n">radius</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;reflect&quot;</span><span class="p">)</span>
+    <span class="n">blurred</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv2d</span><span class="p">(</span><span class="n">pad_col</span><span class="p">,</span> <span class="n">col_k</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="n">C</span><span class="p">)</span>
+
+    <span class="n">pad_row</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">blurred</span><span class="p">,</span> <span class="p">(</span><span class="n">radius</span><span class="p">,</span> <span class="n">radius</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;reflect&quot;</span><span class="p">)</span>
+    <span class="n">blurred</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">conv2d</span><span class="p">(</span><span class="n">pad_row</span><span class="p">,</span> <span class="n">row_k</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="n">C</span><span class="p">)</span>
+
+    <span class="c1"># restore input shape</span>
+    <span class="k">if</span> <span class="n">orig_ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">blurred</span> <span class="o">=</span> <span class="n">blurred</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">orig_ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">blurred</span> <span class="o">=</span> <span class="n">blurred</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">blurred</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Dose-to-acid mapping</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="dose_to_acid">
+<a class="viewcode-back" href="../../../api/modules.html#euv.resist.exposure.dose_to_acid">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dose_to_acid</span><span class="p">(</span>
+    <span class="n">dose</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">C</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">0.01</span><span class="p">,</span>
+    <span class="n">Q</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">0.04</span><span class="p">,</span>
+    <span class="n">sigma_blur</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+    <span class="n">dx</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">apply_blur</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Map EUV dose to photoacid concentration.</span>
+
+<span class="sd">    This is a simplified end-to-end dose-to-acid pipeline:</span>
+
+<span class="sd">        1. Apply secondary-electron Gaussian blur to the dose map.</span>
+<span class="sd">        2. Convert to photoacid concentration: ``[H⁺] = Q · (1 − exp[−C ·</span>
+<span class="sd">        dose])``</span>
+
+<span class="sd">    where *Q* is the maximum acid yield and *C* is the Dill C parameter.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dose : torch.Tensor</span>
+<span class="sd">        Input dose map [mJ/cm²].  Shape ``(H, W)`` or ``(B, H, W)``.</span>
+<span class="sd">    C : float or torch.Tensor</span>
+<span class="sd">        Photo-rate constant [cm²/mJ].  Default 0.01.</span>
+<span class="sd">    Q : float or torch.Tensor</span>
+<span class="sd">        Quantum efficiency — maximum acid molecules per absorbed</span>
+<span class="sd">        photon.  Default 0.04 (typical for EUV CAR).</span>
+<span class="sd">    sigma_blur : float or torch.Tensor</span>
+<span class="sd">        Secondary-electron blur sigma [nm].  Default 5.0.</span>
+<span class="sd">    dx : float</span>
+<span class="sd">        Grid spacing [nm/pixel].  Default 1.0.</span>
+<span class="sd">    apply_blur : bool</span>
+<span class="sd">        Whether to apply SE blur.  Default ``True``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    acid : torch.Tensor</span>
+<span class="sd">        Photoacid concentration.  Same shape as *dose*.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">apply_blur</span><span class="p">:</span>
+        <span class="n">dose_blurred</span> <span class="o">=</span> <span class="n">gaussian_se_blur</span><span class="p">(</span><span class="n">dose</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">sigma_blur</span><span class="p">,</span> <span class="n">dx</span><span class="o">=</span><span class="n">dx</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">dose_blurred</span> <span class="o">=</span> <span class="n">dose</span>
+
+    <span class="n">acid</span> <span class="o">=</span> <span class="n">Q</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">C</span> <span class="o">*</span> <span class="n">dose_blurred</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">acid</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

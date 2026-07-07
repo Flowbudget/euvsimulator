@@ -17,13 +17,14 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx_rtd_theme",
+    "nbsphinx",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]
+html_static_path = []
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -40,3 +41,11 @@ autodoc_default_options = {
     "undoc-members": False,
     "show-inheritance": True,
 }
+
+nbsphinx_allow_errors = True
+
+# Suppress known RST warnings from subagent-generated docstrings
+suppress_warnings = [
+    "ref.footnote",
+    "docutils",
+]

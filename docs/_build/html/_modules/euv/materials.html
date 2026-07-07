@@ -1,0 +1,570 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.materials &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.materials</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.materials</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Material database — CXRO/Henke atomic scattering factors and refractive indices.</span>
+
+<span class="sd">Loads the CXRO f₁, f₂ tables (``data/cxro/*.csv``) for all 92 elements and</span>
+<span class="sd">computes complex refractive indices at arbitrary photon energies.</span>
+
+<span class="sd">Theory</span>
+<span class="sd">------</span>
+<span class="sd">The refractive index is *n* + i*k:</span>
+
+<span class="sd">    n = 1 — δ            where  δ = (r₀ λ² / 2π) · N · f₁</span>
+<span class="sd">    k = (r₀ λ² / 2π) · N · f₂</span>
+
+<span class="sd">with:</span>
+<span class="sd">    r₀ — classical electron radius</span>
+<span class="sd">    λ — photon wavelength [m]</span>
+<span class="sd">    N — atomic number density [atoms/m³] = ρ · N_A / A</span>
+<span class="sd">    f₁, f₂ — atomic scattering factors (CXRO/Henke)</span>
+
+<span class="sd">References</span>
+<span class="sd">----------</span>
+<span class="sd">B.L. Henke, E.M. Gullikson, J.C. Davis, Atomic Data and Nuclear Data Tables</span>
+<span class="sd">54(2), 181–342 (1993).  https://doi.org/10.1006/adnd.1993.1013</span>
+<span class="sd">CXRO database: https://henke.lbl.gov/optical_constants/</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">csv</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AVOGADRO</span><span class="p">,</span>
+    <span class="n">CLASSICAL_ELECTRON_RADIUS</span><span class="p">,</span>
+    <span class="n">EUV_ENERGY_EV</span><span class="p">,</span>
+    <span class="n">EUV_WAVELENGTH_M</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Path resolution</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+<span class="n">DATA_DIR</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span> <span class="o">/</span> <span class="s2">&quot;cxro&quot;</span>
+<span class="sd">&quot;&quot;&quot;Directory containing ``&lt;Element&gt;.csv`` for Z = 1–92.&quot;&quot;&quot;</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Element metadata (Z, symbol, atomic mass, density)</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+<span class="c1"># fmt: off</span>
+<span class="n">_ELEMENT_TABLE</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="c1"># symbol: (Z, atomic_mass_g_mol, density_g_cm3)</span>
+    <span class="s2">&quot;H&quot;</span><span class="p">:</span>  <span class="p">(</span> <span class="mi">1</span><span class="p">,</span>  <span class="mf">1.008</span><span class="p">,</span>    <span class="mf">0.0899e-3</span><span class="p">),</span>  <span class="c1"># gas @ STP</span>
+    <span class="s2">&quot;He&quot;</span><span class="p">:</span> <span class="p">(</span> <span class="mi">2</span><span class="p">,</span>  <span class="mf">4.0026</span><span class="p">,</span>   <span class="mf">0.1785e-3</span><span class="p">),</span>
+    <span class="s2">&quot;Li&quot;</span><span class="p">:</span> <span class="p">(</span> <span class="mi">3</span><span class="p">,</span>  <span class="mf">6.94</span><span class="p">,</span>     <span class="mf">0.534</span><span class="p">),</span>
+    <span class="s2">&quot;Be&quot;</span><span class="p">:</span> <span class="p">(</span> <span class="mi">4</span><span class="p">,</span>  <span class="mf">9.0122</span><span class="p">,</span>   <span class="mf">1.848</span><span class="p">),</span>
+    <span class="s2">&quot;B&quot;</span><span class="p">:</span>  <span class="p">(</span> <span class="mi">5</span><span class="p">,</span> <span class="mf">10.81</span><span class="p">,</span>     <span class="mf">2.37</span><span class="p">),</span>
+    <span class="s2">&quot;C&quot;</span><span class="p">:</span>  <span class="p">(</span> <span class="mi">6</span><span class="p">,</span> <span class="mf">12.011</span><span class="p">,</span>    <span class="mf">2.25</span><span class="p">),</span>      <span class="c1"># graphite</span>
+    <span class="s2">&quot;N&quot;</span><span class="p">:</span>  <span class="p">(</span> <span class="mi">7</span><span class="p">,</span> <span class="mf">14.007</span><span class="p">,</span>    <span class="mf">1.251e-3</span><span class="p">),</span>  <span class="c1"># gas</span>
+    <span class="s2">&quot;O&quot;</span><span class="p">:</span>  <span class="p">(</span> <span class="mi">8</span><span class="p">,</span> <span class="mf">15.999</span><span class="p">,</span>    <span class="mf">1.429e-3</span><span class="p">),</span>  <span class="c1"># gas</span>
+    <span class="s2">&quot;F&quot;</span><span class="p">:</span>  <span class="p">(</span> <span class="mi">9</span><span class="p">,</span> <span class="mf">18.998</span><span class="p">,</span>    <span class="mf">1.696e-3</span><span class="p">),</span>  <span class="c1"># gas</span>
+    <span class="s2">&quot;Ne&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mf">20.180</span><span class="p">,</span>    <span class="mf">0.8999e-3</span><span class="p">),</span> <span class="c1"># gas</span>
+    <span class="s2">&quot;Na&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mf">22.990</span><span class="p">,</span>    <span class="mf">0.971</span><span class="p">),</span>
+    <span class="s2">&quot;Mg&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mf">24.305</span><span class="p">,</span>    <span class="mf">1.738</span><span class="p">),</span>
+    <span class="s2">&quot;Al&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mf">26.982</span><span class="p">,</span>    <span class="mf">2.70</span><span class="p">),</span>
+    <span class="s2">&quot;Si&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mf">28.085</span><span class="p">,</span>    <span class="mf">2.33</span><span class="p">),</span>
+    <span class="s2">&quot;P&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mf">30.974</span><span class="p">,</span>    <span class="mf">1.82</span><span class="p">),</span>
+    <span class="s2">&quot;S&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mf">32.06</span><span class="p">,</span>     <span class="mf">2.07</span><span class="p">),</span>
+    <span class="s2">&quot;Cl&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">17</span><span class="p">,</span> <span class="mf">35.45</span><span class="p">,</span>     <span class="mf">3.12e-3</span><span class="p">),</span>   <span class="c1"># gas</span>
+    <span class="s2">&quot;Ar&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">18</span><span class="p">,</span> <span class="mf">39.948</span><span class="p">,</span>    <span class="mf">1.784e-3</span><span class="p">),</span>  <span class="c1"># gas</span>
+    <span class="s2">&quot;K&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">19</span><span class="p">,</span> <span class="mf">39.098</span><span class="p">,</span>    <span class="mf">0.862</span><span class="p">),</span>
+    <span class="s2">&quot;Ca&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mf">40.078</span><span class="p">,</span>    <span class="mf">1.54</span><span class="p">),</span>
+    <span class="s2">&quot;Sc&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">21</span><span class="p">,</span> <span class="mf">44.956</span><span class="p">,</span>    <span class="mf">2.99</span><span class="p">),</span>
+    <span class="s2">&quot;Ti&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">22</span><span class="p">,</span> <span class="mf">47.867</span><span class="p">,</span>    <span class="mf">4.506</span><span class="p">),</span>
+    <span class="s2">&quot;V&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">23</span><span class="p">,</span> <span class="mf">50.942</span><span class="p">,</span>    <span class="mf">5.96</span><span class="p">),</span>
+    <span class="s2">&quot;Cr&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">24</span><span class="p">,</span> <span class="mf">51.996</span><span class="p">,</span>    <span class="mf">7.19</span><span class="p">),</span>
+    <span class="s2">&quot;Mn&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">25</span><span class="p">,</span> <span class="mf">54.938</span><span class="p">,</span>    <span class="mf">7.21</span><span class="p">),</span>
+    <span class="s2">&quot;Fe&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">26</span><span class="p">,</span> <span class="mf">55.845</span><span class="p">,</span>    <span class="mf">7.874</span><span class="p">),</span>
+    <span class="s2">&quot;Co&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">27</span><span class="p">,</span> <span class="mf">58.933</span><span class="p">,</span>    <span class="mf">8.86</span><span class="p">),</span>
+    <span class="s2">&quot;Ni&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">28</span><span class="p">,</span> <span class="mf">58.693</span><span class="p">,</span>    <span class="mf">8.912</span><span class="p">),</span>
+    <span class="s2">&quot;Cu&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">29</span><span class="p">,</span> <span class="mf">63.546</span><span class="p">,</span>    <span class="mf">8.96</span><span class="p">),</span>
+    <span class="s2">&quot;Zn&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mf">65.38</span><span class="p">,</span>     <span class="mf">7.134</span><span class="p">),</span>
+    <span class="s2">&quot;Ga&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">31</span><span class="p">,</span> <span class="mf">69.723</span><span class="p">,</span>    <span class="mf">5.904</span><span class="p">),</span>
+    <span class="s2">&quot;Ge&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mf">72.630</span><span class="p">,</span>    <span class="mf">5.323</span><span class="p">),</span>
+    <span class="s2">&quot;As&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">33</span><span class="p">,</span> <span class="mf">74.922</span><span class="p">,</span>    <span class="mf">5.776</span><span class="p">),</span>
+    <span class="s2">&quot;Se&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">34</span><span class="p">,</span> <span class="mf">78.971</span><span class="p">,</span>    <span class="mf">4.809</span><span class="p">),</span>
+    <span class="s2">&quot;Br&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">35</span><span class="p">,</span> <span class="mf">79.904</span><span class="p">,</span>    <span class="mf">3.12e-3</span><span class="p">),</span>   <span class="c1"># liquid density used as proxy</span>
+    <span class="s2">&quot;Kr&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">36</span><span class="p">,</span> <span class="mf">83.798</span><span class="p">,</span>    <span class="mf">3.749e-3</span><span class="p">),</span>  <span class="c1"># gas</span>
+    <span class="s2">&quot;Rb&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">37</span><span class="p">,</span> <span class="mf">85.468</span><span class="p">,</span>    <span class="mf">1.532</span><span class="p">),</span>
+    <span class="s2">&quot;Sr&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">38</span><span class="p">,</span> <span class="mf">87.62</span><span class="p">,</span>     <span class="mf">2.64</span><span class="p">),</span>
+    <span class="s2">&quot;Y&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">39</span><span class="p">,</span> <span class="mf">88.906</span><span class="p">,</span>    <span class="mf">4.472</span><span class="p">),</span>
+    <span class="s2">&quot;Zr&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mf">91.224</span><span class="p">,</span>    <span class="mf">6.506</span><span class="p">),</span>
+    <span class="s2">&quot;Nb&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">41</span><span class="p">,</span> <span class="mf">92.906</span><span class="p">,</span>    <span class="mf">8.57</span><span class="p">),</span>
+    <span class="s2">&quot;Mo&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">42</span><span class="p">,</span> <span class="mf">95.95</span><span class="p">,</span>    <span class="mf">10.28</span><span class="p">),</span>
+    <span class="s2">&quot;Tc&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">43</span><span class="p">,</span> <span class="mf">98.0</span><span class="p">,</span>     <span class="mf">11.5</span><span class="p">),</span>       <span class="c1"># synthetic, estimate</span>
+    <span class="s2">&quot;Ru&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">44</span><span class="p">,</span> <span class="mf">101.07</span><span class="p">,</span>   <span class="mf">12.37</span><span class="p">),</span>
+    <span class="s2">&quot;Rh&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">45</span><span class="p">,</span> <span class="mf">102.91</span><span class="p">,</span>   <span class="mf">12.41</span><span class="p">),</span>
+    <span class="s2">&quot;Pd&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">46</span><span class="p">,</span> <span class="mf">106.42</span><span class="p">,</span>   <span class="mf">12.02</span><span class="p">),</span>
+    <span class="s2">&quot;Ag&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">47</span><span class="p">,</span> <span class="mf">107.87</span><span class="p">,</span>   <span class="mf">10.501</span><span class="p">),</span>
+    <span class="s2">&quot;Cd&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">48</span><span class="p">,</span> <span class="mf">112.41</span><span class="p">,</span>    <span class="mf">8.69</span><span class="p">),</span>
+    <span class="s2">&quot;In&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49</span><span class="p">,</span> <span class="mf">114.82</span><span class="p">,</span>    <span class="mf">7.31</span><span class="p">),</span>
+    <span class="s2">&quot;Sn&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mf">118.71</span><span class="p">,</span>    <span class="mf">7.287</span><span class="p">),</span>
+    <span class="s2">&quot;Sb&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">51</span><span class="p">,</span> <span class="mf">121.76</span><span class="p">,</span>    <span class="mf">6.685</span><span class="p">),</span>
+    <span class="s2">&quot;Te&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">52</span><span class="p">,</span> <span class="mf">127.60</span><span class="p">,</span>    <span class="mf">6.232</span><span class="p">),</span>
+    <span class="s2">&quot;I&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">53</span><span class="p">,</span> <span class="mf">126.90</span><span class="p">,</span>    <span class="mf">4.93</span><span class="p">),</span>
+    <span class="s2">&quot;Xe&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">54</span><span class="p">,</span> <span class="mf">131.29</span><span class="p">,</span>    <span class="mf">5.894e-3</span><span class="p">),</span>  <span class="c1"># gas</span>
+    <span class="s2">&quot;Cs&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">55</span><span class="p">,</span> <span class="mf">132.91</span><span class="p">,</span>    <span class="mf">1.873</span><span class="p">),</span>
+    <span class="s2">&quot;Ba&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">56</span><span class="p">,</span> <span class="mf">137.33</span><span class="p">,</span>    <span class="mf">3.594</span><span class="p">),</span>
+    <span class="s2">&quot;La&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">57</span><span class="p">,</span> <span class="mf">138.91</span><span class="p">,</span>    <span class="mf">6.145</span><span class="p">),</span>
+    <span class="s2">&quot;Ce&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">58</span><span class="p">,</span> <span class="mf">140.12</span><span class="p">,</span>    <span class="mf">6.77</span><span class="p">),</span>
+    <span class="s2">&quot;Pr&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">59</span><span class="p">,</span> <span class="mf">140.91</span><span class="p">,</span>    <span class="mf">6.773</span><span class="p">),</span>
+    <span class="s2">&quot;Nd&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">60</span><span class="p">,</span> <span class="mf">144.24</span><span class="p">,</span>    <span class="mf">7.007</span><span class="p">),</span>
+    <span class="s2">&quot;Pm&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">61</span><span class="p">,</span> <span class="mf">145.0</span><span class="p">,</span>     <span class="mf">7.26</span><span class="p">),</span>      <span class="c1"># estimate</span>
+    <span class="s2">&quot;Sm&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">62</span><span class="p">,</span> <span class="mf">150.36</span><span class="p">,</span>    <span class="mf">7.52</span><span class="p">),</span>
+    <span class="s2">&quot;Eu&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">63</span><span class="p">,</span> <span class="mf">151.96</span><span class="p">,</span>    <span class="mf">5.243</span><span class="p">),</span>
+    <span class="s2">&quot;Gd&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mf">157.25</span><span class="p">,</span>    <span class="mf">7.895</span><span class="p">),</span>
+    <span class="s2">&quot;Tb&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">65</span><span class="p">,</span> <span class="mf">158.93</span><span class="p">,</span>    <span class="mf">8.229</span><span class="p">),</span>
+    <span class="s2">&quot;Dy&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">66</span><span class="p">,</span> <span class="mf">162.50</span><span class="p">,</span>    <span class="mf">8.55</span><span class="p">),</span>
+    <span class="s2">&quot;Ho&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">67</span><span class="p">,</span> <span class="mf">164.93</span><span class="p">,</span>    <span class="mf">8.795</span><span class="p">),</span>
+    <span class="s2">&quot;Er&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">68</span><span class="p">,</span> <span class="mf">167.26</span><span class="p">,</span>    <span class="mf">9.066</span><span class="p">),</span>
+    <span class="s2">&quot;Tm&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">69</span><span class="p">,</span> <span class="mf">168.93</span><span class="p">,</span>    <span class="mf">9.321</span><span class="p">),</span>
+    <span class="s2">&quot;Yb&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">70</span><span class="p">,</span> <span class="mf">173.05</span><span class="p">,</span>    <span class="mf">6.965</span><span class="p">),</span>
+    <span class="s2">&quot;Lu&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">71</span><span class="p">,</span> <span class="mf">174.97</span><span class="p">,</span>    <span class="mf">9.84</span><span class="p">),</span>
+    <span class="s2">&quot;Hf&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">72</span><span class="p">,</span> <span class="mf">178.49</span><span class="p">,</span>   <span class="mf">13.31</span><span class="p">),</span>
+    <span class="s2">&quot;Ta&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">73</span><span class="p">,</span> <span class="mf">180.95</span><span class="p">,</span>   <span class="mf">16.654</span><span class="p">),</span>
+    <span class="s2">&quot;W&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">74</span><span class="p">,</span> <span class="mf">183.84</span><span class="p">,</span>   <span class="mf">19.25</span><span class="p">),</span>
+    <span class="s2">&quot;Re&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">75</span><span class="p">,</span> <span class="mf">186.21</span><span class="p">,</span>   <span class="mf">21.02</span><span class="p">),</span>
+    <span class="s2">&quot;Os&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">76</span><span class="p">,</span> <span class="mf">190.23</span><span class="p">,</span>   <span class="mf">22.61</span><span class="p">),</span>
+    <span class="s2">&quot;Ir&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">77</span><span class="p">,</span> <span class="mf">192.22</span><span class="p">,</span>   <span class="mf">22.56</span><span class="p">),</span>
+    <span class="s2">&quot;Pt&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">78</span><span class="p">,</span> <span class="mf">195.08</span><span class="p">,</span>   <span class="mf">21.46</span><span class="p">),</span>
+    <span class="s2">&quot;Au&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">79</span><span class="p">,</span> <span class="mf">196.97</span><span class="p">,</span>   <span class="mf">19.32</span><span class="p">),</span>
+    <span class="s2">&quot;Hg&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mf">200.59</span><span class="p">,</span>   <span class="mf">13.5336</span><span class="p">),</span>    <span class="c1"># liquid</span>
+    <span class="s2">&quot;Tl&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">81</span><span class="p">,</span> <span class="mf">204.38</span><span class="p">,</span>   <span class="mf">11.85</span><span class="p">),</span>
+    <span class="s2">&quot;Pb&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">82</span><span class="p">,</span> <span class="mf">207.2</span><span class="p">,</span>    <span class="mf">11.342</span><span class="p">),</span>
+    <span class="s2">&quot;Bi&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">83</span><span class="p">,</span> <span class="mf">208.98</span><span class="p">,</span>    <span class="mf">9.79</span><span class="p">),</span>
+    <span class="s2">&quot;Po&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">84</span><span class="p">,</span> <span class="mf">209.0</span><span class="p">,</span>     <span class="mf">9.20</span><span class="p">),</span>      <span class="c1"># estimate</span>
+    <span class="s2">&quot;At&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">85</span><span class="p">,</span> <span class="mf">210.0</span><span class="p">,</span>     <span class="mf">7.0</span><span class="p">),</span>       <span class="c1"># estimate</span>
+    <span class="s2">&quot;Rn&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">86</span><span class="p">,</span> <span class="mf">222.0</span><span class="p">,</span>     <span class="mf">9.73e-3</span><span class="p">),</span>   <span class="c1"># gas estimate</span>
+    <span class="s2">&quot;Fr&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">87</span><span class="p">,</span> <span class="mf">223.0</span><span class="p">,</span>     <span class="mf">2.48</span><span class="p">),</span>      <span class="c1"># estimate</span>
+    <span class="s2">&quot;Ra&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">88</span><span class="p">,</span> <span class="mf">226.0</span><span class="p">,</span>     <span class="mf">5.5</span><span class="p">),</span>       <span class="c1"># estimate</span>
+    <span class="s2">&quot;Ac&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">89</span><span class="p">,</span> <span class="mf">227.0</span><span class="p">,</span>    <span class="mf">10.07</span><span class="p">),</span>
+    <span class="s2">&quot;Th&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">90</span><span class="p">,</span> <span class="mf">232.04</span><span class="p">,</span>   <span class="mf">11.72</span><span class="p">),</span>
+    <span class="s2">&quot;Pa&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">91</span><span class="p">,</span> <span class="mf">231.04</span><span class="p">,</span>   <span class="mf">15.37</span><span class="p">),</span>
+    <span class="s2">&quot;U&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">92</span><span class="p">,</span> <span class="mf">238.03</span><span class="p">,</span>   <span class="mf">18.95</span><span class="p">),</span>
+<span class="p">}</span>
+<span class="c1"># fmt: on</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Material record</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="Material">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.Material">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Material</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Optical properties of an element or compound at a given photon energy.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    symbol : str</span>
+<span class="sd">        Chemical symbol or compound identifier.</span>
+<span class="sd">    energy_eV : float</span>
+<span class="sd">        Photon energy [eV].</span>
+<span class="sd">    n : float</span>
+<span class="sd">        Real part of refractive index.</span>
+<span class="sd">    k : float</span>
+<span class="sd">        Imaginary part (extinction coefficient).</span>
+<span class="sd">    density : float</span>
+<span class="sd">        Mass density [g/cm³].</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">energy_eV</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">n</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">k</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">density</span><span class="p">:</span> <span class="nb">float</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">wavelength_nm</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Wavelength [nm] corresponding to the photon energy.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">euv.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">eV_to_nm</span>
+
+        <span class="k">return</span> <span class="n">eV_to_nm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">energy_eV</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">epsilon</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">complex</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Complex permittivity ε = (n + ik)² (dimensionless).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">complex</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delta</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Refractive index decrement δ = 1 — n.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">absorption_length_nm</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;1/e absorption length [nm] = λ / (4π k).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;inf&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">wavelength_nm</span> <span class="o">/</span> <span class="p">(</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># CXRO data loader</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="CXROTable">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.CXROTable">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CXROTable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;In-memory representation of the CXRO f₁, f₂ scattering factors.</span>
+
+<span class="sd">    Lazy-loads CSV data on first access.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data_dir : str or Path</span>
+<span class="sd">        Directory containing ``&lt;Element&gt;.csv`` files.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DATA_DIR</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load f₁, f₂ data for *symbol* from CSV.&quot;&quot;&quot;</span>
+        <span class="n">csv_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2">.csv&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">csv_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;CXRO table not found: </span><span class="si">{</span><span class="n">csv_path</span><span class="si">}</span><span class="s2">. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Run ``python scripts/download_cxro.py`` first.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">energies</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">f1_vals</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">f2_vals</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">newline</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">reader</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+            <span class="nb">next</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>  <span class="c1"># skip header</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">energy</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="c1"># f1 = None (empty) means -9999 in the raw data</span>
+                <span class="n">f1</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="n">f2</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="n">f2</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">energy</span><span class="p">)</span>
+                <span class="n">f1_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f1</span><span class="p">)</span>
+                <span class="n">f2_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f2</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">energies</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No valid data in </span><span class="si">{</span><span class="n">csv_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span><span class="p">[</span><span class="n">symbol</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">energies</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">f1_vals</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">f2_vals</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="CXROTable.has_element">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.CXROTable.has_element">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_element</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if CXRO data exists for this element.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2">.csv&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="CXROTable.get_f1f2">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.CXROTable.get_f1f2">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_f1f2</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">energy_eV</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Interpolate f₁, f₂ at a given photon energy.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        symbol : str</span>
+<span class="sd">            Chemical symbol (e.g. ``&#39;Mo&#39;``, ``&#39;Si&#39;``).</span>
+<span class="sd">        energy_eV : float</span>
+<span class="sd">            Photon energy in eV.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        f1, f2 : float</span>
+<span class="sd">            Atomic scattering factors at *energy_eV*.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        KeyError</span>
+<span class="sd">            If the element is not loaded.</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If *energy_eV* is outside the CXRO table range.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">symbol</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_load</span><span class="p">(</span><span class="n">symbol</span><span class="p">)</span>
+
+        <span class="n">energies</span><span class="p">,</span> <span class="n">f1_raw</span><span class="p">,</span> <span class="n">f2_raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tables</span><span class="p">[</span><span class="n">symbol</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">energy_eV</span> <span class="o">&lt;</span> <span class="n">energies</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span> <span class="n">energy_eV</span> <span class="o">&gt;</span> <span class="n">energies</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Energy </span><span class="si">{</span><span class="n">energy_eV</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> eV outside CXRO range for </span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">energies</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">energies</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">] eV&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Linear interpolation (log-log for better accuracy)</span>
+        <span class="n">log_e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">energies</span><span class="p">)</span>
+        <span class="n">log_e_target</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">energy_eV</span><span class="p">)</span>
+
+        <span class="c1"># f1 — only interpolate where f1 is not -9999 (NaN)</span>
+        <span class="n">valid</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">f1_raw</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">f1_raw</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">valid</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="c1"># Fall back to f2-based Kramers–Kronig or just use nearest</span>
+            <span class="n">f1</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">energy_eV</span><span class="p">,</span> <span class="n">energies</span><span class="p">[</span><span class="n">valid</span><span class="p">],</span> <span class="n">f1_raw</span><span class="p">[</span><span class="n">valid</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">f1</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">energy_eV</span><span class="p">,</span> <span class="n">energies</span><span class="p">,</span> <span class="n">f1_raw</span><span class="p">))</span>
+
+        <span class="c1"># f2 — log-log interpolation</span>
+        <span class="n">log_f2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">f2_raw</span><span class="p">,</span> <span class="mf">1e-30</span><span class="p">))</span>
+        <span class="n">f2</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">log_e_target</span><span class="p">,</span> <span class="n">log_e</span><span class="p">,</span> <span class="n">log_f2</span><span class="p">)))</span>
+
+        <span class="k">return</span> <span class="n">f1</span><span class="p">,</span> <span class="n">f2</span></div>
+
+
+<div class="viewcode-block" id="CXROTable.refractive_index">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.CXROTable.refractive_index">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">refractive_index</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">energy_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">EUV_ENERGY_EV</span><span class="p">,</span>
+        <span class="n">density_g_cm3</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compute refractive index *n* + i*k from CXRO data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        symbol : str</span>
+<span class="sd">            Chemical symbol.</span>
+<span class="sd">        energy_eV : float</span>
+<span class="sd">            Photon energy [eV].</span>
+<span class="sd">        density_g_cm3 : float, optional</span>
+<span class="sd">            Material density in g/cm³.  Uses standard density from the</span>
+<span class="sd">            element table if omitted.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        n, k : float</span>
+<span class="sd">            Real and imaginary parts of refractive index.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">density_g_cm3</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">density_g_cm3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element_info</span><span class="p">(</span><span class="n">symbol</span><span class="p">)</span>
+
+        <span class="n">f1</span><span class="p">,</span> <span class="n">f2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_f1f2</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">energy_eV</span><span class="p">)</span>
+
+        <span class="c1"># Atomic number density N [atoms/m³] = ρ · N_A / A</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">atomic_mass</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element_info</span><span class="p">(</span><span class="n">symbol</span><span class="p">)</span>
+        <span class="n">N</span> <span class="o">=</span> <span class="n">density_g_cm3</span> <span class="o">*</span> <span class="mf">1e3</span> <span class="o">*</span> <span class="n">AVOGADRO</span> <span class="o">/</span> <span class="p">(</span><span class="n">atomic_mass</span> <span class="o">*</span> <span class="mf">1e-3</span><span class="p">)</span>  <span class="c1"># atoms/m³</span>
+
+        <span class="c1"># Wavelength [m] from energy</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">euv.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PLANCK_EV</span><span class="p">,</span> <span class="n">SPEED_OF_LIGHT</span>
+
+        <span class="n">lam</span> <span class="o">=</span> <span class="n">PLANCK_EV</span> <span class="o">*</span> <span class="n">SPEED_OF_LIGHT</span> <span class="o">/</span> <span class="n">energy_eV</span>  <span class="c1"># [m]</span>
+
+        <span class="c1"># Pre-factor</span>
+        <span class="n">prefactor</span> <span class="o">=</span> <span class="n">CLASSICAL_ELECTRON_RADIUS</span> <span class="o">*</span> <span class="n">lam</span><span class="o">**</span><span class="mi">2</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
+        <span class="n">delta</span> <span class="o">=</span> <span class="n">prefactor</span> <span class="o">*</span> <span class="n">N</span> <span class="o">*</span> <span class="n">f1</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="n">prefactor</span> <span class="o">*</span> <span class="n">N</span> <span class="o">*</span> <span class="n">f2</span>
+
+        <span class="n">n</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">delta</span>
+        <span class="k">return</span> <span class="n">n</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>  <span class="c1"># k must be non-negative</span></div>
+
+
+<div class="viewcode-block" id="CXROTable.get_material">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.CXROTable.get_material">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_material</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">energy_eV</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">EUV_ENERGY_EV</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Material</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a ``Material`` instance from CXRO data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        symbol : str</span>
+<span class="sd">            Chemical symbol.</span>
+<span class="sd">        energy_eV : float</span>
+<span class="sd">            Photon energy [eV].</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Material</span>
+<span class="sd">            Optical properties at the requested energy.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">z</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">density</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_element_info</span><span class="p">(</span><span class="n">symbol</span><span class="p">)</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">refractive_index</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">energy_eV</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Material</span><span class="p">(</span>
+            <span class="n">symbol</span><span class="o">=</span><span class="n">symbol</span><span class="p">,</span>
+            <span class="n">energy_eV</span><span class="o">=</span><span class="n">energy_eV</span><span class="p">,</span>
+            <span class="n">n</span><span class="o">=</span><span class="n">n</span><span class="p">,</span>
+            <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">,</span>
+            <span class="n">density</span><span class="o">=</span><span class="n">density</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CXROTable.list_elements">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.CXROTable.list_elements">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_elements</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return all symbols for which CXRO data is available.&quot;&quot;&quot;</span>
+        <span class="n">elements</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_dir</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">fname</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.csv&quot;</span><span class="p">):</span>
+                <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fname</span><span class="p">[:</span><span class="o">-</span><span class="mi">4</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">elements</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_element_info</span><span class="p">(</span><span class="n">symbol</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return (Z, atomic_mass_g_mol, density_g_cm3) for *symbol*.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_ELEMENT_TABLE</span><span class="p">[</span><span class="n">symbol</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Unknown element &#39;</span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2">&#39;. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;CXRO loader covers Z = 1–92.&quot;</span>
+            <span class="p">)</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Module-level singleton</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+<span class="n">_DEFAULT_TABLE</span><span class="p">:</span> <span class="n">CXROTable</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="get_cxro_table">
+<a class="viewcode-back" href="../../api/modules.html#euv.materials.get_cxro_table">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_cxro_table</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">CXROTable</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get or create the default CXRO table singleton.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_DEFAULT_TABLE</span>
+    <span class="k">if</span> <span class="n">_DEFAULT_TABLE</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_DEFAULT_TABLE</span> <span class="o">=</span> <span class="n">CXROTable</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_DEFAULT_TABLE</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,18 @@
+# =============================================================================
+# OpEnUV — Docker Compose (CLI mode)
+# =============================================================================
+# Runs the OpEnUV CLI interactively.  By default shows `--help`; override
+# the command with `docker compose -f docker-compose.cli.yml run --rm cli ...`
+# =============================================================================
+
+services:
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli
+    container_name: openuv-cli
+    image: openuv-cli:latest
+    stdin_open: true   # -i
+    tty: true          # -t
+    volumes:
+      - ./src/euv/data:/app/euv/data

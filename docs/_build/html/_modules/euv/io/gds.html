@@ -1,0 +1,465 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.io.gds &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.io.gds</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.io.gds</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">GDSII import/export wrapper for EUV mask layout geometry.</span>
+
+<span class="sd">Uses ``gdstk`` as the GDSII backend.  The internal representation is a</span>
+<span class="sd">:class:`MaskGeometry` dataclass that maps ``(layer, datatype)`` pairs to</span>
+<span class="sd">lists of polygon vertex arrays.</span>
+
+<span class="sd">Typical EUV mask patterns:</span>
+
+<span class="sd">- **Line/space arrays** — periodic absorber lines on a dark-field mask</span>
+<span class="sd">- **Contact arrays** — square or circular contact holes on a clear-field mask</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">gdstk</span>
+
+    <span class="n">_HAS_GDSTK</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+    <span class="n">_HAS_GDSTK</span> <span class="o">=</span> <span class="kc">False</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Internal representation</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="MaskGeometry">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.MaskGeometry">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MaskGeometry</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mask layout geometry in memory.</span>
+
+<span class="sd">    Polygons are stored as a dictionary keyed by ``(layer, datatype)``,</span>
+<span class="sd">    where each value is a list of ``(N, 2)`` numpy arrays of vertex</span>
+<span class="sd">    coordinates in **nanometres**.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    polygons : dict</span>
+<span class="sd">        Maps ``(layer, datatype)`` tuples to lists of vertex arrays.</span>
+<span class="sd">    cell_name : str</span>
+<span class="sd">        Name of the source GDS cell (default: ``&quot;TOP&quot;``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">polygons</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">cell_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;TOP&quot;</span>
+
+    <span class="c1"># ── convenience accessors ──────────────────</span>
+
+<div class="viewcode-block" id="MaskGeometry.layers">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.MaskGeometry.layers">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">layers</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return sorted list of ``(layer, datatype)`` keys present.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">polygon_count</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Total number of polygons across all layers.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+<div class="viewcode-block" id="MaskGeometry.total_area_nm2">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.MaskGeometry.total_area_nm2">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">total_area_nm2</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sum of all polygon areas in nm².&quot;&quot;&quot;</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="n">verts_list</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">verts</span> <span class="ow">in</span> <span class="n">verts_list</span><span class="p">:</span>
+                <span class="n">total</span> <span class="o">+=</span> <span class="n">_polygon_area</span><span class="p">(</span><span class="n">verts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">total</span></div>
+
+
+    <span class="c1"># ── GDSII export ───────────────────────────</span>
+
+<div class="viewcode-block" id="MaskGeometry.to_gds">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.MaskGeometry.to_gds">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_gds</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">unit</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-9</span><span class="p">,</span>
+        <span class="n">precision</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-12</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write the geometry to a GDSII file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        path : str | Path</span>
+<span class="sd">            Output ``.gds`` file path.</span>
+<span class="sd">        unit : float</span>
+<span class="sd">            Database unit in **metres** (default ``1e-9`` → nanometre).</span>
+<span class="sd">        precision : float</span>
+<span class="sd">            User-unit per database-unit (default ``1e-12``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_HAS_GDSTK</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;gdstk is required to write GDSII files.&quot;</span><span class="p">)</span>
+
+        <span class="n">lib</span> <span class="o">=</span> <span class="n">gdstk</span><span class="o">.</span><span class="n">Library</span><span class="p">(</span><span class="n">unit</span><span class="o">=</span><span class="n">unit</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="n">precision</span><span class="p">)</span>
+        <span class="n">cell</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">new_cell</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cell_name</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">datatype</span><span class="p">),</span> <span class="n">verts_list</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">verts</span> <span class="ow">in</span> <span class="n">verts_list</span><span class="p">:</span>
+                <span class="n">polygon</span> <span class="o">=</span> <span class="n">gdstk</span><span class="o">.</span><span class="n">Polygon</span><span class="p">(</span><span class="n">verts</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="n">layer</span><span class="p">,</span> <span class="n">datatype</span><span class="o">=</span><span class="n">datatype</span><span class="p">)</span>
+                <span class="n">cell</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">polygon</span><span class="p">)</span>
+
+        <span class="n">lib</span><span class="o">.</span><span class="n">write_gds</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span></div>
+
+
+    <span class="c1"># ── equality helper for tests ──────────────</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">MaskGeometry</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">NotImplemented</span>
+        <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="nb">set</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">polygons</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="p">[</span><span class="n">key</span><span class="p">])</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">polygons</span><span class="p">[</span><span class="n">key</span><span class="p">]):</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polygons</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="n">other</span><span class="o">.</span><span class="n">polygons</span><span class="p">[</span><span class="n">key</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">b</span><span class="o">.</span><span class="n">shape</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># GDSII reading</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="load_gds">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.load_gds">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_gds</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">cell_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">layer_filter</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">flatten</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MaskGeometry</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a GDSII file into a :class:`MaskGeometry`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    path : str | Path</span>
+<span class="sd">        Path to the ``.gds`` file.</span>
+<span class="sd">    cell_name : str, optional</span>
+<span class="sd">        Name of the cell to load.  If *None*, the top-level cell with the</span>
+<span class="sd">        most polygons is auto-selected.</span>
+<span class="sd">    layer_filter : sequence of (layer, datatype), optional</span>
+<span class="sd">        If provided, only polygons matching one of these pairs are kept.</span>
+<span class="sd">    flatten : bool</span>
+<span class="sd">        If *True* (default), flatten all cell references into a single cell.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    MaskGeometry</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_HAS_GDSTK</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;gdstk is required to read GDSII files.&quot;</span><span class="p">)</span>
+
+    <span class="n">lib</span> <span class="o">=</span> <span class="n">gdstk</span><span class="o">.</span><span class="n">read_gds</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+    <span class="n">cells</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">cells</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">cells</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No cells found in GDSII file: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Resolve target cell</span>
+    <span class="k">if</span> <span class="n">cell_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cells</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">cell_name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">target</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cell &#39;</span><span class="si">{</span><span class="n">cell_name</span><span class="si">}</span><span class="s2">&#39; not found in </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">target_cell</span> <span class="o">=</span> <span class="n">target</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">top_level</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">top_level</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">top_level</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">target_cell</span> <span class="o">=</span> <span class="n">top_level</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Pick the cell with the most polygons (direct or via refs)</span>
+            <span class="n">target_cell</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+                <span class="n">cells</span><span class="p">,</span>
+                <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">()</span> <span class="k">if</span> <span class="n">flatten</span> <span class="k">else</span> <span class="n">c</span><span class="o">.</span><span class="n">polygons</span><span class="p">),</span>
+            <span class="p">)</span>
+
+    <span class="c1"># Collect polygons</span>
+    <span class="n">raw_polygons</span> <span class="o">=</span> <span class="n">target_cell</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">()</span> <span class="k">if</span> <span class="n">flatten</span> <span class="k">else</span> <span class="n">target_cell</span><span class="o">.</span><span class="n">polygons</span>
+
+    <span class="n">geometry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">poly</span> <span class="ow">in</span> <span class="n">raw_polygons</span><span class="p">:</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">poly</span><span class="o">.</span><span class="n">layer</span><span class="p">,</span> <span class="n">poly</span><span class="o">.</span><span class="n">datatype</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">layer_filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">layer_filter</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">verts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">poly</span><span class="o">.</span><span class="n">points</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">geometry</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">verts</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">MaskGeometry</span><span class="p">(</span><span class="n">polygons</span><span class="o">=</span><span class="n">geometry</span><span class="p">,</span> <span class="n">cell_name</span><span class="o">=</span><span class="n">target_cell</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># EUV mask pattern generators</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="make_linespace">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.make_linespace">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_linespace</span><span class="p">(</span>
+    <span class="n">period_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">line_width_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">height_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">nlines</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">layer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">datatype</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">origin</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a periodic line/space array.</span>
+
+<span class="sd">    Each line is a rectangle of width ``line_width_nm`` and height</span>
+<span class="sd">    ``height_nm``, repeated every ``period_nm``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    period_nm : float</span>
+<span class="sd">        Centre-to-centre pitch in nm.</span>
+<span class="sd">    line_width_nm : float</span>
+<span class="sd">        Line width in nm.</span>
+<span class="sd">    height_nm : float</span>
+<span class="sd">        Line height (y-direction) in nm.</span>
+<span class="sd">    nlines : int</span>
+<span class="sd">        Number of lines (default 1).</span>
+<span class="sd">    layer : int</span>
+<span class="sd">        GDS layer number (default 0).</span>
+<span class="sd">    datatype : int</span>
+<span class="sd">        GDS datatype (default 0).</span>
+<span class="sd">    origin : (float, float)</span>
+<span class="sd">        Bottom-left corner of the first line (default ``(0, 0)``).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of (N, 2) ndarray</span>
+<span class="sd">        Polygon vertex arrays (one per line).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x0</span><span class="p">,</span> <span class="n">y0</span> <span class="o">=</span> <span class="n">origin</span>
+    <span class="n">half_w</span> <span class="o">=</span> <span class="n">line_width_nm</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="n">polygons</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nlines</span><span class="p">):</span>
+        <span class="n">cx</span> <span class="o">=</span> <span class="n">x0</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="n">period_nm</span>
+        <span class="n">left</span> <span class="o">=</span> <span class="n">cx</span> <span class="o">-</span> <span class="n">half_w</span>
+        <span class="n">right</span> <span class="o">=</span> <span class="n">cx</span> <span class="o">+</span> <span class="n">half_w</span>
+        <span class="n">top</span> <span class="o">=</span> <span class="n">y0</span> <span class="o">+</span> <span class="n">height_nm</span>
+        <span class="n">verts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">y0</span><span class="p">],</span>
+                <span class="p">[</span><span class="n">right</span><span class="p">,</span> <span class="n">y0</span><span class="p">],</span>
+                <span class="p">[</span><span class="n">right</span><span class="p">,</span> <span class="n">top</span><span class="p">],</span>
+                <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">top</span><span class="p">],</span>
+            <span class="p">],</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">polygons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">verts</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">polygons</span></div>
+
+
+
+<div class="viewcode-block" id="make_contact_array">
+<a class="viewcode-back" href="../../../api/modules.html#euv.io.gds.make_contact_array">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_contact_array</span><span class="p">(</span>
+    <span class="n">period_x_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">period_y_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">contact_width_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">contact_height_nm</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">nx</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">ny</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">layer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">datatype</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">origin</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a rectangular array of contact holes.</span>
+
+<span class="sd">    Each contact is a rectangle centred at each grid point.  On an EUV</span>
+<span class="sd">    clear-field mask, contacts are typically openings (absorber removed),</span>
+<span class="sd">    so the polygon represents the opening in the absorber layer.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    period_x_nm, period_y_nm : float</span>
+<span class="sd">        Centre-to-centre pitch in the x / y direction [nm].</span>
+<span class="sd">    contact_width_nm, contact_height_nm : float</span>
+<span class="sd">        Contact opening size in x / y [nm].</span>
+<span class="sd">    nx, ny : int</span>
+<span class="sd">        Number of contacts in x / y (default 1 each).</span>
+<span class="sd">    layer : int</span>
+<span class="sd">        GDS layer number (default 1).</span>
+<span class="sd">    datatype : int</span>
+<span class="sd">        GDS datatype (default 0).</span>
+<span class="sd">    origin : (float, float)</span>
+<span class="sd">        Bottom-left corner of the first contact (default ``(0, 0)``).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list of (N, 2) ndarray</span>
+<span class="sd">        Polygon vertex arrays (one per contact).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x0</span><span class="p">,</span> <span class="n">y0</span> <span class="o">=</span> <span class="n">origin</span>
+    <span class="n">half_w</span> <span class="o">=</span> <span class="n">contact_width_nm</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="n">half_h</span> <span class="o">=</span> <span class="n">contact_height_nm</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="n">polygons</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">iy</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ny</span><span class="p">):</span>
+        <span class="n">cy</span> <span class="o">=</span> <span class="n">y0</span> <span class="o">+</span> <span class="n">iy</span> <span class="o">*</span> <span class="n">period_y_nm</span> <span class="o">+</span> <span class="n">half_h</span>
+        <span class="k">for</span> <span class="n">ix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nx</span><span class="p">):</span>
+            <span class="n">cx</span> <span class="o">=</span> <span class="n">x0</span> <span class="o">+</span> <span class="n">ix</span> <span class="o">*</span> <span class="n">period_x_nm</span> <span class="o">+</span> <span class="n">half_w</span>
+            <span class="n">left</span> <span class="o">=</span> <span class="n">cx</span> <span class="o">-</span> <span class="n">half_w</span>
+            <span class="n">right</span> <span class="o">=</span> <span class="n">cx</span> <span class="o">+</span> <span class="n">half_w</span>
+            <span class="n">bottom</span> <span class="o">=</span> <span class="n">cy</span> <span class="o">-</span> <span class="n">half_h</span>
+            <span class="n">top</span> <span class="o">=</span> <span class="n">cy</span> <span class="o">+</span> <span class="n">half_h</span>
+            <span class="n">verts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">bottom</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">right</span><span class="p">,</span> <span class="n">bottom</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">right</span><span class="p">,</span> <span class="n">top</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">left</span><span class="p">,</span> <span class="n">top</span><span class="p">],</span>
+                <span class="p">],</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">polygons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">verts</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">polygons</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Internal helpers</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_polygon_area</span><span class="p">(</span><span class="n">verts</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Signed area of a polygon using the shoelace formula.&quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">verts</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">verts</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="nb">float</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">))))</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,571 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.mask3d.rcwa_torch &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.mask3d.rcwa_torch</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.mask3d.rcwa_torch</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Rigorous Coupled-Wave Analysis (RCWA) — 1D grating, PyTorch.</span>
+
+<span class="sd">Fourier Modal Method (FMM) with numerically stable scattering-matrix</span>
+<span class="sd">(S-matrix) cascade.  All core functions support autograd.</span>
+
+<span class="sd">Theory</span>
+<span class="sd">------</span>
+<span class="sd">For a 1D grating periodic in *x*, the fields are expanded in Fourier</span>
+<span class="sd">orders.  Each homogeneous-in-*z* layer satisfies the eigenvalue</span>
+<span class="sd">problem::</span>
+
+<span class="sd">    A W = W q²   where A = E − Kx²   (TE polarisation)</span>
+
+<span class="sd">The eigenvectors *W* diagonalise the permittivity Toeplitz matrix *E*,</span>
+<span class="sd">and the eigenvalues *q²* give the propagation constants.  Interface</span>
+<span class="sd">S-matrices connect the Rayleigh order basis to the eigenmode basis</span>
+<span class="sd">using the continuity of tangential E and H.</span>
+
+<span class="sd">References</span>
+<span class="sd">----------</span>
+<span class="sd">M. G. Moharam et al., J. Opt. Soc. Am. A 12(5), 1077–1086 (1995).</span>
+<span class="sd">L. Li, J. Opt. Soc. Am. A 13(9), 1870–1876 (1996).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Configuration</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="RCWAConfig">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.RCWAConfig">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RCWAConfig</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for a 1D RCWA simulation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    wavelength : float</span>
+<span class="sd">        Free-space wavelength [m] (default: 13.5e-9).</span>
+<span class="sd">    n_orders : int</span>
+<span class="sd">        Number of Fourier orders (odd, default: 21).</span>
+<span class="sd">    theta : float</span>
+<span class="sd">        Polar angle of incidence [deg] (default: 6.0).</span>
+<span class="sd">    polarization : str</span>
+<span class="sd">        ``&quot;TE&quot;`` or ``&quot;TM&quot;`` (default: ``&quot;TE&quot;``).</span>
+<span class="sd">    device : str</span>
+<span class="sd">        PyTorch device (default: ``&quot;cpu&quot;``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">wavelength</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">13.5e-9</span>
+    <span class="n">n_orders</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">21</span>
+    <span class="n">theta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">6.0</span>
+    <span class="n">polarization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;TE&quot;</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">__post_init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_orders</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n_orders must be odd, got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_orders</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">polarization</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polarization</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">polarization</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;TE&quot;</span><span class="p">,</span> <span class="s2">&quot;TM&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;polarization must be TE or TM&quot;</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Toeplitz permittivity matrix</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="permittivity_toeplitz">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.permittivity_toeplitz">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">permittivity_toeplitz</span><span class="p">(</span>
+    <span class="n">eps_profile</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">n_orders</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">use_inverse_rule</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Toeplitz permittivity matrix from a 1D profile (Li&#39;s rules).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    eps_profile : (Nx,) complex128</span>
+<span class="sd">    n_orders : int (odd)</span>
+<span class="sd">    use_inverse_rule : bool</span>
+<span class="sd">        True → build [1/ε] Toeplitz (needed for TM).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    E : (M, M) complex128</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">M</span> <span class="o">=</span> <span class="n">n_orders</span>
+    <span class="n">Nx</span> <span class="o">=</span> <span class="n">eps_profile</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">use_inverse_rule</span><span class="p">:</span>
+        <span class="n">eps_profile</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">eps_profile</span>
+    <span class="n">eps_fft</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fft</span><span class="p">(</span><span class="n">eps_profile</span><span class="p">)</span> <span class="o">/</span> <span class="n">Nx</span>
+    <span class="n">eps_fft</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fftshift</span><span class="p">(</span><span class="n">eps_fft</span><span class="p">)</span>
+    <span class="n">center</span> <span class="o">=</span> <span class="n">Nx</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">eps_profile</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">idx</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">idx</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">E</span> <span class="o">=</span> <span class="n">eps_fft</span><span class="p">[</span><span class="n">center</span> <span class="o">+</span> <span class="n">diff</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">E</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># RCWA solver</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="RCWA1D">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.RCWA1D">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RCWA1D</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;1D RCWA solver with S-matrix cascade.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cfg : RCWAConfig</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">RCWAConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">cfg</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">n_orders</span>
+        <span class="n">half</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">//</span> <span class="mi">2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="n">half</span><span class="p">,</span> <span class="n">half</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="c1"># ── Public API ─────────────────────────────</span>
+
+<div class="viewcode-block" id="RCWA1D.solve">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.RCWA1D.solve">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">eps_profile</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">thicknesses</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">period</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">n_incident</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">n_substrate</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run the RCWA simulation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        eps_profile : (Nx,) complex128</span>
+<span class="sd">            Permittivity over one period.</span>
+<span class="sd">        thicknesses : (Nlayers,) float64 [m]</span>
+<span class="sd">            Layer thicknesses (single layer for binary grating).</span>
+<span class="sd">        period : float [m]</span>
+<span class="sd">            Grating period.</span>
+<span class="sd">        n_incident : (2,) complex128, optional</span>
+<span class="sd">            (n_upper, n_lower) of incident medium.</span>
+<span class="sd">        n_substrate : (2,) complex128, optional</span>
+<span class="sd">            (n_upper, n_lower) of substrate.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        orders : (M,) complex128</span>
+<span class="sd">            Complex reflected order amplitudes.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">n_incident</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">n_incident</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">1.0</span><span class="o">+</span><span class="mf">0.0</span><span class="n">j</span><span class="p">,</span> <span class="mf">1.0</span><span class="o">+</span><span class="mf">0.0</span><span class="n">j</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">n_substrate</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">n_substrate</span> <span class="o">=</span> <span class="n">n_incident</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+
+        <span class="n">n_i</span> <span class="o">=</span> <span class="n">n_incident</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+        <span class="n">n_s</span> <span class="o">=</span> <span class="n">n_substrate</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+        <span class="n">k0</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">wavelength</span>
+        <span class="n">theta</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span>
+
+        <span class="c1"># Rayleigh wavevectors</span>
+        <span class="n">k_xm</span> <span class="o">=</span> <span class="n">k0</span> <span class="o">*</span> <span class="n">n_i</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">*</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="n">period</span><span class="p">)</span>
+        <span class="n">Kx</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">k_xm</span> <span class="o">/</span> <span class="n">k0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+
+        <span class="c1"># Permittivity Toeplitz matrix</span>
+        <span class="n">use_inv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">polarization</span> <span class="o">==</span> <span class="s2">&quot;TM&quot;</span>
+        <span class="n">E</span> <span class="o">=</span> <span class="n">permittivity_toeplitz</span><span class="p">(</span><span class="n">eps_profile</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">M</span><span class="p">,</span> <span class="n">use_inverse_rule</span><span class="o">=</span><span class="n">use_inv</span><span class="p">)</span>
+
+        <span class="c1"># Eigenvalue problem: A = E - Kx²  (TE)</span>
+        <span class="n">Kx2</span> <span class="o">=</span> <span class="n">Kx</span> <span class="o">@</span> <span class="n">Kx</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">polarization</span> <span class="o">==</span> <span class="s2">&quot;TE&quot;</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">E</span> <span class="o">-</span> <span class="n">Kx2</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">E_inv</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">E</span><span class="p">)</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">E</span> <span class="o">-</span> <span class="n">Kx</span> <span class="o">@</span> <span class="n">E_inv</span> <span class="o">@</span> <span class="n">Kx</span>  <span class="c1"># Li&#39;s TM rule</span>
+
+        <span class="n">eig_vals</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">eig</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">eig_vals</span><span class="p">)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">imag</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span>  <span class="c1"># Im(q) &gt;= 0</span>
+        <span class="n">V</span> <span class="o">=</span> <span class="n">W</span> <span class="o">@</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>  <span class="c1"># modal admittance (TE)</span>
+
+        <span class="c1"># Rayleigh admittances of incident and substrate media</span>
+        <span class="n">kz_inc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">n_i</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">k0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">k_xm</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">0</span><span class="n">j</span>
+        <span class="p">)</span>
+        <span class="n">kz_sub</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">n_s</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">k0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">k_xm</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">0</span><span class="n">j</span>
+        <span class="p">)</span>
+        <span class="n">kz_inc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">kz_inc</span><span class="o">.</span><span class="n">imag</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">kz_inc</span><span class="p">,</span> <span class="n">kz_inc</span><span class="p">)</span>
+        <span class="n">kz_sub</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">kz_sub</span><span class="o">.</span><span class="n">imag</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">kz_sub</span><span class="p">,</span> <span class="n">kz_sub</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">polarization</span> <span class="o">==</span> <span class="s2">&quot;TE&quot;</span><span class="p">:</span>
+            <span class="n">Y_inc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">kz_inc</span> <span class="o">/</span> <span class="n">k0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+            <span class="n">Y_sub</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">kz_sub</span> <span class="o">/</span> <span class="n">k0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">Y_inc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">n_i</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">k0</span> <span class="o">/</span> <span class="n">kz_inc</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+            <span class="n">Y_sub</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">n_s</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">k0</span> <span class="o">/</span> <span class="n">kz_sub</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+
+        <span class="c1"># Build top interface S-matrix: Rayleigh ↔ eigenmodes</span>
+        <span class="n">S_top</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rayleigh_to_eigenmode_smatrix</span><span class="p">(</span><span class="n">Y_inc</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+
+        <span class="c1"># Build propagation through layer(s)</span>
+        <span class="n">S_layer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_propagation_smatrix</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">thicknesses</span><span class="p">,</span> <span class="n">k0</span><span class="p">)</span>
+
+        <span class="c1"># Build bottom interface S-matrix: eigenmodes ↔ substrate Rayleigh</span>
+        <span class="n">S_bot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eigenmode_to_rayleigh_smatrix</span><span class="p">(</span><span class="n">Y_sub</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">V</span><span class="p">)</span>
+
+        <span class="c1"># Cascade: total S = S_top ⨂ S_layer ⨂ S_bot</span>
+        <span class="n">S_total</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_redheffer_star_matrix</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_redheffer_star_matrix</span><span class="p">(</span><span class="n">S_top</span><span class="p">,</span> <span class="n">S_layer</span><span class="p">),</span> <span class="n">S_bot</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Incident: 0th order only</span>
+        <span class="n">inc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">inc</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">//</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="mf">0.0</span><span class="n">j</span>
+
+        <span class="c1"># Reflected orders = S_total[0,0] @ inc</span>
+        <span class="n">reflected</span> <span class="o">=</span> <span class="n">S_total</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">@</span> <span class="n">inc</span>
+        <span class="k">return</span> <span class="n">reflected</span></div>
+
+
+<div class="viewcode-block" id="RCWA1D.diffraction_efficiency">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.RCWA1D.diffraction_efficiency">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">diffraction_efficiency</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">orders</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Diffraction efficiencies per order.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        orders : (M,) complex128</span>
+<span class="sd">            Reflected order amplitudes from ``solve()``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        eff : dict {order: float}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">order_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">m_val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="o">.</span><span class="n">tolist</span><span class="p">()):</span>
+            <span class="n">amp</span> <span class="o">=</span> <span class="n">orders</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">order_map</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">m_val</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">((</span><span class="n">amp</span> <span class="o">*</span> <span class="n">amp</span><span class="o">.</span><span class="n">conj</span><span class="p">())</span><span class="o">.</span><span class="n">real</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">order_map</span></div>
+
+
+    <span class="c1"># ── S-matrix building blocks ───────────────</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_rayleigh_to_eigenmode_smatrix</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">Y_R</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">W</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">V</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Interface: Rayleigh basis → eigenmode basis.</span>
+
+<span class="sd">        S₁₁ = 2W A⁻¹ Y_R − I    (reflected Rayleigh)</span>
+<span class="sd">        S₁₂ = 2W A⁻¹ V          (incoming eigenmode → Rayleigh)</span>
+<span class="sd">        S₂₁ = A⁻¹ 2 Y_R         (incident Rayleigh → eigenmode)</span>
+<span class="sd">        S₂₂ = −A⁻¹ B            (reflected eigenmode → eigenmode)</span>
+
+<span class="sd">        where A = V + Y_R W, B = Y_R W − V.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">M</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">YW</span> <span class="o">=</span> <span class="n">Y_R</span> <span class="o">@</span> <span class="n">W</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">V</span> <span class="o">+</span> <span class="n">YW</span>
+        <span class="n">B</span> <span class="o">=</span> <span class="n">YW</span> <span class="o">-</span> <span class="n">V</span>
+        <span class="n">A_inv</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+
+        <span class="n">S</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">W</span> <span class="o">@</span> <span class="n">A_inv</span> <span class="o">@</span> <span class="n">Y_R</span> <span class="o">-</span> <span class="n">I</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">W</span> <span class="o">@</span> <span class="n">A_inv</span> <span class="o">@</span> <span class="n">V</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">A_inv</span> <span class="o">@</span> <span class="n">Y_R</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">A_inv</span> <span class="o">@</span> <span class="n">B</span>
+        <span class="k">return</span> <span class="n">S</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_eigenmode_to_rayleigh_smatrix</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">Y_R</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">W</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">V</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Interface: eigenmode basis → Rayleigh basis (substrate side).</span>
+
+<span class="sd">        This is the same as ``_rayleigh_to_eigenmode_smatrix`` but with</span>
+<span class="sd">        port roles swapped: port 0 = eigenmode, port 1 = Rayleigh.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">M</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">YW</span> <span class="o">=</span> <span class="n">Y_R</span> <span class="o">@</span> <span class="n">W</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">V</span> <span class="o">+</span> <span class="n">YW</span>
+        <span class="n">B</span> <span class="o">=</span> <span class="n">YW</span> <span class="o">-</span> <span class="n">V</span>
+        <span class="n">A_inv</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+
+        <span class="n">S</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="c1"># Port 0 = eigenmode (top), Port 1 = Rayleigh (bottom)</span>
+        <span class="c1"># S₁₁: eigenmode → eigenmode (reflected back into layer)</span>
+        <span class="c1"># S₁₂: bottom Rayleigh → eigenmode</span>
+        <span class="c1"># S₂₁: eigenmode → bottom Rayleigh</span>
+        <span class="c1"># S₂₂: bottom Rayleigh → Rayleigh</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">A_inv</span> <span class="o">@</span> <span class="n">B</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">A_inv</span> <span class="o">@</span> <span class="n">Y_R</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">W</span> <span class="o">@</span> <span class="n">A_inv</span> <span class="o">@</span> <span class="n">V</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">W</span> <span class="o">@</span> <span class="n">A_inv</span> <span class="o">@</span> <span class="n">Y_R</span> <span class="o">-</span> <span class="n">I</span>
+        <span class="k">return</span> <span class="n">S</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_propagation_smatrix</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">thicknesses</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">k0</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Propagation through grating layer(s).</span>
+
+<span class="sd">        For each layer, the S-matrix in the eigenmode basis is:</span>
+<span class="sd">        S = [[0, X], [X, 0]] where X = diag(exp(-i k₀ q d)).</span>
+
+<span class="sd">        Multiple layers are cascaded via Redheffer star.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">M</span>
+        <span class="n">S_total</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">S_total</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">S_total</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">thicknesses</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="n">thicknesses</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+            <span class="n">phase</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">k0</span> <span class="o">*</span> <span class="n">q</span> <span class="o">*</span> <span class="n">d</span><span class="p">)</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">phase</span><span class="p">)</span>
+
+            <span class="n">S_layer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">S_layer</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">X</span>
+            <span class="n">S_layer</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">X</span>
+
+            <span class="n">S_total</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_redheffer_star_matrix</span><span class="p">(</span><span class="n">S_total</span><span class="p">,</span> <span class="n">S_layer</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">S_total</span>
+
+    <span class="c1"># ── Redheffer star product ─────────────────</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_redheffer_star_matrix</span><span class="p">(</span>
+        <span class="n">S_a</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">S_b</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Redheffer star product for matrix-valued S-matrices.</span>
+
+<span class="sd">        Stable formulation (Li 1996):</span>
+<span class="sd">          D₁ = (I − A₂₂ B₁₁)^{-1}</span>
+<span class="sd">          D₂ = (I − B₁₁ A₂₂)^{-1}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="n">S_a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">M</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">S_a</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="n">A11</span><span class="p">,</span> <span class="n">A12</span><span class="p">,</span> <span class="n">A21</span><span class="p">,</span> <span class="n">A22</span> <span class="o">=</span> <span class="n">S_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">S_a</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">S_a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">S_a</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">B11</span><span class="p">,</span> <span class="n">B12</span><span class="p">,</span> <span class="n">B21</span><span class="p">,</span> <span class="n">B22</span> <span class="o">=</span> <span class="n">S_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">S_b</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">S_b</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">S_b</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+
+        <span class="n">D1</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">I</span> <span class="o">-</span> <span class="n">A22</span> <span class="o">@</span> <span class="n">B11</span><span class="p">)</span>
+        <span class="n">D2</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">I</span> <span class="o">-</span> <span class="n">B11</span> <span class="o">@</span> <span class="n">A22</span><span class="p">)</span>
+
+        <span class="n">S</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">S_a</span><span class="p">)</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">A11</span> <span class="o">+</span> <span class="n">A12</span> <span class="o">@</span> <span class="n">D1</span> <span class="o">@</span> <span class="n">B11</span> <span class="o">@</span> <span class="n">A21</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">A12</span> <span class="o">@</span> <span class="n">D1</span> <span class="o">@</span> <span class="n">B12</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">B21</span> <span class="o">@</span> <span class="n">D2</span> <span class="o">@</span> <span class="n">A21</span>
+        <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">B22</span> <span class="o">+</span> <span class="n">B21</span> <span class="o">@</span> <span class="n">D2</span> <span class="o">@</span> <span class="n">A22</span> <span class="o">@</span> <span class="n">B12</span>
+        <span class="k">return</span> <span class="n">S</span>
+
+    <span class="c1"># ── Convergence driver ─────────────────────</span>
+
+<div class="viewcode-block" id="RCWA1D.solve_with_convergence">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.RCWA1D.solve_with_convergence">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">solve_with_convergence</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">eps_profile</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">thicknesses</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">period</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">target_rel</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-3</span><span class="p">,</span>
+        <span class="n">max_orders</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">101</span><span class="p">,</span>
+        <span class="n">n_incident</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">n_substrate</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Increase Fourier orders until zeroth order stabilises.</span>
+
+<span class="sd">        Returns (efficiencies, n_orders_used).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">prev_r0</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">eff</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">M</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="n">max_orders</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">RCWAConfig</span><span class="p">(</span>
+                <span class="n">wavelength</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">n_orders</span><span class="o">=</span><span class="n">M</span><span class="p">,</span>
+                <span class="n">theta</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="n">polarization</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">polarization</span><span class="p">,</span>
+                <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">solver</span> <span class="o">=</span> <span class="n">RCWA1D</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+            <span class="n">orders</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span>
+                <span class="n">eps_profile</span><span class="p">,</span> <span class="n">thicknesses</span><span class="p">,</span> <span class="n">period</span><span class="p">,</span>
+                <span class="n">n_incident</span><span class="o">=</span><span class="n">n_incident</span><span class="p">,</span> <span class="n">n_substrate</span><span class="o">=</span><span class="n">n_substrate</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">eff</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">diffraction_efficiency</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span>
+            <span class="n">r0</span> <span class="o">=</span> <span class="n">eff</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">prev_r0</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">prev_r0</span> <span class="o">&gt;</span> <span class="mf">1e-12</span><span class="p">:</span>
+                <span class="n">rel_change</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">r0</span> <span class="o">-</span> <span class="n">prev_r0</span><span class="p">)</span> <span class="o">/</span> <span class="n">prev_r0</span>
+                <span class="k">if</span> <span class="n">rel_change</span> <span class="o">&lt;</span> <span class="n">target_rel</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">eff</span><span class="p">,</span> <span class="n">M</span>
+            <span class="n">prev_r0</span> <span class="o">=</span> <span class="n">r0</span>
+
+        <span class="k">return</span> <span class="n">eff</span><span class="p">,</span> <span class="n">max_orders</span></div>
+</div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Convenience: binary grating profile</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="binary_grating_profile">
+<a class="viewcode-back" href="../../../api/modules.html#euv.mask3d.rcwa_torch.binary_grating_profile">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">binary_grating_profile</span><span class="p">(</span>
+    <span class="n">period</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">fill_width</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">eps_line</span><span class="p">:</span> <span class="nb">complex</span><span class="p">,</span>
+    <span class="n">eps_space</span><span class="p">:</span> <span class="nb">complex</span><span class="p">,</span>
+    <span class="n">n_samples</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Binary (rectangular) grating permittivity profile.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    period : float [m]</span>
+<span class="sd">    fill_width : float [m]</span>
+<span class="sd">        Width of the line (high-ε region).</span>
+<span class="sd">    eps_line : complex</span>
+<span class="sd">        Line permittivity.</span>
+<span class="sd">    eps_space : complex</span>
+<span class="sd">        Space permittivity.</span>
+<span class="sd">    n_samples : int</span>
+<span class="sd">        Spatial samples (default: 1024).</span>
+<span class="sd">    device : str</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    eps_profile : (n_samples,) complex128</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">period</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">half</span> <span class="o">=</span> <span class="n">fill_width</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="n">period</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">half</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">&lt;=</span> <span class="n">period</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">half</span><span class="p">)</span>
+    <span class="n">eps</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">full_like</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">eps_space</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+    <span class="n">eps</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="nb">complex</span><span class="p">(</span><span class="n">eps_line</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">eps</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

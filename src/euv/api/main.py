@@ -14,6 +14,8 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from euv import __version__
 from euv.api.schemas import (
@@ -38,6 +40,22 @@ app = FastAPI(
     version=__version__,
     license_info={"name": "Apache-2.0"},
 )
+
+
+# ──────────────────────────────────────────────
+# Static files (Web UI dashboard)
+# ──────────────────────────────────────────────
+
+import os as _os
+
+STATIC_DIR = _os.path.join(_os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def serve_dashboard() -> FileResponse:
+    """Serve the OpEnUV web dashboard."""
+    return FileResponse(_os.path.join(STATIC_DIR, "index.html"), media_type="text/html")
 
 
 # ──────────────────────────────────────────────

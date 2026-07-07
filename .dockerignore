@@ -1,0 +1,57 @@
+# =============================================================================
+# OpEnUV — .dockerignore
+# =============================================================================
+# Exclude from Docker build context: version control, caches, tests, notebooks,
+# and other non-essential files.
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+
+# Tests (not needed at runtime)
+tests/
+test_*.py
+
+# Notebooks (development only)
+*.ipynb
+notebooks/
+
+# Local environment
+.env
+.env.*
+*.env
+venv/
+.venv/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker files (don't copy other Dockerfiles into the build context)
+Dockerfile
+Dockerfile.cli
+docker-compose.yml
+docker-compose.cli.yml
+.dockerignore

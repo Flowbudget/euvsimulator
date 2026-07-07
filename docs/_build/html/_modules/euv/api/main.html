@@ -1,0 +1,324 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.api.main &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.api.main</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.api.main</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">FastAPI application for the OpEnUV REST API.</span>
+
+<span class="sd">Endpoints</span>
+<span class="sd">---------</span>
+<span class="sd">- ``GET  /health``          — Service health check</span>
+<span class="sd">- ``POST /simulate``        — Run a full simulation pipeline</span>
+<span class="sd">- ``GET  /materials``       — List available materials in the CXRO database</span>
+<span class="sd">- ``POST /materials/nk``    — Retrieve refractive index for a given element/energy</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">FastAPI</span><span class="p">,</span> <span class="n">HTTPException</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv</span><span class="w"> </span><span class="kn">import</span> <span class="n">__version__</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.api.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">HealthResponse</span><span class="p">,</span>
+    <span class="n">MaterialElement</span><span class="p">,</span>
+    <span class="n">MaterialListResponse</span><span class="p">,</span>
+    <span class="n">NkRequest</span><span class="p">,</span>
+    <span class="n">NkResponse</span><span class="p">,</span>
+    <span class="n">SimulationRequest</span><span class="p">,</span>
+    <span class="n">SimulationResponse</span><span class="p">,</span>
+    <span class="n">SimulationResult</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.materials</span><span class="w"> </span><span class="kn">import</span> <span class="n">_ELEMENT_TABLE</span><span class="p">,</span> <span class="n">get_cxro_table</span>
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># App instance</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">FastAPI</span><span class="p">(</span>
+    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;OpEnUV — Open Source EUV Lithography Simulator&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;REST API for simulating EUV lithography at 13.5 nm.&quot;</span><span class="p">,</span>
+    <span class="n">version</span><span class="o">=</span><span class="n">__version__</span><span class="p">,</span>
+    <span class="n">license_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Apache-2.0&quot;</span><span class="p">},</span>
+<span class="p">)</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Helpers</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_list_available_elements</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return metadata for every element available in the CXRO database.&quot;&quot;&quot;</span>
+    <span class="n">cxro</span> <span class="o">=</span> <span class="n">get_cxro_table</span><span class="p">()</span>
+    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">symbol</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">_ELEMENT_TABLE</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cxro</span><span class="o">.</span><span class="n">has_element</span><span class="p">(</span><span class="n">symbol</span><span class="p">):</span>
+            <span class="n">z</span><span class="p">,</span> <span class="n">mass</span><span class="p">,</span> <span class="n">density</span> <span class="o">=</span> <span class="n">_ELEMENT_TABLE</span><span class="p">[</span><span class="n">symbol</span><span class="p">]</span>
+            <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;symbol&quot;</span><span class="p">:</span> <span class="n">symbol</span><span class="p">,</span>
+                    <span class="s2">&quot;z&quot;</span><span class="p">:</span> <span class="n">z</span><span class="p">,</span>
+                    <span class="s2">&quot;atomic_mass_g_mol&quot;</span><span class="p">:</span> <span class="n">mass</span><span class="p">,</span>
+                    <span class="s2">&quot;density_g_cm3&quot;</span><span class="p">:</span> <span class="n">density</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+    <span class="k">return</span> <span class="n">elements</span>
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Endpoints</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="health_check">
+<a class="viewcode-back" href="../../../api/modules.html#euv.api.main.health_check">[docs]</a>
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/health&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">HealthResponse</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;system&quot;</span><span class="p">])</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">health_check</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">HealthResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return service status and version.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">HealthResponse</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">&quot;ok&quot;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">__version__</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="run_simulation">
+<a class="viewcode-back" href="../../../api/modules.html#euv.api.main.run_simulation">[docs]</a>
+<span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/simulate&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">SimulationResponse</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;simulation&quot;</span><span class="p">])</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_simulation</span><span class="p">(</span><span class="n">req</span><span class="p">:</span> <span class="n">SimulationRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SimulationResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute a full EUV lithography simulation pipeline.</span>
+
+<span class="sd">    The simulation proceeds through:</span>
+<span class="sd">    1. Aerial image formation (Abbe/Hopkins imaging)</span>
+<span class="sd">    2. Mask-3D RCWA diffraction</span>
+<span class="sd">    3. Resist exposure and development (CAR or MOR)</span>
+
+<span class="sd">    .. note::</span>
+
+<span class="sd">        The full pipeline integration is planned for Sprint 6; this endpoint</span>
+<span class="sd">        currently returns validated configuration and placeholder metrics.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">req</span><span class="o">.</span><span class="n">config</span>
+
+    <span class="c1"># ── Placeholder: real pipeline will wire up aerial → mask → resist ── #</span>
+    <span class="c1"># For now, return the validated config and a stub result.</span>
+    <span class="n">results</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SimulationResult</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">SimulationResult</span><span class="p">(</span>
+            <span class="n">stage</span><span class="o">=</span><span class="s2">&quot;aerial&quot;</span><span class="p">,</span>
+            <span class="n">metric</span><span class="o">=</span><span class="s2">&quot;nils&quot;</span><span class="p">,</span>
+            <span class="n">value</span><span class="o">=</span><span class="mf">2.15</span><span class="p">,</span>
+            <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">SimulationResult</span><span class="p">(</span>
+            <span class="n">stage</span><span class="o">=</span><span class="s2">&quot;resist&quot;</span><span class="p">,</span>
+            <span class="n">metric</span><span class="o">=</span><span class="s2">&quot;cd&quot;</span><span class="p">,</span>
+            <span class="n">value</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">cd_nm</span><span class="p">,</span>
+            <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;nm&quot;</span><span class="p">,</span>
+        <span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">SimulationResponse</span><span class="p">(</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;completed&quot;</span><span class="p">,</span>
+        <span class="n">config</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span>
+        <span class="n">results</span><span class="o">=</span><span class="n">results</span><span class="p">,</span>
+        <span class="n">raw</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="list_materials">
+<a class="viewcode-back" href="../../../api/modules.html#euv.api.main.list_materials">[docs]</a>
+<span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/materials&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">MaterialListResponse</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;materials&quot;</span><span class="p">])</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_materials</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">MaterialListResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return all elements for which CXRO optical-constants data is available.</span>
+
+<span class="sd">    The CXRO database covers atomic scattering factors f₁, f₂ for Z = 1–92.</span>
+<span class="sd">    Run ``scripts/download_cxro.py`` to populate the data directory.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n">_list_available_elements</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">MaterialListResponse</span><span class="p">(</span>
+        <span class="n">count</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">raw</span><span class="p">),</span>
+        <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">MaterialElement</span><span class="p">(</span><span class="o">**</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">raw</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="refractive_index">
+<a class="viewcode-back" href="../../../api/modules.html#euv.api.main.refractive_index">[docs]</a>
+<span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/materials/nk&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">NkResponse</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;materials&quot;</span><span class="p">])</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">refractive_index</span><span class="p">(</span><span class="n">req</span><span class="p">:</span> <span class="n">NkRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NkResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the complex refractive index *n* + i*k for an element.</span>
+
+<span class="sd">    Uses CXRO/Henke atomic scattering factors f₁, f₂ and the standard</span>
+<span class="sd">    density for the element (or a user-supplied override).</span>
+
+<span class="sd">    Raises ``404`` if the element is not in the CXRO database (CSV not</span>
+<span class="sd">    downloaded) and ``422`` if the energy falls outside the tabulated range.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cxro</span> <span class="o">=</span> <span class="n">get_cxro_table</span><span class="p">()</span>
+
+    <span class="c1"># Check the element exists in our table</span>
+    <span class="k">if</span> <span class="n">req</span><span class="o">.</span><span class="n">symbol</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ELEMENT_TABLE</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span>
+            <span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">,</span>
+            <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Element &#39;</span><span class="si">{</span><span class="n">req</span><span class="o">.</span><span class="n">symbol</span><span class="si">}</span><span class="s2">&#39; not found in the element table (Z = 1–92).&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Check CXRO data exists</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">cxro</span><span class="o">.</span><span class="n">has_element</span><span class="p">(</span><span class="n">req</span><span class="o">.</span><span class="n">symbol</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span>
+            <span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">,</span>
+            <span class="n">detail</span><span class="o">=</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;CXRO data for &#39;</span><span class="si">{</span><span class="n">req</span><span class="o">.</span><span class="n">symbol</span><span class="si">}</span><span class="s2">&#39; is not available. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Run ``python scripts/download_cxro.py`` first.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">mat</span> <span class="o">=</span> <span class="n">cxro</span><span class="o">.</span><span class="n">get_material</span><span class="p">(</span><span class="n">symbol</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span> <span class="n">energy_eV</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">energy_eV</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">422</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">))</span>
+
+    <span class="c1"># If density override is given, recompute n,k with that density</span>
+    <span class="k">if</span> <span class="n">req</span><span class="o">.</span><span class="n">density_g_cm3</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="n">cxro</span><span class="o">.</span><span class="n">refractive_index</span><span class="p">(</span>
+            <span class="n">symbol</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span>
+            <span class="n">energy_eV</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">energy_eV</span><span class="p">,</span>
+            <span class="n">density_g_cm3</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">density_g_cm3</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="n">mat</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">mat</span><span class="o">.</span><span class="n">k</span>
+
+    <span class="n">eps</span> <span class="o">=</span> <span class="nb">complex</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="k">return</span> <span class="n">NkResponse</span><span class="p">(</span>
+        <span class="n">symbol</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">symbol</span><span class="p">,</span>
+        <span class="n">energy_eV</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">energy_eV</span><span class="p">,</span>
+        <span class="n">wavelength_nm</span><span class="o">=</span><span class="n">mat</span><span class="o">.</span><span class="n">wavelength_nm</span><span class="p">,</span>
+        <span class="n">n</span><span class="o">=</span><span class="n">n</span><span class="p">,</span>
+        <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">,</span>
+        <span class="n">delta</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">n</span><span class="p">,</span>
+        <span class="n">density</span><span class="o">=</span><span class="n">req</span><span class="o">.</span><span class="n">density_g_cm3</span> <span class="k">if</span> <span class="n">req</span><span class="o">.</span><span class="n">density_g_cm3</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">mat</span><span class="o">.</span><span class="n">density</span><span class="p">,</span>
+        <span class="n">absorption_length_nm</span><span class="o">=</span><span class="n">mat</span><span class="o">.</span><span class="n">wavelength_nm</span> <span class="o">/</span> <span class="p">(</span><span class="mf">4.0</span> <span class="o">*</span> <span class="mf">3.141592653589793</span> <span class="o">*</span> <span class="n">k</span><span class="p">)</span> <span class="k">if</span> <span class="n">k</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;inf&quot;</span><span class="p">),</span>
+        <span class="n">epsilon_real</span><span class="o">=</span><span class="n">eps</span><span class="o">.</span><span class="n">real</span><span class="p">,</span>
+        <span class="n">epsilon_imag</span><span class="o">=</span><span class="n">eps</span><span class="o">.</span><span class="n">imag</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># ──────────────────────────────────────────────</span>
+<span class="c1"># Direct entry</span>
+<span class="c1"># ──────────────────────────────────────────────</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">uvicorn</span>
+
+    <span class="n">uvicorn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s2">&quot;euv.api.main:app&quot;</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">8000</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;info&quot;</span><span class="p">)</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

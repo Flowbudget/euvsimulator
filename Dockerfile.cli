@@ -1,0 +1,39 @@
+# =============================================================================
+# OpEnUV — CLI-only Docker image
+# =============================================================================
+# Same base as the API image but without uvicorn, producing a smaller image.
+# Default command prints the CLI help; override with `euv <subcommand>`.
+# =============================================================================
+
+# ── Stage 1: Builder ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir setuptools wheel
+
+COPY pyproject.toml README.md ./
+
+# Install runtime deps (no uvicorn — CLI only)
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    numpy scipy torch fastapi pydantic httpx typer gdstk matplotlib
+
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    .
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+COPY src/ ./src/
+
+RUN mkdir -p /app/euv/data
+
+# Default: show CLI help
+CMD ["euv", "simulate", "--help"]

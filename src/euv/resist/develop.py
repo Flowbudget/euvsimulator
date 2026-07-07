@@ -39,7 +39,7 @@ References
 ----------
 C.A. Mack, "Development of positive photoresist", TECHCON '83 (1983).
 C.A. Mack, "New model for resist development", Proc. SPIE 5383,
-    209–220 (2004).
+209-220 (2004).
 """
 
 from __future__ import annotations

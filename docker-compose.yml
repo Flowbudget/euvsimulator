@@ -1,0 +1,18 @@
+# =============================================================================
+# OpEnUV — Docker Compose (API service)
+# =============================================================================
+# Starts the OpEnUV REST API on port 8000, with CXRO data mounted from the
+# host source tree so the database is live without rebuilding the image.
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openuv-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/euv/data:/app/euv/data
+    restart: unless-stopped

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpEnUV Dashboard — EUV Lithography Simulator</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ═══════════ Header / Branding ═══════════ -->
+
+  <header>
+    <div class="container">
+      <div class="brand">
+        <div class="brand-icon">Ō</div>
+        <div class="brand-text">
+          <h1>OpEnUV Dashboard</h1>
+          <span>Open Source EUV Lithography Simulator · 13.5 nm</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span class="header-status-text" id="status-text">checking…</span>
+        <span class="header-version" id="version-text"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════ Main Content ═══════════ -->
+
+  <main class="container">
+
+    <!-- Error bar -->
+    <div id="error-bar" class="alert alert-error error-bar hidden">
+      <span id="error-text"></span>
+    </div>
+
+    <div class="grid">
+
+      <!-- ── SECTION A: System Status ── -->
+
+      <div class="card">
+        <div class="card-header">
+          <h2>System Status</h2>
+        </div>
+        <div class="card-body">
+          <div class="status-grid">
+            <div class="status-item">
+              <span class="status-label">Status</span>
+              <span class="status-value" id="status-text-inline">—</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Version</span>
+              <span class="status-value" id="version-text-inline">—</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">API</span>
+              <span class="status-value">REST · OpenAPI</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Wavelength</span>
+              <span class="status-value">13.5 nm</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECTION D: Results ── -->
+
+      <div class="card grid-full" id="results-section">
+        <div class="card-header">
+          <h2>Results</h2>
+          <button class="btn btn-secondary hidden" id="clear-results-btn"
+                  onclick="document.getElementById('results-content').textContent=''; this.parentElement.parentElement.classList.add('hidden')"
+                  style="display:none">Clear</button>
+        </div>
+        <div class="card-body">
+          <pre class="results-pre" id="results-content">Results will appear here after running a simulation or querying materials.</pre>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="grid">
+
+      <!-- ── SECTION B: Materials Browser ── -->
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Materials Browser</h2>
+          <span class="mat-count" id="material-count"></span>
+        </div>
+        <div class="card-body">
+          <input type="text" class="material-search" id="material-search"
+                 placeholder="Filter by symbol, Z, or mass…" />
+          <div class="material-list" id="material-list">
+            <div class="loading-overlay"><span class="spinner"></span> Loading materials…</div>
+          </div>
+          <div class="mat-detail" id="mat-detail">
+            <div style="color:var(--text-muted); font-size:13px; text-align:center; padding:8px 0;">
+              Click an element above to see n, k, and optical constants.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SECTION C: Quick Simulation ── -->
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Quick Simulation</h2>
+        </div>
+        <div class="card-body">
+          <form id="sim-form" novalidate>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="sim-period">Period (nm)</label>
+                <input type="number" id="sim-period" step="any" min="1" required />
+              </div>
+              <div class="form-group">
+                <label for="sim-cd">CD (nm)</label>
+                <input type="number" id="sim-cd" step="any" min="1" required />
+              </div>
+              <div class="form-group">
+                <label for="sim-dose">Dose (mJ/cm²)</label>
+                <input type="number" id="sim-dose" step="any" min="1" required />
+              </div>
+              <div class="form-group">
+                <label for="sim-na">NA</label>
+                <input type="number" id="sim-na" step="0.01" min="0.1" max="0.7" required />
+              </div>
+              <div class="form-group">
+                <label for="sim-sigma">Sigma (σ)</label>
+                <input type="number" id="sim-sigma" step="0.05" min="0" max="1" required />
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-success" id="sim-submit-btn">
+                  <span class="spinner hidden" id="sim-spinner"></span>
+                  Run Simulation
+                </button>
+                <button type="reset" class="btn btn-secondary">Reset</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ═══════════ Footer ═══════════ -->
+
+  <footer>
+    <div class="container">
+      <p>OpEnUV — Open Source EUV Lithography Simulator &middot; <a href="https://github.com/nousresearch/OpEnUV" target="_blank" rel="noopener">GitHub</a></p>
+      <p style="margin-top:4px; font-size:11px;">Powered by FastAPI &middot; CXRO optical constants &middot; RCWA</p>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

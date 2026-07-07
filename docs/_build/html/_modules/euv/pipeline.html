@@ -1,0 +1,367 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.pipeline &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.pipeline</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.pipeline</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Full simulation pipeline — end-to-end EUV lithography simulation.</span>
+
+<span class="sd">Connects all modules: mask → RCWA → aerial image → resist → CD.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.aerial.abbe</span><span class="w"> </span><span class="kn">import</span> <span class="n">abbe_image</span><span class="p">,</span> <span class="n">nils</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.aerial.pupil</span><span class="w"> </span><span class="kn">import</span> <span class="n">circular_pupil</span><span class="p">,</span> <span class="n">defocus_pupil</span><span class="p">,</span> <span class="n">pupil_grid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.aerial.source</span><span class="w"> </span><span class="kn">import</span> <span class="n">conventional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.mask3d.rcwa_torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">RCWA1D</span><span class="p">,</span> <span class="n">RCWAConfig</span><span class="p">,</span> <span class="n">binary_grating_profile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.materials</span><span class="w"> </span><span class="kn">import</span> <span class="n">CXROTable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.resist.develop</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">MackModel</span><span class="p">,</span>
+    <span class="n">extract_cd</span><span class="p">,</span>
+    <span class="n">threshold_development</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.resist.exposure</span><span class="w"> </span><span class="kn">import</span> <span class="n">dose_to_acid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">euv.resist.peb</span><span class="w"> </span><span class="kn">import</span> <span class="n">reaction_diffusion_analytical</span>
+
+
+<div class="viewcode-block" id="SimulationResult">
+<a class="viewcode-back" href="../../api/modules.html#euv.pipeline.SimulationResult">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SimulationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Results from a full pipeline simulation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    aerial_image : (G, G) float64</span>
+<span class="sd">        Computed aerial image intensity.</span>
+<span class="sd">    resist_profile : (G, G) float64</span>
+<span class="sd">        Developed resist profile (0 = developed, 1 = remaining).</span>
+<span class="sd">    cd_nm : float</span>
+<span class="sd">        Critical dimension [nm] (0 if not measurable).</span>
+<span class="sd">    nils_value : float</span>
+<span class="sd">        Normalised Image Log-Slope at line edge.</span>
+<span class="sd">    absorber_reflectivity : float</span>
+<span class="sd">        Reflectivity of the absorber region (normalised).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">aerial_image</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">resist_profile</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">cd_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">nils_value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">absorber_reflectivity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span></div>
+
+
+
+<div class="viewcode-block" id="SimulationConfig">
+<a class="viewcode-back" href="../../api/modules.html#euv.pipeline.SimulationConfig">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SimulationConfig</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for a full pipeline simulation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    wavelength_nm : float</span>
+<span class="sd">        Exposure wavelength [nm] (default: 13.5).</span>
+<span class="sd">    na : float</span>
+<span class="sd">        Numerical aperture (default: 0.33).</span>
+<span class="sd">    sigma : float</span>
+<span class="sd">        Partial coherence factor (default: 0.8).</span>
+<span class="sd">    period_nm : float</span>
+<span class="sd">        Mask pattern period [nm] (default: 64).</span>
+<span class="sd">    line_width_nm : float</span>
+<span class="sd">        Absorber line width [nm] (default: 32).</span>
+<span class="sd">    absorber_height_nm : float</span>
+<span class="sd">        Absorber thickness [nm] (default: 60).</span>
+<span class="sd">    absorber_material : str</span>
+<span class="sd">        Absorber material (default: &quot;Ta&quot;).</span>
+<span class="sd">    n_rcwa_orders : int</span>
+<span class="sd">        RCWA Fourier orders (default: 21).</span>
+<span class="sd">    dose_mj_cm2 : float</span>
+<span class="sd">        Exposure dose [mJ/cm²] (default: 20).</span>
+<span class="sd">    resist_threshold : float</span>
+<span class="sd">        Development threshold (default: 0.5).</span>
+<span class="sd">    grid : int</span>
+<span class="sd">        Simulation grid size (default: 256).</span>
+<span class="sd">    device : str</span>
+<span class="sd">        PyTorch device (default: &quot;cpu&quot;).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">wavelength_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">13.5</span>
+    <span class="n">na</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.33</span>
+    <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.8</span>
+    <span class="n">period_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">64.0</span>
+    <span class="n">line_width_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">32.0</span>
+    <span class="n">absorber_height_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">60.0</span>
+    <span class="n">absorber_material</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Ta&quot;</span>
+    <span class="n">n_rcwa_orders</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">21</span>
+    <span class="n">dose_mj_cm2</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">20.0</span>
+    <span class="n">resist_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">focus_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">grid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="run_simulation">
+<a class="viewcode-back" href="../../api/modules.html#euv.pipeline.run_simulation">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_simulation</span><span class="p">(</span>
+    <span class="n">cfg</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SimulationConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SimulationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a full end-to-end EUV lithography simulation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cfg : SimulationConfig, optional</span>
+<span class="sd">        Simulation configuration.  Omit for defaults.</span>
+<span class="sd">    **kwargs</span>
+<span class="sd">        Override individual config parameters.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    SimulationResult</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">cfg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">SimulationConfig</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+
+    <span class="n">device</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">device</span>
+    <span class="n">wavelength_m</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">wavelength_nm</span> <span class="o">*</span> <span class="mf">1e-9</span>
+    <span class="n">period_m</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">period_nm</span> <span class="o">*</span> <span class="mf">1e-9</span>
+    <span class="n">line_m</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">line_width_nm</span> <span class="o">*</span> <span class="mf">1e-9</span>
+    <span class="n">half</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">grid</span> <span class="o">//</span> <span class="mi">2</span>
+
+    <span class="c1"># ── 1. Materials ──────────────────────────</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">CXROTable</span><span class="p">()</span>
+    <span class="n">n_ta</span><span class="p">,</span> <span class="n">k_ta</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">refractive_index</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">absorber_material</span><span class="p">,</span> <span class="mf">91.84</span><span class="p">)</span>
+    <span class="n">eps_line</span> <span class="o">=</span> <span class="nb">complex</span><span class="p">(</span><span class="n">n_ta</span><span class="p">,</span> <span class="n">k_ta</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">eps_space</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="mf">0.0</span><span class="n">j</span>  <span class="c1"># vacuum</span>
+
+    <span class="c1"># ── 2. RCWA: compute mask reflectivity ────</span>
+    <span class="n">profile</span> <span class="o">=</span> <span class="n">binary_grating_profile</span><span class="p">(</span>
+        <span class="n">period</span><span class="o">=</span><span class="n">period_m</span><span class="p">,</span>
+        <span class="n">fill_width</span><span class="o">=</span><span class="n">line_m</span><span class="p">,</span>
+        <span class="n">eps_line</span><span class="o">=</span><span class="n">eps_line</span><span class="p">,</span>
+        <span class="n">eps_space</span><span class="o">=</span><span class="n">eps_space</span><span class="p">,</span>
+        <span class="n">n_samples</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="mi">1024</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">n_rcwa_orders</span> <span class="o">*</span> <span class="mi">20</span><span class="p">),</span>
+        <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">thicknesses</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">cfg</span><span class="o">.</span><span class="n">absorber_height_nm</span> <span class="o">*</span> <span class="mf">1e-9</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span>
+    <span class="p">)</span>
+
+    <span class="n">rcwa_cfg</span> <span class="o">=</span> <span class="n">RCWAConfig</span><span class="p">(</span>
+        <span class="n">wavelength</span><span class="o">=</span><span class="n">wavelength_m</span><span class="p">,</span>
+        <span class="n">n_orders</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">n_rcwa_orders</span><span class="p">,</span>
+        <span class="n">theta</span><span class="o">=</span><span class="mf">6.0</span><span class="p">,</span>
+        <span class="n">polarization</span><span class="o">=</span><span class="s2">&quot;TE&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">solver</span> <span class="o">=</span> <span class="n">RCWA1D</span><span class="p">(</span><span class="n">rcwa_cfg</span><span class="p">)</span>
+    <span class="n">orders</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">thicknesses</span><span class="p">,</span> <span class="n">period_m</span><span class="p">)</span>
+    <span class="n">eff</span> <span class="o">=</span> <span class="n">solver</span><span class="o">.</span><span class="n">diffraction_efficiency</span><span class="p">(</span><span class="n">orders</span><span class="p">)</span>
+    <span class="n">absorber_reflectivity</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">eff</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+    <span class="c1"># ── 3. Illumination source ────────────────</span>
+    <span class="n">source</span> <span class="o">=</span> <span class="n">conventional</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">sigma</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="c1"># ── 4. Pupil ──────────────────────────────</span>
+    <span class="n">fx</span><span class="p">,</span> <span class="n">fy</span><span class="p">,</span> <span class="n">inside_pupil</span> <span class="o">=</span> <span class="n">pupil_grid</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">na</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">pupil</span> <span class="o">=</span> <span class="n">inside_pupil</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">)</span>
+
+    <span class="c1"># Apply defocus if non-zero</span>
+    <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">focus_nm</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">1e-12</span><span class="p">:</span>
+        <span class="n">defocus_phase</span> <span class="o">=</span> <span class="n">defocus_pupil</span><span class="p">(</span>
+            <span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">na</span><span class="p">,</span> <span class="n">defocus_nm</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">focus_nm</span><span class="p">,</span>
+            <span class="n">wavelength_nm</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">wavelength_nm</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">pupil</span> <span class="o">=</span> <span class="n">pupil</span> <span class="o">*</span> <span class="n">defocus_phase</span>
+
+    <span class="c1"># ── 5. Mask FFT ────────────────────────────</span>
+    <span class="c1"># Build a simple mask transmission: line/space</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="n">period_m</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">period_m</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">half_line</span> <span class="o">=</span> <span class="n">line_m</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">mask_transmission</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">complex128</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+    <span class="c1"># Vertical absorber lines in the centre</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">):</span>
+        <span class="n">xi</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">xi</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">half_line</span><span class="p">:</span>
+            <span class="n">mask_transmission</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>  <span class="c1"># absorber = dark</span>
+
+    <span class="n">mask_fft</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fft2</span><span class="p">(</span><span class="n">mask_transmission</span><span class="p">)</span>
+    <span class="n">mask_fft</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fftshift</span><span class="p">(</span><span class="n">mask_fft</span><span class="p">)</span>
+
+    <span class="c1"># ── 6. Aerial image ───────────────────────</span>
+    <span class="n">aerial</span> <span class="o">=</span> <span class="n">abbe_image</span><span class="p">(</span><span class="n">mask_fft</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">fx</span><span class="p">,</span> <span class="n">fy</span><span class="p">,</span> <span class="n">pupil</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">na</span><span class="p">)</span>
+
+    <span class="c1"># Normalise to dose</span>
+    <span class="n">aerial</span> <span class="o">=</span> <span class="n">aerial</span> <span class="o">*</span> <span class="n">cfg</span><span class="o">.</span><span class="n">dose_mj_cm2</span> <span class="o">/</span> <span class="p">(</span><span class="n">aerial</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">+</span> <span class="mf">1e-12</span><span class="p">)</span>
+
+    <span class="c1"># NILS at the line edge</span>
+    <span class="n">nils_val</span> <span class="o">=</span> <span class="n">nils</span><span class="p">(</span><span class="n">aerial</span><span class="p">,</span> <span class="n">half</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">line_width_nm</span> <span class="o">/</span> <span class="p">(</span><span class="n">period_m</span> <span class="o">/</span> <span class="n">cfg</span><span class="o">.</span><span class="n">grid</span><span class="p">))</span>
+
+    <span class="c1"># ── 7. Resist ─────────────────────────────</span>
+    <span class="n">dose_map</span> <span class="o">=</span> <span class="n">aerial</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+    <span class="n">acid</span> <span class="o">=</span> <span class="n">dose_to_acid</span><span class="p">(</span><span class="n">dose_map</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">Q</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">sigma_blur</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+    <span class="n">inhib_in</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">acid</span><span class="p">)</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">inhib</span> <span class="o">=</span> <span class="n">reaction_diffusion_analytical</span><span class="p">(</span><span class="n">acid</span><span class="p">,</span> <span class="n">inhib_in</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">t_bake</span><span class="o">=</span><span class="mf">60.0</span><span class="p">)</span>
+
+    <span class="n">dev</span> <span class="o">=</span> <span class="n">threshold_development</span><span class="p">(</span><span class="n">inhib</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">resist_threshold</span><span class="p">)</span>
+
+    <span class="c1"># CD extraction</span>
+    <span class="n">dx_nm</span> <span class="o">=</span> <span class="n">period_m</span> <span class="o">/</span> <span class="n">cfg</span><span class="o">.</span><span class="n">grid</span> <span class="o">*</span> <span class="mf">1e9</span>
+    <span class="n">cd</span> <span class="o">=</span> <span class="n">extract_cd</span><span class="p">(</span><span class="n">dev</span><span class="p">,</span> <span class="n">dx</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">dx_nm</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">SimulationResult</span><span class="p">(</span>
+        <span class="n">aerial_image</span><span class="o">=</span><span class="n">aerial</span><span class="p">,</span>
+        <span class="n">resist_profile</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span>
+        <span class="n">cd_nm</span><span class="o">=</span><span class="n">cd</span><span class="p">,</span>
+        <span class="n">nils_value</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">nils_val</span><span class="p">),</span>
+        <span class="n">absorber_reflectivity</span><span class="o">=</span><span class="n">absorber_reflectivity</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="simulate_line_space">
+<a class="viewcode-back" href="../../api/modules.html#euv.pipeline.simulate_line_space">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">simulate_line_space</span><span class="p">(</span>
+    <span class="n">period_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">64.0</span><span class="p">,</span>
+    <span class="n">cd_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">32.0</span><span class="p">,</span>
+    <span class="n">dose_mj_cm2</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">20.0</span><span class="p">,</span>
+    <span class="n">na</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.33</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">grid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SimulationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convenience: run a standard line/space simulation.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    SimulationResult</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">SimulationConfig</span><span class="p">(</span>
+        <span class="n">period_nm</span><span class="o">=</span><span class="n">period_nm</span><span class="p">,</span>
+        <span class="n">line_width_nm</span><span class="o">=</span><span class="n">cd_nm</span><span class="p">,</span>
+        <span class="n">dose_mj_cm2</span><span class="o">=</span><span class="n">dose_mj_cm2</span><span class="p">,</span>
+        <span class="n">na</span><span class="o">=</span><span class="n">na</span><span class="p">,</span>
+        <span class="n">sigma</span><span class="o">=</span><span class="n">sigma</span><span class="p">,</span>
+        <span class="n">grid</span><span class="o">=</span><span class="n">grid</span><span class="p">,</span>
+        <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">run_simulation</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

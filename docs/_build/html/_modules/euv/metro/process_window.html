@@ -1,0 +1,438 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euv.metro.process_window &mdash; OpEnUV 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            OpEnUV
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/modules.html">API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../license.html">License</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">OpEnUV</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">euv.metro.process_window</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for euv.metro.process_window</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Process-window and Bossung analysis for EUV lithography.</span>
+
+<span class="sd">The process window defines the range of exposure dose and focus</span>
+<span class="sd">settings over which the printed Critical Dimension (CD) stays within</span>
+<span class="sd">a specified tolerance of the target value.</span>
+
+<span class="sd">Functions</span>
+<span class="sd">---------</span>
+<span class="sd">dose_matrix</span>
+<span class="sd">    Run a dose-focus sweep to produce a Bossung CD matrix.</span>
+<span class="sd">process_window</span>
+<span class="sd">    Compute Depth of Focus (DoF) and Exposure Latitude (EL) from a</span>
+<span class="sd">    Bossung matrix.</span>
+<span class="sd">plot_bossung</span>
+<span class="sd">    ASCII-table visualisation of a Bossung CD matrix.</span>
+<span class="sd">pw_metrics</span>
+<span class="sd">    Detailed process-window metrics including max NILS.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+<span class="c1"># Dose-focus matrix (Bossung)</span>
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+
+
+<div class="viewcode-block" id="dose_matrix">
+<a class="viewcode-back" href="../../../api/modules.html#euv.metro.process_window.dose_matrix">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dose_matrix</span><span class="p">(</span>
+    <span class="n">pipeline_fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span>
+    <span class="n">doses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">focuses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">target_cd</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">32.0</span><span class="p">,</span>
+    <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a dose-focus sweep and return the Bossung CD matrix.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    pipeline_fn : Callable</span>
+<span class="sd">        Function ``fn( dose_mj_cm2, focus_nm )`` that returns a dict</span>
+<span class="sd">        with key ``&#39;cd_nm&#39;`` (float).  Typically the project&#39;s</span>
+<span class="sd">        ``euv.pipeline.run_simulation`` wrapped to accept focus.</span>
+<span class="sd">    doses : list of float</span>
+<span class="sd">        Dose values [mJ/cm²].</span>
+<span class="sd">    focuses : list of float</span>
+<span class="sd">        Focus offset values [nm].</span>
+<span class="sd">    target_cd : float</span>
+<span class="sd">        Target CD [nm].  Default 32.0.</span>
+<span class="sd">    tolerance : float</span>
+<span class="sd">        Fractional CD tolerance.  Default 0.1 (±10 %).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    cd_matrix : np.ndarray</span>
+<span class="sd">        2D array ``(N_focus, N_dose)`` of measured CD [nm].</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">Nf</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">focuses</span><span class="p">)</span>
+    <span class="n">Nd</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">doses</span><span class="p">)</span>
+    <span class="n">cd_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="n">Nf</span><span class="p">,</span> <span class="n">Nd</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">focuses</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">doses</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">pipeline_fn</span><span class="p">(</span><span class="n">dose_mj_cm2</span><span class="o">=</span><span class="n">d</span><span class="p">,</span> <span class="n">focus_nm</span><span class="o">=</span><span class="n">f</span><span class="p">)</span>
+                <span class="n">cd</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;cd_nm&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">cd_nm</span><span class="p">)</span>
+                <span class="n">cd_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">cd</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">cd_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+
+    <span class="k">return</span> <span class="n">cd_matrix</span></div>
+
+
+
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+<span class="c1"># Process window extraction</span>
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+
+
+<div class="viewcode-block" id="process_window">
+<a class="viewcode-back" href="../../../api/modules.html#euv.metro.process_window.process_window">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">process_window</span><span class="p">(</span>
+    <span class="n">cd_matrix</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">doses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">focuses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">target_cd</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">32.0</span><span class="p">,</span>
+    <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract Depth of Focus (DoF) and Exposure Latitude (EL) from a</span>
+<span class="sd">    Bossung CD matrix.</span>
+
+<span class="sd">    The in-spec window is defined as all dose-focus pairs where the</span>
+<span class="sd">    measured CD is within ``target_cd · (1 ± tolerance)``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cd_matrix : np.ndarray</span>
+<span class="sd">        2D array ``(N_focus, N_dose)`` of measured CD [nm].</span>
+<span class="sd">    doses : list of float</span>
+<span class="sd">        Dose values [mJ/cm²] corresponding to columns.</span>
+<span class="sd">    focuses : list of float</span>
+<span class="sd">        Focus values [nm] corresponding to rows.</span>
+<span class="sd">    target_cd : float</span>
+<span class="sd">        Target CD [nm].  Default 32.0.</span>
+<span class="sd">    tolerance : float</span>
+<span class="sd">        Fractional CD tolerance.  Default 0.1 (±10 %).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pw : dict</span>
+<span class="sd">        Keys:</span>
+<span class="sd">        - ``&#39;dof_nm&#39;`` — Depth of Focus [nm] at best dose.</span>
+<span class="sd">        - ``&#39;el_pct&#39;`` — Exposure Latitude [%] at best focus.</span>
+<span class="sd">        - ``&#39;best_dose&#39;`` — Dose [mJ/cm²] closest to target CD at</span>
+<span class="sd">          best focus.</span>
+<span class="sd">        - ``&#39;best_focus&#39;`` — Focus [nm] with CD closest to target.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cd_low</span> <span class="o">=</span> <span class="n">target_cd</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">tolerance</span><span class="p">)</span>
+    <span class="n">cd_high</span> <span class="o">=</span> <span class="n">target_cd</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">tolerance</span><span class="p">)</span>
+
+    <span class="n">Nf</span><span class="p">,</span> <span class="n">Nd</span> <span class="o">=</span> <span class="n">cd_matrix</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">in_spec</span> <span class="o">=</span> <span class="p">(</span><span class="n">cd_matrix</span> <span class="o">&gt;=</span> <span class="n">cd_low</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">cd_matrix</span> <span class="o">&lt;=</span> <span class="n">cd_high</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">cd_matrix</span><span class="p">))</span>
+
+    <span class="c1"># Best focus: find the focus row where the CD is closest to target</span>
+    <span class="c1"># averaged across all dose values.</span>
+    <span class="n">best_focus_idx</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">best_dose_idx</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">min_dev</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;inf&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Nf</span><span class="p">):</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">cd_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">valid</span> <span class="o">=</span> <span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">valid</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="k">continue</span>
+        <span class="c1"># Deviation at the central dose column for this focus row</span>
+        <span class="n">mid_j</span> <span class="o">=</span> <span class="n">Nd</span> <span class="o">//</span> <span class="mi">2</span>
+        <span class="n">dev</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">mid_j</span><span class="p">])</span> <span class="o">-</span> <span class="n">target_cd</span><span class="p">)</span> <span class="k">if</span> <span class="n">valid</span><span class="p">[</span><span class="n">mid_j</span><span class="p">]</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;inf&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dev</span> <span class="o">&lt;</span> <span class="n">min_dev</span><span class="p">:</span>
+            <span class="n">min_dev</span> <span class="o">=</span> <span class="n">dev</span>
+            <span class="n">best_focus_idx</span> <span class="o">=</span> <span class="n">i</span>
+
+    <span class="c1"># Now at the best focus row, find the dose closest to target</span>
+    <span class="n">best_row</span> <span class="o">=</span> <span class="n">cd_matrix</span><span class="p">[</span><span class="n">best_focus_idx</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">best_dose_idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nanargmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">best_row</span> <span class="o">-</span> <span class="n">target_cd</span><span class="p">)))</span>
+    <span class="n">best_focus</span> <span class="o">=</span> <span class="n">focuses</span><span class="p">[</span><span class="n">best_focus_idx</span><span class="p">]</span>
+    <span class="n">best_dose</span> <span class="o">=</span> <span class="n">doses</span><span class="p">[</span><span class="n">best_dose_idx</span><span class="p">]</span>
+
+    <span class="c1"># DoF at best dose: number of focus rows in-spec at best dose col</span>
+    <span class="n">dof_nm</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">focus_spacing</span> <span class="o">=</span> <span class="p">(</span><span class="n">focuses</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">focuses</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">Nf</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="n">Nf</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="mf">0.0</span>
+    <span class="k">if</span> <span class="n">focus_spacing</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">spec_at_best_dose</span> <span class="o">=</span> <span class="n">in_spec</span><span class="p">[:,</span> <span class="n">best_dose_idx</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">spec_at_best_dose</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="c1"># Find first and last in-spec focus</span>
+            <span class="n">idx_first</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_at_best_dose</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">idx_last</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_at_best_dose</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">dof_nm</span> <span class="o">=</span> <span class="p">(</span><span class="n">idx_last</span> <span class="o">-</span> <span class="n">idx_first</span><span class="p">)</span> <span class="o">*</span> <span class="n">focus_spacing</span>
+
+    <span class="c1"># EL at best focus: dose range in-spec at best focus row divided</span>
+    <span class="c1"># by best dose × 100</span>
+    <span class="n">el_pct</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">if</span> <span class="n">best_dose</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">spec_at_best_focus</span> <span class="o">=</span> <span class="n">in_spec</span><span class="p">[</span><span class="n">best_focus_idx</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="k">if</span> <span class="n">spec_at_best_focus</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="n">idx_first</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_at_best_focus</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">idx_last</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_at_best_focus</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">dose_min</span> <span class="o">=</span> <span class="n">doses</span><span class="p">[</span><span class="n">idx_first</span><span class="p">]</span>
+            <span class="n">dose_max</span> <span class="o">=</span> <span class="n">doses</span><span class="p">[</span><span class="n">idx_last</span><span class="p">]</span>
+            <span class="n">el_pct</span> <span class="o">=</span> <span class="p">(</span><span class="n">dose_max</span> <span class="o">-</span> <span class="n">dose_min</span><span class="p">)</span> <span class="o">/</span> <span class="n">best_dose</span> <span class="o">*</span> <span class="mf">100.0</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;dof_nm&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">dof_nm</span><span class="p">),</span>
+        <span class="s2">&quot;el_pct&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">el_pct</span><span class="p">),</span>
+        <span class="s2">&quot;best_dose&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">best_dose</span><span class="p">),</span>
+        <span class="s2">&quot;best_focus&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">best_focus</span><span class="p">),</span>
+    <span class="p">}</span></div>
+
+
+
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+<span class="c1"># Bossung ASCII table</span>
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+
+
+<div class="viewcode-block" id="plot_bossung">
+<a class="viewcode-back" href="../../../api/modules.html#euv.metro.process_window.plot_bossung">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">plot_bossung</span><span class="p">(</span>
+    <span class="n">cd_matrix</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">doses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">focuses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Print an ASCII-table visualisation of the Bossung CD matrix.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cd_matrix : np.ndarray</span>
+<span class="sd">        2D array ``(N_focus, N_dose)`` of measured CD [nm].</span>
+<span class="sd">    doses : list of float</span>
+<span class="sd">        Dose values [mJ/cm²].</span>
+<span class="sd">    focuses : list of float</span>
+<span class="sd">        Focus values [nm].</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">Nf</span><span class="p">,</span> <span class="n">Nd</span> <span class="o">=</span> <span class="n">cd_matrix</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1"># Header row</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="s2">&quot;Focus (nm)  | &quot;</span> <span class="o">+</span> <span class="s2">&quot;  &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;D=</span><span class="si">{</span><span class="n">d</span><span class="si">:</span><span class="s2">6.2f</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">doses</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">header</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Nf</span><span class="p">):</span>
+        <span class="n">row_vals</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Nd</span><span class="p">):</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">cd_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+                <span class="n">row_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;   NaN  &quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">row_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">val</span><span class="si">:</span><span class="s2">7.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">focuses</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">+8.1f</span><span class="si">}</span><span class="s2">   | &quot;</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row_vals</span><span class="p">))</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Best focus: </span><span class="si">{</span><span class="n">focuses</span><span class="p">[</span><span class="n">Nf</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="mi">2</span><span class="p">]</span><span class="si">:</span><span class="s2">+.1f</span><span class="si">}</span><span class="s2"> nm (centre row)&quot;</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+<span class="c1"># Process-window metrics</span>
+<span class="c1"># ═══════════════════════════════════════════════════════════════════</span>
+
+
+<div class="viewcode-block" id="pw_metrics">
+<a class="viewcode-back" href="../../../api/modules.html#euv.metro.process_window.pw_metrics">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">pw_metrics</span><span class="p">(</span>
+    <span class="n">cd_matrix</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">target_cd</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">nils_matrix</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute detailed process-window metrics from a Bossung CD matrix.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    cd_matrix : np.ndarray</span>
+<span class="sd">        2D array ``(N_focus, N_dose)`` of measured CD [nm].</span>
+<span class="sd">    target_cd : float</span>
+<span class="sd">        Target CD [nm].</span>
+<span class="sd">    tolerance : float</span>
+<span class="sd">        Fractional CD tolerance (e.g. 0.1 for ±10 %).</span>
+<span class="sd">    nils_matrix : np.ndarray, optional</span>
+<span class="sd">        Optional 2D array of same shape with NILS values at each</span>
+<span class="sd">        dose-focus condition.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    metrics : dict</span>
+<span class="sd">        Keys:</span>
+<span class="sd">        - ``&#39;dof_nm&#39;`` — Depth of Focus [nm].</span>
+<span class="sd">        - ``&#39;el_pct&#39;`` — Exposure Latitude [%].</span>
+<span class="sd">        - ``&#39;max_nils&#39;`` — Maximum NILS in the in-spec region (NaN if</span>
+<span class="sd">          *nils_matrix* not provided).</span>
+<span class="sd">        - ``&#39;min_nils&#39;`` — Minimum NILS in the in-spec region.</span>
+<span class="sd">        - ``&#39;n_in_spec&#39;`` — Number of dose-focus points within spec.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cd_low</span> <span class="o">=</span> <span class="n">target_cd</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">tolerance</span><span class="p">)</span>
+    <span class="n">cd_high</span> <span class="o">=</span> <span class="n">target_cd</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">tolerance</span><span class="p">)</span>
+
+    <span class="n">Nf</span><span class="p">,</span> <span class="n">Nd</span> <span class="o">=</span> <span class="n">cd_matrix</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">in_spec</span> <span class="o">=</span> <span class="p">(</span><span class="n">cd_matrix</span> <span class="o">&gt;=</span> <span class="n">cd_low</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">cd_matrix</span> <span class="o">&lt;=</span> <span class="n">cd_high</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">cd_matrix</span><span class="p">))</span>
+    <span class="n">n_in_spec</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">in_spec</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+
+    <span class="c1"># Focus spacing</span>
+    <span class="n">doses</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">Nd</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>  <span class="c1"># dummy spacing</span>
+    <span class="n">focus_spacing</span> <span class="o">=</span> <span class="mf">1.0</span>  <span class="c1"># dummy — caller should pass actual grids</span>
+
+    <span class="c1"># DoF at best-dose column: find the column closest to target</span>
+    <span class="n">deviations</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">in_spec</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">cd_matrix</span> <span class="o">-</span> <span class="n">target_cd</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">deviations</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+        <span class="n">best_focus_idx</span><span class="p">,</span> <span class="n">best_dose_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unravel_index</span><span class="p">(</span>
+            <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nanargmin</span><span class="p">(</span><span class="n">deviations</span><span class="p">)),</span> <span class="n">cd_matrix</span><span class="o">.</span><span class="n">shape</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">best_focus_idx</span><span class="p">,</span> <span class="n">best_dose_idx</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+
+    <span class="c1"># Recompute focus spacing from the actual focus range (assume uniform)</span>
+    <span class="c1"># The caller should pass the actual arrays for accurate metrics;</span>
+    <span class="c1"># here we rely on the simpler process_window() for real data.</span>
+    <span class="n">dof_nm</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">el_pct</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+    <span class="k">if</span> <span class="n">n_in_spec</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Estimate DoF: look at focus range at the best dose</span>
+        <span class="n">spec_col</span> <span class="o">=</span> <span class="n">in_spec</span><span class="p">[:,</span> <span class="n">best_dose_idx</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">spec_col</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="n">idx_first</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_col</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">idx_last</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_col</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="c1"># Assume uniform focus spacing of 1 nm as fallback</span>
+            <span class="n">dof_nm</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">idx_last</span> <span class="o">-</span> <span class="n">idx_first</span><span class="p">)</span>
+
+        <span class="n">spec_row</span> <span class="o">=</span> <span class="n">in_spec</span><span class="p">[</span><span class="n">best_focus_idx</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="k">if</span> <span class="n">spec_row</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="n">idx_first</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_row</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">idx_last</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">spec_row</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="c1"># Fractional EL using dose indices as proxy</span>
+            <span class="n">el_pct</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">idx_last</span> <span class="o">-</span> <span class="n">idx_first</span><span class="p">)</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">Nd</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mf">100.0</span>
+
+    <span class="c1"># NILS metrics</span>
+    <span class="n">max_nils</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>
+    <span class="n">min_nils</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">nils_matrix</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">nils_matrix</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">cd_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+        <span class="n">in_spec_nils</span> <span class="o">=</span> <span class="n">nils_matrix</span><span class="p">[</span><span class="n">in_spec</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_spec_nils</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">max_nils</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">in_spec_nils</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+            <span class="n">min_nils</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">in_spec_nils</span><span class="o">.</span><span class="n">min</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;dof_nm&quot;</span><span class="p">:</span> <span class="n">dof_nm</span><span class="p">,</span>
+        <span class="s2">&quot;el_pct&quot;</span><span class="p">:</span> <span class="n">el_pct</span><span class="p">,</span>
+        <span class="s2">&quot;max_nils&quot;</span><span class="p">:</span> <span class="n">max_nils</span><span class="p">,</span>
+        <span class="s2">&quot;min_nils&quot;</span><span class="p">:</span> <span class="n">min_nils</span><span class="p">,</span>
+        <span class="s2">&quot;n_in_spec&quot;</span><span class="p">:</span> <span class="n">n_in_spec</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, OpEnUV Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
