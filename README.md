@@ -23,12 +23,14 @@ pytest tests/                       # run tests (-v for verbose)
 
 ```
 src/euv/
-├── optics/          Multilayer mirrors (TMM) + pupil shapes
-├── mask3d/          RCWA / Waveguide solver for mask-3D effects
-├── aerial/          Abbe/Hopkins partially coherent imaging
-├── source/          LPP tin-plasma source model
-├── resist/          Stochastic resist simulation (CAR/MOR)
-├── io/              GDSII import/export + CLI
+├── constants/       Physical constants + conversion helpers
+├── materials/       CXRO material database (Henke f1, f2)
+├── optics/          Multilayer mirrors (S-matrix TMM) + collector
+├── mask3d/          RCWA 1D Fourier Modal Method + S-matrix cascade
+├── aerial/          Abbe partially coherent imaging + pupil + source shapes
+├── source/          LPP Sn-plasma emission + dose model
+├── resist/          CAR exposure, PEB, development simulation
+├── io/              GDSII layout I/O + rasterization
 ├── api/             FastAPI REST server
 └── data/            CXRO material constants (auto-downloaded)
 ```
