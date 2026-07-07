@@ -20,6 +20,8 @@ def chunked_abbe(
     pupil: torch.Tensor,
     na: float = 0.33,
     chunk_size: int = 32,
+    period_m: float = 64e-9,
+    wavelength_m: float = 13.5e-9,
 ) -> torch.Tensor:
     """Compute the aerial image via chunked Abbe summation.
 
@@ -85,7 +87,7 @@ def chunked_abbe(
         chunk_source[chunk_indices[:, 0], chunk_indices[:, 1]] = weights[start:end]
 
         # Compute partial aerial image for this chunk
-        partial = abbe_image(mask_fft, chunk_source, fx, fy, pupil, na)
+        partial = abbe_image(mask_fft, chunk_source, fx, fy, pupil, na, period_m=period_m, wavelength_m=wavelength_m)
         aerial = aerial + partial
 
     return aerial

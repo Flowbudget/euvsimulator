@@ -29,6 +29,8 @@ def abbe_image(
     fy: torch.Tensor,
     pupil: torch.Tensor,
     na: float = 0.33,
+    period_m: float = 64e-9,
+    wavelength_m: float = 13.5e-9,
 ) -> torch.Tensor:
     """Compute the aerial image via Abbe summation over source points.
 
@@ -38,14 +40,18 @@ def abbe_image(
         2D FFT of the mask transmission (centred, zero-frequency
         at G//2, G//2).
     source : (Sx, Sy) float64
-        Illumination source intensity distribution.  Must be defined
-        on the same grid as the pupil.  Normalised (sum = 1).
+        Illumination source intensity distribution. Normalised (sum = 1).
     fx, fy : (G, G) float64
-        Normalised frequency coordinates from ``pupil_grid()``.
+        Normalised frequency coordinates from ``pupil_grid()`` (-1 to 1).
     pupil : (G, G) complex128 or float64
-        Pupil transmission function (amplitude + phase).
+        Pupil transmission function (amplitude + phase) defined on
+        normalised coordinates (-1 to 1).  1 inside, 0 outside.
     na : float
         Numerical aperture.
+    period_m : float
+        Mask period in metres.
+    wavelength_m : float
+        Exposure wavelength in metres.
 
     Returns
     -------
@@ -54,58 +60,93 @@ def abbe_image(
     """
     G = mask_fft.shape[0]
     device = mask_fft.device
+    half = G // 2
+
+    # Physical frequency spacing of the mask FFT (1/m)
+    df = 1.0 / (period_m * G)
+
+    # Pupil cutoff frequency (1/m) and radius in FFT pixels
+    fc = na / wavelength_m
+    pupil_radius_px = fc / df  # radius of the pupil in the FFT grid
 
     # Identify non-zero source points
-    src_mask = source > 0
-    src_indices = torch.nonzero(src_mask)  # (n_src, 2)
+    src_mask = source > 1e-6
+    src_indices = torch.nonzero(src_mask)
 
     if src_indices.shape[0] == 0:
         return torch.zeros(G, G, dtype=torch.float64, device=device)
 
-    # Frequency step in the mask FFT (normalised)
-    dfx = fx[1, 0].item() - fx[0, 0].item()
-    dfy = fy[0, 1].item() - fy[0, 0].item()
-
-    # Convert source indices to frequency shifts
-    # Source coordinates are in sigma-space: sx, sy ∈ [-1, 1] → shift = sigma * NA / (df * ...)
-    # Map: source pixel → (shift_x, shift_y) in FFT pixels
-    half = G // 2
-    sx_vals = (src_indices[:, 0].float() - half) / half  # [-1, 1]
-    sy_vals = (src_indices[:, 1].float() - half) / half
-
-    # Frequency shift per source point: α = σ_x · NA, β = σ_y · NA
-    # In units of the FFT frequency grid
-    shift_i = torch.round(sx_vals * na / (dfx * na)).long()  # ≈ G/2 * sx
-    shift_j = torch.round(sy_vals * na / (dfy * na)).long()
-
-    # Actually for the simple case where the FFT grid covers ±NA,
-    # a shift in source sigma is directly a cyclic shift of the spectrum
-    # Let's use a simpler approach: roll the spectrum by source-pixel offset
-
     aerial = torch.zeros(G, G, dtype=torch.float64, device=device)
 
-    for idx in range(src_indices.shape[0]):
-        si = src_indices[idx, 0].item()
-        sj = src_indices[idx, 1].item()
-        weight = source[si, sj].item()
+    # Pupil radius in normalised coordinates is 1.0 (by definition).
+    # In the mask FFT grid, the pupil covers pixels from
+    # half - pupil_radius_px to half + pupil_radius_px.
+    r_px = int(round(pupil_radius_px))
 
-        # Shift mask spectrum by source point position (in pupil coordinates)
-        # For a mask on a G×G grid, the frequency coordinate of pixel (i,j)
-        # is fx[i,j] = na * (2i/G - 1) (for conventional grid)
-        # A source point at (α, β) shifts the spectrum by (−α, −β)
-        di = int(round((si - half) / half * (G / 2)))
-        dj = int(round((sj - half) / half * (G / 2)))
+    # If the pupil is resolved within the FFT grid, use the pupil function
+    # directly.  Otherwise (pupil is many pixels), the entire mask FFT is
+    # inside the pupil and we just need source-shifted IFFT.
+    if r_px < half:
+        # Crop the pupil to the mask FFT region it covers
+        x_start = half - r_px
+        x_end = half + r_px + 1
+        y_start = half - r_px
+        y_end = half + r_px + 1
 
-        shifted = torch.roll(mask_fft, shifts=(-di, -dj), dims=(0, 1))
+        # Map source sigma (-1..1) to the physical pupil in the FFT grid
+        # A source point at sigma s shifts the mask spectrum by s * NA / lambda.
+        # In FFT pixels, this is s * (NA / lambda) / df = s * pupil_radius_px.
+        for idx in range(src_indices.shape[0]):
+            si = src_indices[idx, 0].item()
+            sj = src_indices[idx, 1].item()
+            weight = source[si, sj].item()
 
-        # Apply pupil
-        filtered = shifted * pupil
+            # Source sigma coordinate: (0,0) is centre, (-1,1) are edges
+            sx = (si - half) / half  # [-1, 1]
+            sy = (sj - half) / half
 
-        # IFFT → coherent image
-        coherent = torch.fft.ifft2(torch.fft.ifftshift(filtered))
-        intensity = (coherent * coherent.conj()).real
+            # Shift in FFT pixels
+            shift_x = int(round(sx * pupil_radius_px))
+            shift_y = int(round(sy * pupil_radius_px))
 
-        aerial = aerial + weight * intensity
+            # Shift the mask spectrum
+            shifted = torch.roll(mask_fft, shifts=(-shift_x, -shift_y), dims=(0, 1))
+
+            # Extract the pupil-sized region
+            sub = shifted[x_start:x_end, y_start:y_end]
+
+            # Apply pupil (interpolated to match the extracted region)
+            # For simplicity, just multiply by the pupil (already on normalised grid)
+            # The pupil on the normalised grid covers [-1,1], but in the FFT
+            # grid it covers [half-r_px, half+r_px]; we need the subregion of pupil.
+            pupil_sub = pupil[x_start:x_end, y_start:y_end]
+
+            filtered = sub * pupil_sub
+
+            # Pad back to full grid before IFFT
+            padded = torch.zeros_like(mask_fft)
+            padded[x_start:x_end, y_start:y_end] = filtered
+
+            coherent = torch.fft.ifft2(torch.fft.ifftshift(padded))
+            intensity = (coherent * coherent.conj()).real
+            aerial = aerial + weight * intensity
+    else:
+        # Pupil covers the entire FFT grid (or more) — no spatial filtering
+        for idx in range(src_indices.shape[0]):
+            si = src_indices[idx, 0].item()
+            sj = src_indices[idx, 1].item()
+            weight = source[si, sj].item()
+
+            sx = (si - half) / half
+            sy = (sj - half) / half
+            shift_x = int(round(sx * pupil_radius_px))
+            shift_y = int(round(sy * pupil_radius_px))
+
+            shifted = torch.roll(mask_fft, shifts=(-shift_x, -shift_y), dims=(0, 1))
+            filtered = shifted * pupil
+            coherent = torch.fft.ifft2(torch.fft.ifftshift(filtered))
+            intensity = (coherent * coherent.conj()).real
+            aerial = aerial + weight * intensity
 
     return aerial
 
@@ -153,8 +194,9 @@ def nils(
     if cut[left] <= 0 or cut[right] <= 0:
         return 0.0
 
-    nils_left = cut[left].item() / dIdx_left.item() if dIdx_left != 0 else 0.0
-    nils_right = cut[right].item() / dIdx_right.item() if dIdx_right != 0 else 0.0
+    # NILS = CD * (dI/dx) / I  at the line edge
+    nils_left = (dIdx_left.item() / cut[left].item()) if (dIdx_left != 0 and cut[left] > 1e-12) else 0.0
+    nils_right = (dIdx_right.item() / cut[right].item()) if (dIdx_right != 0 and cut[right] > 1e-12) else 0.0
 
     cd_pixels = float(line_width_px)
     return abs(cd_pixels * (nils_left + nils_right) / 2.0)

@@ -188,8 +188,8 @@ class TestChunkedAbbe:
         # Frequency grid
         fx, fy, _ = pupil_grid(G, na=na, device=device)
 
-        # Simple circular pupil
-        pupil = ((fx**2 + fy**2) <= na**2).to(torch.complex128)
+        # Simple circular pupil in normalised coordinates
+        pupil = ((fx**2 + fy**2) <= 1.0).to(torch.complex128)
 
         # Mask: a simple test pattern — single centred slit → sinc spectrum
         mask = torch.zeros(G, G, dtype=torch.complex128, device=device)
@@ -208,10 +208,11 @@ class TestChunkedAbbe:
         source[G // 2 - 4, G // 2 + 1] = 0.2
 
         # Full Abbe
-        full = abbe_image(mask_fft, source, fx, fy, pupil, na)
+        full = abbe_image(mask_fft, source, fx, fy, pupil, na, period_m=1e-6, wavelength_m=13.5e-9)
 
-        # Chunked Abbe with small chunks
-        chunked = chunked_abbe(mask_fft, source, fx, fy, pupil, na, chunk_size=1)
+        # Chunked Abbe with small chunks — use period_m/wavelength_m too
+        chunked = chunked_abbe(mask_fft, source, fx, fy, pupil, na, chunk_size=1,
+                               period_m=1e-6, wavelength_m=13.5e-9)
 
         assert torch.allclose(
             full, chunked, atol=1e-10

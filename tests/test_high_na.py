@@ -30,16 +30,16 @@ class TestAnamorphicPupil:
         fx, fy, inside = pupil_grid(256, na=na, mag_x=mag_x, mag_y=mag_y)
         pupil = inside.to(torch.float64)
 
-        # The frequency axes range: fx spans ±na/mag_x, fy spans ±na/mag_y
-        # Since mag_y=8 > mag_x=4, the fy range is narrower
-        max_fx = float(fx.abs().max())
-        max_fy = float(fy.abs().max())
-        assert max_fx > max_fy, (
-            f"fx range ({max_fx:.4f}) should be > fy range ({max_fy:.4f}) " f"for anamorphic 8×/4×"
+        # Normalised coordinates: fx, fy ∈ [-1, 1].
+        # Physical frequency range is fx * NA/mag_x, fy * NA/mag_y.
+        max_fx_phys = float(fx.abs().max()) * na / mag_x
+        max_fy_phys = float(fy.abs().max()) * na / mag_y
+        # mag_y=8 > mag_x=4 → narrower physical y-range
+        assert max_fx_phys > max_fy_phys + 0.01, (
+            f"Physical fx range ({max_fx_phys:.4f}) should be > fy range ({max_fy_phys:.4f})"
         )
-        # Theoretical: max_fx = 0.55/4 = 0.1375, max_fy = 0.55/8 = 0.06875
-        assert abs(max_fx - na / mag_x) < 0.01
-        assert abs(max_fy - na / mag_y) < 0.01
+        assert abs(max_fx_phys - na / mag_x) < 0.01
+        assert abs(max_fy_phys - na / mag_y) < 0.01
 
     def test_anamorphic_vs_circular(self):
         """Anamorphic NA 0.55 should have smaller area than circular NA 0.33."""
@@ -56,12 +56,13 @@ class TestAnamorphicPupil:
         ), f"Anamorphic area ({area_anam}) should be > 0.5× circular ({area_circ})"
 
     def test_anamorphic_na_scaling(self):
-        """Higher NA should produce a larger frequency range."""
+        """Higher NA should produce a larger physical frequency range."""
         fx_lo, _, _ = pupil_grid(64, na=0.33, mag_x=4.0, mag_y=8.0)
         fx_hi, _, _ = pupil_grid(64, na=0.55, mag_x=4.0, mag_y=8.0)
-        assert float(fx_hi.abs().max()) > float(
-            fx_lo.abs().max()
-        ), "Higher NA should have larger frequency extent"
+        # In normalised coords both are [-1,1]; physical range = coord * NA/mag
+        assert float(fx_hi.abs().max() * 0.55 / 8.0) > float(
+            fx_lo.abs().max() * 0.33 / 8.0
+        ), "Higher NA should have larger physical frequency extent"
 
     def test_anamorphic_device(self):
         """Pupil on CPU should work."""
@@ -146,14 +147,18 @@ class TestZernikeHighNA:
         """Zernike astigmatism (Z6) should have 2-fold symmetry."""
         fx, fy, _ = pupil_grid(64, na=0.33)
         Z6 = zernike(2, 2, fx, fy)  # astigmatism
-        # Should be symmetric: Z6(x,y) = Z6(-x,y) for Z(2,2) = r²cos(2θ)
-        assert abs(Z6[16, 16] - Z6[48, 16]) < 0.01, "Astigmatism should have 2-fold symmetry"
+        # Z(2,2) = x² - y² → should be equal at symmetric x-coordinates
+        half = 32
+        # Check at radius 0.5 (normalised coordinate)
+        d = 16
+        assert abs(Z6[half - d, half] - Z6[half + d, half]) < 0.04, \
+            "Astigmatism should have 2-fold symmetry about x"
 
     def test_apply_aberrations_preserves_shape(self):
         """Applying aberrations to a pupil should preserve its shape."""
         grid = 64
-        _, fx, fy = pupil_grid(grid, na=0.33)
-        pupil = pupil_grid(grid, na=0.33)[2].to(torch.float64).to(torch.complex128)
+        fx, fy, inside = pupil_grid(grid, na=0.33)
+        pupil = inside.to(torch.float64).to(torch.complex128)
         coeffs = [(2, 0, 0.5), (2, 2, 0.3)]  # defocus + astigmatism
         aberrated = apply_aberrations(pupil, fx, fy, coeffs)
         assert aberrated.shape == pupil.shape

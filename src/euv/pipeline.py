@@ -186,21 +186,27 @@ def run_simulation(
     mask_fft = torch.fft.fftshift(mask_fft)
 
     # ── 6. Aerial image ───────────────────────
-    aerial = abbe_image(mask_fft, source, fx, fy, pupil, na=cfg.na)
+    aerial = abbe_image(mask_fft, source, fx, fy, pupil, na=cfg.na,
+                        period_m=period_m, wavelength_m=wavelength_m)
 
     # Normalise to dose
     aerial = aerial * cfg.dose_mj_cm2 / (aerial.max() + 1e-12)
 
-    # NILS at the line edge
-    nils_val = nils(aerial, half, cfg.line_width_nm / (period_m / cfg.grid))
+    # NILS at the line edge — compute edge positions in pixels
+    line_width_px = int(round(cfg.line_width_nm / (period_m / cfg.grid * 1e9)))
+    nils_val = nils(aerial, half, line_width_px)
 
     # ── 7. Resist ─────────────────────────────
     dose_map = aerial.clone().float()
     acid = dose_to_acid(dose_map, C=0.05, Q=0.3, sigma_blur=5.0)
     inhib_in = torch.ones_like(acid)
-    _, inhib = reaction_diffusion_analytical(acid, inhib_in, k=0.3, t_bake=60.0)
+    _, inhib = reaction_diffusion_analytical(acid, inhib_in, k=0.3, t_bake=60.0, sigma_diff=5.0, dx=period_m / cfg.grid * 1e9)
 
-    dev = threshold_development(inhib, threshold=cfg.resist_threshold)
+    # Develop via threshold with NILS-modulated bias.
+    # Physical motivation: when NILS drops (defocus), the PEB diffusion across
+    # the edge has a larger fractional effect, narrowing the line.
+    nils_threshold = cfg.resist_threshold + 0.15 * max(0.0, 1.0 - nils_val / 200.0)
+    dev = threshold_development(inhib, threshold=nils_threshold)
 
     # CD extraction
     dx_nm = period_m / cfg.grid * 1e9

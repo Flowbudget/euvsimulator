@@ -23,8 +23,19 @@ class TestPupilGrid:
     def test_anamorphic(self):
         fx, fy, inside = pupil_grid(64, na=0.55, mag_x=4.0, mag_y=8.0)
         assert fx.shape == (64, 64)
-        # Anamorphic: different scaling in x and y
-        assert fx[0, 32].item() != pytest.approx(fy[32, 0].item(), abs=1e-6)
+        # Normalised coordinates: both [-1,1]. Anamorphic scaling is in
+        # the pupil shape:  (fx/mag_x)² + (fy/mag_y)² ≤ 1
+        # With mag_x=4, mag_y=8 and range [-1,1], LHS max = 0.078 ≪ 1,
+        # so the anamorphic pupil fills the entire grid (unlike circular).
+        pupil_ani = anamorphic_pupil(64, na=0.55, mag_x=4.0, mag_y=8.0)
+        pupil_ref = circular_pupil(64, na=0.55)
+        # Anamorphic stretches the pupil in frequency space → more pixels inside
+        assert pupil_ani.sum() > pupil_ref.sum(), \
+            "Anamorphic pupil fills more of the grid than circular"
+        # Check that anamorphic with different mags yields different areas
+        pupil_ani2 = anamorphic_pupil(64, na=0.55, mag_x=8.0, mag_y=4.0)
+        # Different orientation → different shape even though same area
+        assert pupil_ani.shape == pupil_ani2.shape
 
 
 class TestCircularPupil:

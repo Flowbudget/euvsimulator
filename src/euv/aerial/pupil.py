@@ -22,6 +22,9 @@ def pupil_grid(
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Normalised pupil coordinates.
 
+    Returns fx, fy in range [-1, 1] (normalised to NA/lambda).
+    ``inside`` is True where fx² + fy² ≤ 1.
+
     Parameters
     ----------
     grid : int
@@ -42,10 +45,12 @@ def pupil_grid(
     inside : (grid, grid) bool
         True for points inside the pupil: fx² + fy² ≤ 1.
     """
-    x = torch.linspace(-na / mag_x, na / mag_x, grid, device=device)
-    y = torch.linspace(-na / mag_y, na / mag_y, grid, device=device)
+    # Normalised coordinates: fx = (2i/G - 1) * na / mag_x, then normalise by NA
+    half = grid // 2
+    x = torch.linspace(-1.0, 1.0, grid, device=device)
+    y = torch.linspace(-1.0, 1.0, grid, device=device)
     fx, fy = torch.meshgrid(x, y, indexing="ij")
-    inside = fx**2 + fy**2 <= na**2
+    inside = fx**2 + fy**2 <= 1.0
     return fx, fy, inside
 
 
@@ -74,9 +79,9 @@ def defocus_pupil(
         Complex phase factor to multiply with the pupil.
     """
     fx, fy, _ = pupil_grid(grid, na, device=device)
-    # Quadratic phase: W = (2π/λ) * defocus * sqrt(NA² - (fx²+fy²))
+    # Quadratic phase: W = (2π/λ) * 0.5 * defocus * NA² * (fx² + fy²)
     rho_sq = fx**2 + fy**2
-    phase = (2.0 * math.pi / (wavelength_nm * 1e-9)) * (defocus_nm * 1e-9) * rho_sq
+    phase = (2.0 * math.pi / (wavelength_nm * 1e-9)) * (defocus_nm * 1e-9) * na**2 * rho_sq / 2.0
     return torch.exp(1j * phase.to(torch.complex128))
 
 
@@ -91,7 +96,8 @@ def circular_pupil(
     -------
     pupil : (grid, grid) float64
     """
-    _, _, inside = pupil_grid(grid, na, device=device)
+    fx, fy, _ = pupil_grid(grid, na, device=device)
+    inside = fx**2 + fy**2 <= 1.0
     return inside.to(torch.float64)
 
 
@@ -187,10 +193,14 @@ def anamorphic_pupil(
 ) -> torch.Tensor:
     """High-NA anamorphic pupil (different X/Y magnification).
 
+    In normalised coordinates ([−1, 1] in both axes), the pupil shape is
+    an ellipse:  (fx/mag_x)² + (fy/mag_y)² ≤ 1 / NA².
+
     Returns
     -------
     pupil : (grid, grid) float64
         Transmission (1 inside the stretched pupil, 0 outside).
     """
-    fx, fy, inside = pupil_grid(grid, na, mag_x, mag_y, device)
+    fx, fy, _ = pupil_grid(grid, na, mag_x, mag_y, device)
+    inside = (fx / mag_x) ** 2 + (fy / mag_y) ** 2 <= 1.0
     return inside.to(torch.float64)
