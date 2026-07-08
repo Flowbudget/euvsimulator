@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
+import math
+
 import torch
 
 from euv.materials import CXROTable
@@ -112,6 +114,9 @@ def mo_si_stack(
     substrate: str = "Si",
     energy_eV: float = 91.84,
     table: CXROTable | None = None,
+    gamma: float | None = None,
+    grading_linear_nm: float = 0.0,
+    grading_parabolic_nm: float = 0.0,
 ) -> MultilayerStack:
     """Build a standard Mo/Si multilayer mirror stack.
 
@@ -137,6 +142,18 @@ def mo_si_stack(
         Photon energy in eV (default: 91.84).
     table : CXROTable, optional
         CXRO table instance.  Uses the default singleton if omitted.
+    gamma : float, optional
+        Mo fraction of bilayer: gamma = d_Mo / (d_Mo + d_Si).  When set,
+        d_si_nm is computed from d_mo_nm / gamma - d_mo_nm,
+        overriding the d_si_nm parameter.
+    grading_linear_nm : float
+        Linear period grading [nm]: each bilayer period increases by
+        this amount from top to bottom.  Positive = thicker at bottom.
+        Typical: 0.0 (no grading) to 0.3 nm for High-NA.
+    grading_parabolic_nm : float
+        Parabolic period grading amplitude [nm].  The period at the
+        centre of the stack is nominal; top and bottom periods are
+        wider by this amount.  Typical: 0.0 to 0.15 nm.
 
     Returns
     -------
@@ -150,17 +167,37 @@ def mo_si_stack(
     symbols: List[str] = []
     thicknesses_nm: List[float] = []
 
+    # Handle gamma override: d_Si from gamma = d_Mo / (d_Mo + d_Si)
+    d_mo = d_mo_nm
+    d_si = d_si_nm
+    if gamma is not None:
+        period = d_mo / gamma
+        d_si = period - d_mo
+
     # Capping layer (top)
     if capping_layer and d_cap_nm > 0:
         symbols.append(capping_layer)
         thicknesses_nm.append(d_cap_nm)
 
-    # Mo/Si bilayers
-    for _ in range(n_bilayers):
+    # Mo/Si bilayers with optional period grading
+    # Grading profile: period(z) = d0 + linear * (z/N) + parabolic * sin(pi * z/N)
+    # where z = bilayer index from top, N = total bilayers
+    # Linear grading: period increases linearly from top to bottom
+    # Parabolic grading: period peaks at top and bottom, minimum at centre
+    period0 = d_mo + d_si
+    for i in range(n_bilayers):
+        z = i / max(n_bilayers - 1, 1)  # 0 (top) to 1 (bottom)
+        # Grading profile
+        grad = (grading_linear_nm * z
+                + grading_parabolic_nm * (1.0 - math.cos(math.pi * z)))
+        p_i = period0 + grad
+        mo_i = d_mo + (d_mo / period0) * grad
+        si_i = p_i - mo_i
+
         symbols.append("Mo")
-        thicknesses_nm.append(d_mo_nm)
+        thicknesses_nm.append(mo_i)
         symbols.append("Si")
-        thicknesses_nm.append(d_si_nm)
+        thicknesses_nm.append(si_i)
 
     # Compute refractive indices from CXRO
     nk_list: List[complex] = []

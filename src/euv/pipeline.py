@@ -6,15 +6,15 @@ Connects all modules: mask → RCWA → aerial image → resist → CD.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Optional
 
 import torch
 
-from euv.aerial.abbe import abbe_image, nils
-from euv.aerial.pupil import defocus_pupil, pupil_grid
-from euv.aerial.source import conventional
-from euv.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
+from euv.aerial.abbe import aerial_from_orders, nils
 from euv.materials import CXROTable
+from euv.optics.multilayer import mo_si_stack
+from euv.optics.tmm import reflectivity
 from euv.resist.develop import (
     extract_cd,
     threshold_development,
@@ -83,6 +83,16 @@ class SimulationConfig:
     wavelength_nm: float = 13.5
     na: float = 0.33
     sigma: float = 0.8
+    illumination_shape: str = "conventional"
+    ml_n_bilayers: int = 50
+    ml_d_mo_nm: float = 2.8
+    ml_d_si_nm: float = 4.1
+    ml_gamma: float | None = None
+    ml_grading_linear_nm: float = 0.0
+    ml_grading_parabolic_nm: float = 0.0
+    ml_roughness_nm: float = 0.0
+    ml_capping: str = "Ru"
+    ml_capping_nm: float = 2.5
     period_nm: float = 64.0
     line_width_nm: float = 32.0
     absorber_height_nm: float = 60.0
@@ -126,68 +136,84 @@ def run_simulation(
 
     # ── 1. Materials ──────────────────────────
     table = CXROTable()
-    n_ta, k_ta = table.refractive_index(cfg.absorber_material, 91.84)
-    eps_line = complex(n_ta, k_ta) ** 2
-    eps_space = 1.0 + 0.0j  # vacuum
 
-    # ── 2. RCWA: compute mask reflectivity ────
-    profile = binary_grating_profile(
-        period=period_m,
-        fill_width=line_m,
-        eps_line=eps_line,
-        eps_space=eps_space,
-        n_samples=max(1024, cfg.n_rcwa_orders * 20),
-        device=device,
+    # ── 5. Aerial image from complex diffraction orders (TMM + Hopkins) ──
+    # Compute the complex reflectivity of the ML mirror and the absorber+ML stack
+    # via TMM.  Then compute the 1D aerial image directly from the Fourier
+    # coefficients of the binary complex mask using the Hopkins formulation.
+    theta0 = torch.tensor(math.radians(6.0), dtype=torch.float64)
+    wl_t = torch.tensor([wavelength_m], dtype=torch.float64)
+    n_si, k_si = table.refractive_index("Si", 91.84)
+    n_sub = torch.tensor(complex(n_si, k_si), dtype=torch.complex128)
+
+    # Build multilayer stack (without absorber)
+    ml_stack = mo_si_stack(
+        n_bilayers=cfg.ml_n_bilayers,
+        d_mo_nm=cfg.ml_d_mo_nm,
+        d_si_nm=cfg.ml_d_si_nm,
+        gamma=cfg.ml_gamma,
+        grading_linear_nm=cfg.ml_grading_linear_nm,
+        grading_parabolic_nm=cfg.ml_grading_parabolic_nm,
+        capping_layer=cfg.ml_capping if cfg.ml_capping != "none" else None,
+        d_cap_nm=cfg.ml_capping_nm,
     )
-    thicknesses = torch.tensor([cfg.absorber_height_nm * 1e-9], dtype=torch.float64, device=device)
 
-    rcwa_cfg = RCWAConfig(
-        wavelength=wavelength_m,
-        n_orders=cfg.n_rcwa_orders,
-        theta=6.0,
-        polarization="TE",
-        device=device,
+    # TMM: ML-only reflectivity (space regions)
+    _, r_space = reflectivity(
+        ml_stack.n_layers, ml_stack.thicknesses,
+        wl_t, theta0, n_substrate=n_sub,
+        roughness_nm=cfg.ml_roughness_nm,
     )
-    solver = RCWA1D(rcwa_cfg)
-    orders = solver.solve(profile, thicknesses, period_m)
-    eff = solver.diffraction_efficiency(orders)
-    absorber_reflectivity = sum(eff.values())
+    r0_space = r_space[0]
 
-    # ── 3. Illumination source ────────────────
-    source = conventional(cfg.grid, sigma=cfg.sigma, device=device)
+    # TMM: absorber-on-ML reflectivity (absorber lines)
+    n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, 91.84)
+    n_abs = torch.tensor(complex(n_ta_c, k_ta_c), dtype=torch.complex128)
+    d_abs = torch.tensor([cfg.absorber_height_nm * 1e-9], dtype=torch.float64)
+    full_n = torch.cat([n_abs.unsqueeze(0), ml_stack.n_layers])
+    full_d = torch.cat([d_abs, ml_stack.thicknesses])
 
-    # ── 4. Pupil ──────────────────────────────
-    fx, fy, inside_pupil = pupil_grid(cfg.grid, na=cfg.na, device=device)
-    pupil = inside_pupil.to(torch.float64).to(torch.complex128)
+    _, r_ab = reflectivity(
+        full_n, full_d, wl_t, theta0, n_substrate=n_sub,
+        roughness_nm=cfg.ml_roughness_nm,
+    )
+    r0_abs = r_ab[0]
 
-    # Apply defocus if non-zero
-    if abs(cfg.focus_nm) > 1e-12:
-        defocus_phase = defocus_pupil(
-            cfg.grid,
-            na=cfg.na,
-            defocus_nm=cfg.focus_nm,
-            wavelength_nm=cfg.wavelength_nm,
-            device=device,
-        )
-        pupil = pupil * defocus_phase
+    # Average absorber reflectivity (diagnostic)
+    space_frac = 1.0 - cfg.line_width_nm / cfg.period_nm
+    absorber_reflectivity = float(
+        (abs(r0_abs)**2 * (1.0 - space_frac) + abs(r0_space)**2 * space_frac).real
+    )
 
-    # ── 5. Mask FFT ────────────────────────────
-    # Build a simple mask transmission: line/space
-    x = torch.linspace(-period_m / 2, period_m / 2, cfg.grid, device=device)
-    half_line = line_m / 2
-    mask_transmission = torch.ones(cfg.grid, cfg.grid, dtype=torch.complex128, device=device)
-    # Vertical absorber lines in the centre
-    for i in range(cfg.grid):
-        xi = x[i].item()
-        if abs(xi) <= half_line:
-            mask_transmission[:, i] = 0.0  # absorber = dark
+    # Fourier coefficients of the binary complex mask
+    duty = cfg.line_width_nm / cfg.period_nm  # η = absorber fraction
+    n_orders = min(cfg.n_rcwa_orders, cfg.grid // 2)
 
-    mask_fft = torch.fft.fft2(mask_transmission)
-    mask_fft = torch.fft.fftshift(mask_fft)
+    a = r0_abs
+    b = r0_space
+    c0 = a * duty + b * (1.0 - duty)
 
-    # ── 6. Aerial image ───────────────────────
-    aerial = abbe_image(mask_fft, source, fx, fy, pupil, na=cfg.na,
-                        period_m=period_m, wavelength_m=wavelength_m)
+    order_indices = list(range(-n_orders, n_orders + 1))
+    amplitudes = torch.zeros(len(order_indices), dtype=torch.complex128, device=device)
+
+    for idx, m in enumerate(order_indices):
+        if m == 0:
+            amplitudes[idx] = c0
+        else:
+            cm = (a - b) * math.sin(math.pi * m * duty) / (math.pi * m)
+            amplitudes[idx] = cm
+
+    # Compute aerial image from orders (Hopkins formulation)
+    order_tensor = torch.tensor(order_indices, dtype=torch.int64, device=device)
+    aerial = aerial_from_orders(
+        amplitudes, order_tensor,
+        period_m=period_m,
+        na=cfg.na,
+        wavelength_m=wavelength_m,
+        sigma=cfg.sigma,
+        illumination_shape=cfg.illumination_shape,
+        grid=cfg.grid,
+    )
 
     # Normalise to dose
     aerial = aerial * cfg.dose_mj_cm2 / (aerial.max() + 1e-12)

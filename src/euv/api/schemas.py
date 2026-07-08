@@ -44,7 +44,7 @@ class AerialImageConfig(BaseModel):
 
 
 class MaskConfig(BaseModel):
-    """Parameters for the reflective EUV mask."""
+    """Parameters for the reflective EUV mask and multilayer mirror."""
 
     layout: str = Field(
         "linespace", description="Layout type: linespace, contact_array, or gds_path"
@@ -57,6 +57,13 @@ class MaskConfig(BaseModel):
     capping_height_nm: float = Field(2.5, gt=0, description="Capping layer height [nm]")
     multilayer_pairs: int = Field(40, ge=1, description="Number of Mo/Si bilayer pairs")
     gds_path: Optional[str] = Field(None, description="Path to GDSII file (when layout=gds_path)")
+    # Multilayer parameters
+    ml_d_mo_nm: float = Field(2.8, gt=0, description="Mo layer thickness [nm]")
+    ml_d_si_nm: float = Field(4.1, gt=0, description="Si layer thickness [nm]")
+    ml_gamma: Optional[float] = Field(None, ge=0.2, le=0.6, description="Mo fraction gamma = d_Mo/(d_Mo+d_Si)")
+    ml_grading_linear_nm: float = Field(0.0, ge=0, description="Linear period grading [nm]")
+    ml_grading_parabolic_nm: float = Field(0.0, ge=0, description="Parabolic period grading [nm]")
+    ml_roughness_nm: float = Field(0.0, ge=0, description="RMS interface roughness [nm]")
 
 
 class ResistConfig(BaseModel):

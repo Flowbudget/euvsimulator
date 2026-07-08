@@ -98,7 +98,7 @@ select {
 <body>
 
 <header>
-  <h1><span>Ō</span>pEnUV — Simulation</h1>
+  <h1>OpEnUV — Simulation</h1>
   <div class="header-status">
     <span class="status-dot offline" id="statusDot"></span>
     <span id="statusText">offline</span>
@@ -150,8 +150,9 @@ select {
       <select id="illum">
         <option value="conventional">Conventional</option>
         <option value="annular" selected>Annular</option>
-        <option value="dipole">Dipole</option>
-        <option value="quasar">Quasar</option>
+        <option value="dipole">Dipole (X)</option>
+        <option value="dipole_y">Dipole (Y)</option>
+        <option value="quasar">Quasar (CQuad)</option>
       </select>
     </div>
 
@@ -168,12 +169,54 @@ select {
     </div>
     <div class="param-group">
       <label>Absorber</label>
-      <select id="absorber">
-        <option value="Ta" selected>Ta</option>
-        <option value="Cr">Cr</option>
-        <option value="Ni">Ni</option>
-        <option value="Au">Au</option>
-      </select>
+      <input list="elements" id="absorber" value="Ta" placeholder="Element symbol…" style="width:100%;background:#161b22;border:1px solid #30363d;color:#e6edf3;padding:5px 8px;border-radius:4px;font-size:13px;font-family:inherit">
+      <datalist id="elements">
+        <option value="Ag"><option value="Al"><option value="Au"><option value="Co">
+        <option value="Cr"><option value="Cu"><option value="Fe"><option value="Ge">
+        <option value="Hf"><option value="Ir"><option value="Mo"><option value="Nb">
+        <option value="Ni"><option value="Pd"><option value="Pt"><option value="Ru">
+        <option value="Si"><option value="Sn"><option value="Ta"><option value="Ti">
+        <option value="W"><option value="Zr">
+      </datalist>
+      <span style="font-size:11px;color:#8b949e;margin-top:2px;display:block">Beliebiges Element H–U (z.B. Ta, W, Ni, Ru)</span>
+    </div>
+
+    <h3>🔬 Multilayer Mirror</h3>
+    <div class="param-group">
+      <label>Bilayer pairs <span class="val" id="mlPairsVal">50</span></label>
+      <input type="range" id="mlPairs" min="0" max="80" step="1" value="50" oninput="syncVal(this)">
+      <input type="number" step="1" min="0" max="80" value="50" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Mo thickness <span class="val" id="mlMoVal">2.8</span> nm</label>
+      <input type="range" id="mlMo" min="1.0" max="4.5" step="0.1" value="2.8" oninput="syncVal(this)">
+      <input type="number" step="0.1" min="1.0" max="4.5" value="2.8" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Si thickness <span class="val" id="mlSiVal">4.1</span> nm</label>
+      <input type="range" id="mlSi" min="2.0" max="6.0" step="0.1" value="4.1" oninput="syncVal(this)">
+      <input type="number" step="0.1" min="2.0" max="6.0" value="4.1" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Gamma (Mo/Si ratio) <span class="val" id="mlGammaVal">—</span></label>
+      <input type="range" id="mlGamma" min="0.25" max="0.55" step="0.01" value="0.4" oninput="syncVal(this)">
+      <input type="number" step="0.01" min="0.25" max="0.55" value="0.4" onchange="syncSlider(this)">
+      <span style="font-size:11px;color:#8b949e">Setzt Si-Dicke außer Kraft wenn ≠ 0.4</span>
+    </div>
+    <div class="param-group">
+      <label>Lin. Grading <span class="val" id="mlGradLinVal">0</span> nm</label>
+      <input type="range" id="mlGradLin" min="0" max="0.5" step="0.01" value="0" oninput="syncVal(this)">
+      <input type="number" step="0.01" min="0" max="0.5" value="0" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Parab. Grading <span class="val" id="mlGradParaVal">0</span> nm</label>
+      <input type="range" id="mlGradPara" min="0" max="0.3" step="0.01" value="0" oninput="syncVal(this)">
+      <input type="number" step="0.01" min="0" max="0.3" value="0" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Roughness σ <span class="val" id="mlRoughVal">0</span> nm</label>
+      <input type="range" id="mlRough" min="0" max="1.0" step="0.05" value="0" oninput="syncVal(this)">
+      <input type="number" step="0.05" min="0" max="1.0" value="0" onchange="syncSlider(this)">
     </div>
 
     <h3>💡 Resist</h3>
@@ -225,6 +268,13 @@ function getParams() {
     dose: parseFloat(document.getElementById('dose').value),
     focus_nm: parseFloat(document.getElementById('focus').value),
     thickness_nm: parseFloat(document.getElementById('thick').value),
+    mlPairs: parseInt(document.getElementById('mlPairs').value),
+    mlMo: parseFloat(document.getElementById('mlMo').value),
+    mlSi: parseFloat(document.getElementById('mlSi').value),
+    mlGamma: parseFloat(document.getElementById('mlGamma').value),
+    mlGradLin: parseFloat(document.getElementById('mlGradLin').value),
+    mlGradPara: parseFloat(document.getElementById('mlGradPara').value),
+    mlRough: parseFloat(document.getElementById('mlRough').value),
   };
 }
 
@@ -251,6 +301,16 @@ async function runSimulation() {
           pitch_nm: p.period_nm,
           cd_nm: p.cd_nm,
           absorber_material: p.absorber,
+          absorber_height_nm: 60,
+          capping_material: 'Ru',
+          capping_height_nm: 2.5,
+          multilayer_pairs: p.mlPairs,
+          ml_d_mo_nm: p.mlMo,
+          ml_d_si_nm: p.mlSi,
+          ml_gamma: p.mlGamma !== 0.4 ? p.mlGamma : null,
+          ml_grading_linear_nm: p.mlGradLin,
+          ml_grading_parabolic_nm: p.mlGradPara,
+          ml_roughness_nm: p.mlRough,
         },
         resist: {
           dose_mJ_cm2: p.dose,

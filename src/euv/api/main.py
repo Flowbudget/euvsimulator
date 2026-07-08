@@ -114,11 +114,21 @@ async def run_simulation(req: SimulationRequest) -> SimulationResponse:
     pipe_cfg = PipelineConfig(
         na=cfg_api.aerial.na,
         sigma=cfg_api.aerial.illumination_sigma,
+        illumination_shape=cfg_api.aerial.illumination_shape,
         period_nm=cfg_api.mask.pitch_nm,
         line_width_nm=cfg_api.mask.cd_nm,
         absorber_material=cfg_api.mask.absorber_material,
         absorber_height_nm=cfg_api.mask.absorber_height_nm,
         dose_mj_cm2=cfg_api.resist.dose_mJ_cm2,
+        ml_n_bilayers=cfg_api.mask.multilayer_pairs,
+        ml_d_mo_nm=cfg_api.mask.ml_d_mo_nm,
+        ml_d_si_nm=cfg_api.mask.ml_d_si_nm,
+        ml_gamma=cfg_api.mask.ml_gamma,
+        ml_grading_linear_nm=cfg_api.mask.ml_grading_linear_nm,
+        ml_grading_parabolic_nm=cfg_api.mask.ml_grading_parabolic_nm,
+        ml_roughness_nm=cfg_api.mask.ml_roughness_nm,
+        ml_capping=cfg_api.mask.capping_material,
+        ml_capping_nm=cfg_api.mask.capping_height_nm,
         device="cpu",
     )
 

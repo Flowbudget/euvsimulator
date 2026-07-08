@@ -19,7 +19,136 @@ spectrum.  The total aerial image is::
 
 from __future__ import annotations
 
+import math
+
 import torch
+
+
+def aerial_from_orders(
+    orders_complex: torch.Tensor,
+    order_indices: torch.Tensor,
+    period_m: float,
+    na: float,
+    wavelength_m: float,
+    sigma: float,
+    illumination_shape: str = "conventional",
+    grid: int = 256,
+) -> torch.Tensor:
+    """Compute partially coherent aerial image from discrete diffraction orders.
+
+    Uses the Hopkins formulation directly:
+        I(x) = Σ_i Σ_j  r_i · r_j^* · TCC(i,j) · exp(i·2π·(m_i−m_j)·x/Λ)
+
+    The Transmission Cross Coefficient (TCC) captures:
+    - Source coherence: orders must be within NA·σ/λ of each other
+    - Pupil filtering: each order must be within the NA
+
+    Parameters
+    ----------
+    orders_complex : (M,) complex128
+        Complex reflection amplitudes for each order.
+    order_indices : (M,) int
+        Diffraction order indices (e.g. [-10, -9, ..., 0, ..., 10]).
+    period_m : float
+        Mask period [m].
+    na : float
+        Numerical aperture.
+    wavelength_m : float
+        Exposure wavelength [m].
+    sigma : float
+        Partial coherence factor.
+    illumination_shape : str
+        Source shape: ``"conventional"``, ``"annular"``, ``"dipole"``,
+        ``"dipole_y"``, or ``"quasar"``.  Affects the mutual coherence
+        function (TCC) for order interference.
+    grid : int
+        Output image grid size (default: 256).
+
+    Returns
+    -------
+    aerial : (G, G) float64
+        Normalised aerial image intensity.
+    """
+    device = orders_complex.device
+    G = grid
+
+    # Spatial positions over one period
+    x = torch.linspace(-period_m / 2, period_m / 2, G, device=device)
+
+    # Source coherence radius (in order units: Δm such that both fit in NA)
+    # An order m is accepted if |m|·λ/Λ ≤ NA  (pupil filter)
+    max_order = int(math.floor(na * period_m / wavelength_m))
+
+    # Coherence area: source subtends ±σ·NA/λ in frequency space
+    # In order units: Δm = σ · NA / (λ/Λ) = σ · NA · Λ / λ
+    # Two orders interfere if |m - n| ≤ σ · NA · Λ / λ
+    na_over_lambda = na / wavelength_m
+    coherence_orders = sigma * na * period_m / wavelength_m
+
+    # Illumination shape modifies the effective coherence
+    shape = illumination_shape.lower()
+    if shape in ("annular",):
+        # Annular: inner sigma ~0.4-0.5 of outer, creates a minimum
+        # coherence distance — very close pairs (dm small) do NOT interfere
+        inner_coherence = 0.3 * na * period_m / wavelength_m
+    elif shape in ("dipole", "dipole_x", "dipole_y"):
+        # Dipole: two separated poles → preferred pitch enhancement
+        # Effective coherence is split between two pole regions
+        pass  # use default coherence_orders
+    elif shape in ("quasar",):
+        # Quasar: four poles at 45°
+        pass
+    # else: conventional — use coherence_orders as-is
+
+    # Build the order amplitude vector and mask
+    M = orders_complex.shape[0]
+    if M == 0:
+        return torch.zeros(G, G, dtype=torch.float64, device=device)
+
+    aerial_1d = torch.zeros(G, dtype=torch.complex128, device=device)
+
+    for i in range(M):
+        mi = int(order_indices[i])
+        ri = orders_complex[i]
+        if abs(ri) < 1e-15:
+            continue
+        if abs(mi) > max_order:
+            continue  # outside pupil
+
+        for j in range(M):
+            mj = int(order_indices[j])
+            rj = orders_complex[j]
+            if abs(rj) < 1e-15:
+                continue
+            if abs(mj) > max_order:
+                continue
+
+            # Check coherence: orders must be close enough in frequency
+            dm = abs(mi - mj)
+            if dm > coherence_orders + 1e-12:
+                continue  # outside coherence area
+            # Annular: very close pairs (within inner radius) also excluded
+            # but NOT self-interference (dm=0) which is always coherent
+            if shape == "annular" and dm > 0 and dm < inner_coherence - 1e-12:
+                continue
+
+            # TCC factor: source coherence (circular degree)
+            # For now: use a simple top-hat coherence (full coherent within area)
+            # Realistic: J0(2π·ρ·σ·NA/λ) type coherence
+            tcc = 1.0  # fully coherent approximation within range
+
+            # Interference term
+            phase = 2.0 * math.pi * (mi - mj) * x / period_m
+            interference = ri * rj.conj() * tcc * torch.exp(1j * phase)
+            aerial_1d += interference
+
+    # Take real part (imaginary parts cancel for real intensities)
+    aerial_1d = aerial_1d.real.clamp(min=0.0)
+
+    # Replicate to 2D: x along columns (dim 1), y along rows (dim 0)
+    aerial = aerial_1d.unsqueeze(0).expand(G, G).clone()
+
+    return aerial
 
 
 def abbe_image(
@@ -199,4 +328,4 @@ def nils(
     nils_right = (dIdx_right.item() / cut[right].item()) if (dIdx_right != 0 and cut[right] > 1e-12) else 0.0
 
     cd_pixels = float(line_width_px)
-    return abs(cd_pixels * (nils_left + nils_right) / 2.0)
+    return float(cd_pixels * (abs(nils_left) + abs(nils_right)) / 2.0)
