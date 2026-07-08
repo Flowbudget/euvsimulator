@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpEnUV Simulation — EUV Lithography</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Layout ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0d1117; color: #e6edf3; height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+header {
+  background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 24px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+header h1 { font-size: 18px; font-weight: 600; }
+header h1 span { color: #58a6ff; }
+.header-status { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-dot.online { background: #3fb950; box-shadow: 0 0 6px #3fb95080; }
+.status-dot.offline { background: #f85149; }
+.controls-bar {
+  background: #161b22; border-bottom: 1px solid #30363d;
+  padding: 10px 24px; display: flex; gap: 12px; align-items: center; flex-shrink: 0;
+}
+.controls-bar button {
+  background: #238636; color: #fff; border: none; padding: 7px 20px;
+  border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+}
+.controls-bar button:hover { background: #2ea043; }
+.controls-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Main Grid ── */
+main {
+  display: flex; flex: 1; min-height: 0;
+}
+.left-panel {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+  border-right: 1px solid #30363d;
+}
+.plot-area {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 16px; position: relative; min-height: 200px;
+}
+.plot-area canvas { max-width: 100%; max-height: 100%; }
+.plot-placeholder {
+  color: #484f58; text-align: center; font-size: 14px;
+}
+.results-area {
+  background: #161b22; border-top: 1px solid #30363d;
+  padding: 12px 24px; flex-shrink: 0;
+  display: flex; gap: 24px; flex-wrap: wrap;
+}
+.result-item { display: flex; flex-direction: column; }
+.result-item .label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+.result-item .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.result-item .unit { font-size: 12px; color: #8b949e; margin-left: 2px; }
+
+/* ── Right Panel ── */
+.right-panel {
+  width: 360px; flex-shrink: 0; overflow-y: auto;
+  padding: 16px 20px; background: #0d1117;
+}
+.right-panel h3 { font-size: 13px; color: #8b949e; text-transform: uppercase;
+  letter-spacing: 0.8px; margin: 16px 0 10px; }
+.right-panel h3:first-child { margin-top: 0; }
+.param-group { margin-bottom: 14px; }
+.param-group label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; margin-bottom: 4px;
+}
+.param-group label .val { color: #58a6ff; font-weight: 600; font-size: 14px; }
+.param-group input[type="range"] {
+  width: 100%; height: 4px; -webkit-appearance: none; appearance: none;
+  background: #30363d; border-radius: 2px; outline: none;
+  cursor: pointer;
+}
+.param-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: #58a6ff; cursor: pointer; border: 2px solid #0d1117;
+}
+.param-group input[type="number"] {
+  width: 100%; background: #161b22; border: 1px solid #30363d;
+  color: #e6edf3; padding: 5px 8px; border-radius: 4px; font-size: 13px;
+  margin-top: 3px;
+}
+select {
+  width: 100%; background: #161b22; border: 1px solid #30363d;
+  color: #e6edf3; padding: 5px 8px; border-radius: 4px; font-size: 13px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>Ō</span>pEnUV — Simulation</h1>
+  <div class="header-status">
+    <span class="status-dot offline" id="statusDot"></span>
+    <span id="statusText">offline</span>
+    <span style="color:#8b949e" id="versionText"></span>
+  </div>
+</header>
+
+<div class="controls-bar">
+  <button id="runBtn" onclick="runSimulation()">▶ Run Simulation</button>
+  <span style="color:#8b949e;font-size:13px" id="simTime"></span>
+</div>
+
+<main>
+  <!-- Left: Plot + Results -->
+  <div class="left-panel">
+    <div class="plot-area" id="plotArea">
+      <div class="plot-placeholder" id="plotPlaceholder">
+        Configure parameters on the right and click <strong>Run Simulation</strong>
+      </div>
+      <canvas id="plotCanvas" style="display:none"></canvas>
+    </div>
+    <div class="results-area" id="resultsArea">
+      <div class="result-item"><span class="label">CD</span>
+        <span><span class="value" id="resCd">—</span><span class="unit">nm</span></span></div>
+      <div class="result-item"><span class="label">NILS</span>
+        <span><span class="value" id="resNils">—</span><span class="unit"></span></span></div>
+      <div class="result-item"><span class="label">Contrast</span>
+        <span><span class="value" id="resContrast">—</span><span class="unit">%</span></span></div>
+      <div class="result-item"><span class="label">Dose</span>
+        <span><span class="value" id="resDose">—</span><span class="unit">mJ/cm²</span></span></div>
+    </div>
+  </div>
+
+  <!-- Right: Parameters -->
+  <div class="right-panel">
+    <h3>🔭 Optics</h3>
+    <div class="param-group">
+      <label>NA <span class="val" id="naVal">0.33</span></label>
+      <input type="range" id="na" min="0.1" max="0.55" step="0.01" value="0.33" oninput="syncVal(this)">
+      <input type="number" step="0.01" min="0.1" max="0.55" value="0.33" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Coherence σ <span class="val" id="sigmaVal">0.8</span></label>
+      <input type="range" id="sigma" min="0.1" max="1.0" step="0.05" value="0.8" oninput="syncVal(this)">
+      <input type="number" step="0.05" min="0.1" max="1.0" value="0.8" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Illumination</label>
+      <select id="illum">
+        <option value="conventional">Conventional</option>
+        <option value="annular" selected>Annular</option>
+        <option value="dipole">Dipole</option>
+        <option value="quasar">Quasar</option>
+      </select>
+    </div>
+
+    <h3>🎯 Mask</h3>
+    <div class="param-group">
+      <label>Period <span class="val" id="periodVal">64</span></label>
+      <input type="range" id="period" min="20" max="200" step="1" value="64" oninput="syncVal(this)">
+      <input type="number" step="1" min="20" max="200" value="64" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>CD target <span class="val" id="cdVal">32</span></label>
+      <input type="range" id="cd" min="8" max="100" step="1" value="32" oninput="syncVal(this)">
+      <input type="number" step="1" min="8" max="100" value="32" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Absorber</label>
+      <select id="absorber">
+        <option value="Ta" selected>Ta</option>
+        <option value="Cr">Cr</option>
+        <option value="Ni">Ni</option>
+        <option value="Au">Au</option>
+      </select>
+    </div>
+
+    <h3>💡 Resist</h3>
+    <div class="param-group">
+      <label>Dose <span class="val" id="doseVal">20</span> mJ/cm²</label>
+      <input type="range" id="dose" min="5" max="60" step="0.5" value="20" oninput="syncVal(this)">
+      <input type="number" step="0.5" min="5" max="60" value="20" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Focus <span class="val" id="focusVal">0</span> nm</label>
+      <input type="range" id="focus" min="-150" max="150" step="5" value="0" oninput="syncVal(this)">
+      <input type="number" step="5" min="-150" max="150" value="0" onchange="syncSlider(this)">
+    </div>
+    <div class="param-group">
+      <label>Resist thickness <span class="val" id="thickVal">30</span> nm</label>
+      <input type="range" id="thick" min="10" max="100" step="1" value="30" oninput="syncVal(this)">
+      <input type="number" step="1" min="10" max="100" value="30" onchange="syncSlider(this)">
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Chart instance ──
+let chart = null;
+
+// ── Sync slider ↔ number ──
+function syncVal(el) {
+  const id = el.id;
+  const valSpan = document.getElementById(id + 'Val');
+  if (valSpan) valSpan.textContent = el.value;
+  const num = el.parentElement.querySelector('input[type="number"]');
+  if (num) num.value = el.value;
+}
+function syncSlider(el) {
+  const id = el.id;
+  const range = document.getElementById(id);
+  if (range) { range.value = el.value; syncVal(range); }
+}
+
+// ── Gather params ──
+function getParams() {
+  return {
+    na: parseFloat(document.getElementById('na').value),
+    sigma: parseFloat(document.getElementById('sigma').value),
+    illum: document.getElementById('illum').value,
+    period_nm: parseFloat(document.getElementById('period').value),
+    cd_nm: parseFloat(document.getElementById('cd').value),
+    absorber: document.getElementById('absorber').value,
+    dose: parseFloat(document.getElementById('dose').value),
+    focus_nm: parseFloat(document.getElementById('focus').value),
+    thickness_nm: parseFloat(document.getElementById('thick').value),
+  };
+}
+
+// ── Run simulation ──
+async function runSimulation() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running...';
+  document.getElementById('simTime').textContent = '';
+
+  const p = getParams();
+  const startTime = performance.now();
+
+  try {
+    const body = {
+      config: {
+        aerial: {
+          na: p.na,
+          illumination_sigma: p.sigma,
+          illumination_shape: p.illum,
+        },
+        mask: {
+          layout: 'linespace',
+          pitch_nm: p.period_nm,
+          cd_nm: p.cd_nm,
+          absorber_material: p.absorber,
+        },
+        resist: {
+          dose_mJ_cm2: p.dose,
+          thickness_nm: p.thickness_nm,
+        },
+      },
+    };
+
+    const resp = await fetch('/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const data = await resp.json();
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    document.getElementById('simTime').textContent = `⏱ ${elapsed}s`;
+
+    // Parse results
+    const results = {};
+    for (const r of data.results || []) {
+      results[r.metric] = r.value;
+    }
+
+    document.getElementById('resCd').textContent = (results.cd ?? '—').toFixed(1);
+    document.getElementById('resNils').textContent = (results.nils ?? '—').toFixed(2);
+    document.getElementById('resContrast').textContent = (results.contrast ?? '—').toFixed(1);
+    document.getElementById('resDose').textContent = p.dose.toFixed(1);
+
+    // Draw plot
+    if (data.raw && data.raw.aerial_profile_nm) {
+      drawPlot(data.raw.aerial_profile_nm, p.period_nm);
+    } else {
+      drawMockPlot(p);
+    }
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('simTime').textContent = '❌ Error';
+    // Fallback: draw mock
+    drawMockPlot(p);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Run Simulation';
+}
+
+// ── Draw plot ──
+function drawPlot(profile, periodNm) {
+  const canvas = document.getElementById('plotCanvas');
+  const placeholder = document.getElementById('plotPlaceholder');
+  canvas.style.display = 'block';
+  placeholder.style.display = 'none';
+
+  const parent = canvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  const w = parent.clientWidth - 32;
+  const h = parent.clientHeight - 32;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  if (chart) { chart.destroy(); chart = null; }
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 30, bottom: 35, left: 50, right: 20 };
+  const pw = w - pad.left - pad.right;
+  const ph = h - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = '#161b22';
+  ctx.fillRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ph * i) / 4;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
+  }
+
+  // Axes labels
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Position [nm]', pad.left + pw / 2, h - 4);
+
+  ctx.save();
+  ctx.translate(14, pad.top + ph / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Intensity', 0, 0);
+  ctx.restore();
+
+  // Y-axis
+  ctx.fillStyle = '#8b949e';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + ph - (ph * i) / 4;
+    ctx.fillText((i / 4).toFixed(1), pad.left - 6, y + 4);
+  }
+
+  // X-axis
+  ctx.textAlign = 'center';
+  const n = profile.length;
+  const xMin = -periodNm / 2;
+  const xMax = periodNm / 2;
+  const xStep = (xMax - xMin) / (n - 1);
+  for (let i = 0; i <= 4; i++) {
+    const x = xMin + (xMax - xMin) * i / 4;
+    ctx.fillText(x.toFixed(0), pad.left + (pw * i) / 4, h - pad.bottom + 16);
+  }
+
+  // Plot line
+  const maxVal = Math.max(...profile, 0.001);
+  ctx.beginPath();
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < n; i++) {
+    const x = pad.left + (i / (n - 1)) * pw;
+    const y = pad.top + ph - (profile[i] / maxVal) * ph;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Threshold line
+  const threshY = pad.top + ph - 0.5 * ph;
+  ctx.strokeStyle = '#f85149';
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.left, threshY);
+  ctx.lineTo(w - pad.right, threshY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#f85149';
+  ctx.textAlign = 'left';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.fillText('threshold', w - pad.right - 65, threshY - 4);
+
+  // Title
+  ctx.fillStyle = '#e6edf3';
+  ctx.font = '13px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Aerial Image Cross-Section', pad.left + pw / 2, 18);
+}
+
+// ── Mock plot (placeholder) ──
+function drawMockPlot(p) {
+  const n = 200;
+  const profile = [];
+  const period = p.period_nm;
+  const focus = p.focus_nm;
+  const defocusBlur = Math.max(0.05, 1 - Math.abs(focus) / 200);
+
+  for (let i = 0; i < n; i++) {
+    const x = (-period / 2) + (period * i) / (n - 1);
+    const duty = p.cd_nm / period;
+    const edge = period * duty / 2;
+
+    // Simple aerial image approximation
+    const raw = Math.abs(x) < edge ? 0.15 : 0.9;
+    const smooth = raw + 0.35 * (Math.sin(x * 4 / period * Math.PI) * defocusBlur);
+    const blurred = smooth + (0.4 - 0.4 * defocusBlur) * (Math.cos(x * 8 / period * Math.PI) * 0.3);
+    profile.push(Math.max(0, Math.min(1, blurred)));
+  }
+
+  drawPlot(profile, period);
+}
+
+// ── Health check ──
+async function checkHealth() {
+  try {
+    const resp = await fetch('/health');
+    const data = await resp.json();
+    document.getElementById('statusDot').className = 'status-dot online';
+    document.getElementById('statusText').textContent = 'online';
+    document.getElementById('versionText').textContent = `v${data.version}`;
+  } catch {
+    document.getElementById('statusDot').className = 'status-dot offline';
+    document.getElementById('statusText').textContent = 'offline';
+  }
+}
+
+// ── Resize handler ──
+window.addEventListener('resize', () => {
+  const canvas = document.getElementById('plotCanvas');
+  if (canvas.style.display !== 'none') {
+    // Re-run with current plot data
+    const p = getParams();
+    drawMockPlot(p);
+  }
+});
+
+checkHealth();
+</script>
+</body>
+</html>

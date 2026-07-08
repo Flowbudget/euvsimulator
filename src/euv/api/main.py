@@ -11,7 +11,7 @@ Endpoints
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -29,6 +29,8 @@ from euv.api.schemas import (
     SimulationResult,
 )
 from euv.materials import _ELEMENT_TABLE, get_cxro_table
+from euv.pipeline import run_simulation as run_pipeline
+from euv.pipeline import SimulationConfig as PipelineConfig
 
 # ──────────────────────────────────────────────
 # App instance
@@ -48,6 +50,12 @@ app = FastAPI(
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/simulate", include_in_schema=False)
+async def serve_simulate_ui() -> FileResponse:
+    """Serve the interactive simulation GUI."""
+    return FileResponse(os.path.join(STATIC_DIR, "simulate.html"), media_type="text/html")
 
 
 @app.get("/", include_in_schema=False)
@@ -95,39 +103,58 @@ async def run_simulation(req: SimulationRequest) -> SimulationResponse:
     """Execute a full EUV lithography simulation pipeline.
 
     The simulation proceeds through:
-    1. Aerial image formation (Abbe/Hopkins imaging)
-    2. Mask-3D RCWA diffraction
-    3. Resist exposure and development (CAR or MOR)
-
-    .. note::
-
-        The full pipeline integration is planned for Sprint 6; this endpoint
-        currently returns validated configuration and placeholder metrics.
+    1. Mask-3D RCWA diffraction
+    2. Aerial image formation (Abbe imaging)
+    3. Resist exposure + PEB + development
+    4. CD extraction + NILS computation
     """
-    cfg = req.config
+    cfg_api = req.config
 
-    # ── Placeholder: real pipeline will wire up aerial → mask → resist ── #
-    # For now, return the validated config and a stub result.
+    # Map API schema → pipeline config
+    pipe_cfg = PipelineConfig(
+        na=cfg_api.aerial.na,
+        sigma=cfg_api.aerial.illumination_sigma,
+        period_nm=cfg_api.mask.pitch_nm,
+        line_width_nm=cfg_api.mask.cd_nm,
+        absorber_material=cfg_api.mask.absorber_material,
+        absorber_height_nm=cfg_api.mask.absorber_height_nm,
+        dose_mj_cm2=cfg_api.resist.dose_mJ_cm2,
+        device="cpu",
+    )
+
+    try:
+        result = run_pipeline(pipe_cfg)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    # Aerial profile (centre row) for the frontend plot
+    aerial_profile = result.aerial_image[result.aerial_image.shape[0] // 2, :].tolist()
+    resist_profile = result.resist_profile[result.resist_profile.shape[0] // 2, :].tolist()
+
     results: List[SimulationResult] = [
+        SimulationResult(stage="aerial", metric="nils", value=result.nils_value, unit=""),
+        SimulationResult(stage="resist", metric="cd", value=result.cd_nm, unit="nm"),
         SimulationResult(
-            stage="aerial",
-            metric="nils",
-            value=2.15,
-            unit="1",
-        ),
-        SimulationResult(
-            stage="resist",
-            metric="cd",
-            value=cfg.mask.cd_nm,
-            unit="nm",
+            stage="aerial", metric="contrast",
+            value=(
+                (float(result.aerial_image.max()) - float(result.aerial_image.min()))
+                / (float(result.aerial_image.max()) + float(result.aerial_image.min()) + 1e-12)
+                * 100
+            ),
+            unit="%",
         ),
     ]
 
     return SimulationResponse(
         status="completed",
-        config=cfg,
+        config=cfg_api,
         results=results,
-        raw=None,
+        raw={
+            "aerial_profile_nm": aerial_profile,
+            "aerial_shape": list(result.aerial_image.shape),
+            "resist_profile": resist_profile,
+            "absorber_reflectivity": result.absorber_reflectivity,
+        },
     )
 
 
