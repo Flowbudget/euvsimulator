@@ -24,6 +24,7 @@ header h1 span { color: #58a6ff; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .status-dot.online { background: #3fb950; box-shadow: 0 0 6px #3fb95080; }
 .status-dot.offline { background: #f85149; }
+.status-dot.error { background: #f0883e; box-shadow: 0 0 6px #f0883e80; }
 .controls-bar {
   background: #161b22; border-bottom: 1px solid #30363d;
   padding: 10px 24px; display: flex; gap: 12px; align-items: center; flex-shrink: 0;
@@ -31,9 +32,24 @@ header h1 span { color: #58a6ff; }
 .controls-bar button {
   background: #238636; color: #fff; border: none; padding: 7px 20px;
   border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+  transition: background 0.15s, opacity 0.15s;
 }
 .controls-bar button:hover { background: #2ea043; }
 .controls-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+/* ── Error Banner ── */
+.error-banner {
+  display: none; background: #3d1418; border: 1px solid #da3633;
+  color: #ffa198; padding: 8px 24px; font-size: 13px; flex-shrink: 0;
+  align-items: center; gap: 8px;
+}
+.error-banner.visible { display: flex; }
+.error-banner .err-icon { font-size: 16px; line-height: 1; }
+.error-banner .err-msg { flex: 1; }
+.error-banner .err-dismiss {
+  cursor: pointer; opacity: 0.6; font-size: 16px; line-height: 1;
+  background: none; border: none; color: #ffa198; padding: 2px 6px;
+}
+.error-banner .err-dismiss:hover { opacity: 1; }
 
 /* ── Main Grid ── */
 main {
@@ -89,16 +105,34 @@ main {
   color: #e6edf3; padding: 5px 8px; border-radius: 4px; font-size: 13px;
   margin-top: 3px;
 }
+.param-group input[type="number"]:focus {
+  border-color: #58a6ff; outline: none;
+}
 select {
   width: 100%; background: #161b22; border: 1px solid #30363d;
   color: #e6edf3; padding: 5px 8px; border-radius: 4px; font-size: 13px;
 }
+/* ── Loading Overlay ── */
+.loading-overlay {
+  position: absolute; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(13, 17, 23, 0.8);
+  z-index: 10; flex-direction: column; gap: 8px;
+}
+.loading-overlay.visible { display: flex; }
+.spinner {
+  width: 32px; height: 32px; border: 3px solid #30363d;
+  border-top-color: #58a6ff; border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-overlay .label { color: #8b949e; font-size: 13px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>OpEnUV — Simulation</h1>
+  <h1>OpEnUV — <span>Simulation</span></h1>
   <div class="header-status">
     <span class="status-dot offline" id="statusDot"></span>
     <span id="statusText">offline</span>
@@ -107,8 +141,15 @@ select {
 </header>
 
 <div class="controls-bar">
-  <button id="runBtn" onclick="runSimulation()">▶ Run Simulation</button>
+  <button id="runBtn">▶ Run Simulation</button>
   <span style="color:#8b949e;font-size:13px" id="simTime"></span>
+</div>
+
+<!-- Error banner (hidden by default) -->
+<div class="error-banner" id="errorBanner">
+  <span class="err-icon">⚠</span>
+  <span class="err-msg" id="errorText"></span>
+  <button class="err-dismiss" id="errorDismiss" aria-label="Dismiss">&times;</button>
 </div>
 
 <main>
@@ -118,7 +159,11 @@ select {
       <div class="plot-placeholder" id="plotPlaceholder">
         Configure parameters on the right and click <strong>Run Simulation</strong>
       </div>
-      <canvas id="plotCanvas" style="display:none"></canvas>
+      <canvas id="plotCanvas"></canvas>
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <span class="label">Computing aerial image…</span>
+      </div>
     </div>
     <div class="results-area" id="resultsArea">
       <div class="result-item"><span class="label">CD</span>
@@ -127,6 +172,8 @@ select {
         <span><span class="value" id="resNils">—</span><span class="unit"></span></span></div>
       <div class="result-item"><span class="label">Contrast</span>
         <span><span class="value" id="resContrast">—</span><span class="unit">%</span></span></div>
+      <div class="result-item"><span class="label">Reflectivity</span>
+        <span><span class="value" id="resRefl">—</span><span class="unit">%</span></span></div>
       <div class="result-item"><span class="label">Dose</span>
         <span><span class="value" id="resDose">—</span><span class="unit">mJ/cm²</span></span></div>
     </div>
@@ -148,8 +195,8 @@ select {
     <div class="param-group">
       <label>Illumination</label>
       <select id="illum">
-        <option value="conventional">Conventional</option>
-        <option value="annular" selected>Annular</option>
+        <option value="conventional" selected>Conventional</option>
+        <option value="annular">Annular</option>
         <option value="dipole">Dipole (X)</option>
         <option value="dipole_y">Dipole (Y)</option>
         <option value="quasar">Quasar (CQuad)</option>
@@ -169,7 +216,8 @@ select {
     </div>
     <div class="param-group">
       <label>Absorber</label>
-      <input list="elements" id="absorber" value="Ta" placeholder="Element symbol…" style="width:100%;background:#161b22;border:1px solid #30363d;color:#e6edf3;padding:5px 8px;border-radius:4px;font-size:13px;font-family:inherit">
+      <input list="elements" id="absorber" value="Ta" placeholder="Element symbol…"
+             style="width:100%;background:#161b22;border:1px solid #30363d;color:#e6edf3;padding:5px 8px;border-radius:4px;font-size:13px;font-family:inherit">
       <datalist id="elements">
         <option value="Ag"><option value="Al"><option value="Au"><option value="Co">
         <option value="Cr"><option value="Cu"><option value="Fe"><option value="Ge">
@@ -198,10 +246,10 @@ select {
       <input type="number" step="0.1" min="2.0" max="6.0" value="4.1" onchange="syncSlider(this)">
     </div>
     <div class="param-group">
-      <label>Gamma (Mo/Si ratio) <span class="val" id="mlGammaVal">—</span></label>
-      <input type="range" id="mlGamma" min="0.25" max="0.55" step="0.01" value="0.4" oninput="syncVal(this)">
-      <input type="number" step="0.01" min="0.25" max="0.55" value="0.4" onchange="syncSlider(this)">
-      <span style="font-size:11px;color:#8b949e">Setzt Si-Dicke außer Kraft wenn ≠ 0.4</span>
+      <label>Gamma (Mo fraction) <span class="val" id="mlGammaVal">0.40</span></label>
+      <input type="range" id="mlGamma" min="0.25" max="0.55" step="0.01" value="0.40" oninput="syncVal(this)">
+      <input type="number" step="0.01" min="0.25" max="0.55" value="0.40" onchange="syncSlider(this)">
+      <span style="font-size:11px;color:#8b949e">When ≠ 0.40, gamma overrides Mo/Si thicknesses</span>
     </div>
     <div class="param-group">
       <label>Lin. Grading <span class="val" id="mlGradLinVal">0</span> nm</label>
@@ -239,57 +287,137 @@ select {
 </main>
 
 <script>
-// ── Chart instance ──
-let chart = null;
+(function () {
+  'use strict';
 
-// ── Sync slider ↔ number ──
-function syncVal(el) {
-  const id = el.id;
-  const valSpan = document.getElementById(id + 'Val');
-  if (valSpan) valSpan.textContent = el.value;
-  const num = el.parentElement.querySelector('input[type="number"]');
-  if (num) num.value = el.value;
-}
-function syncSlider(el) {
-  const id = el.id;
-  const range = document.getElementById(id);
-  if (range) { range.value = el.value; syncVal(range); }
-}
+  // ── Constants ──
+  const GAMMA_DEFAULT = 0.40;       // gamma slider value that means "use Mo/Si directly"
+  const NA_MIN = 0.1, NA_MAX = 0.55;
+  const SIGMA_MIN = 0.1, SIGMA_MAX = 1.0;
+  const PERIOD_MIN = 20, PERIOD_MAX = 200;
+  const CD_MIN = 8, CD_MAX = 100;
+  const DOSE_MIN = 5, DOSE_MAX = 60;
+  const FOCUS_MIN = -150, FOCUS_MAX = 150;
+  const THICK_MIN = 10, THICK_MAX = 100;
 
-// ── Gather params ──
-function getParams() {
-  return {
-    na: parseFloat(document.getElementById('na').value),
-    sigma: parseFloat(document.getElementById('sigma').value),
-    illum: document.getElementById('illum').value,
-    period_nm: parseFloat(document.getElementById('period').value),
-    cd_nm: parseFloat(document.getElementById('cd').value),
-    absorber: document.getElementById('absorber').value,
-    dose: parseFloat(document.getElementById('dose').value),
-    focus_nm: parseFloat(document.getElementById('focus').value),
-    thickness_nm: parseFloat(document.getElementById('thick').value),
-    mlPairs: parseInt(document.getElementById('mlPairs').value),
-    mlMo: parseFloat(document.getElementById('mlMo').value),
-    mlSi: parseFloat(document.getElementById('mlSi').value),
-    mlGamma: parseFloat(document.getElementById('mlGamma').value),
-    mlGradLin: parseFloat(document.getElementById('mlGradLin').value),
-    mlGradPara: parseFloat(document.getElementById('mlGradPara').value),
-    mlRough: parseFloat(document.getElementById('mlRough').value),
+  // ── State ──
+  let chartInstance = null;
+  let lastProfile = null;   // { profile, periodNm } for resize redraw
+  let isSimulating = false;
+
+  // ── DOM cache ──
+  const $ = id => document.getElementById(id);
+  const dom = {
+    runBtn:       $('runBtn'),
+    simTime:      $('simTime'),
+    errorBanner:  $('errorBanner'),
+    errorText:    $('errorText'),
+    errorDismiss: $('errorDismiss'),
+    loading:      $('loadingOverlay'),
+    placeholder:  $('plotPlaceholder'),
+    canvas:       $('plotCanvas'),
+    statusDot:    $('statusDot'),
+    statusText:   $('statusText'),
+    versionText:  $('versionText'),
+    resCd:        $('resCd'),
+    resNils:      $('resNils'),
+    resContrast:  $('resContrast'),
+    resRefl:      $('resRefl'),
+    resDose:      $('resDose'),
   };
-}
 
-// ── Run simulation ──
-async function runSimulation() {
-  const btn = document.getElementById('runBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Running...';
-  document.getElementById('simTime').textContent = '';
+  // ── Error handling ──
+  function showError(msg) {
+    dom.errorText.textContent = msg;
+    dom.errorBanner.classList.add('visible');
+    console.error('[OpEnUV]', msg);
+  }
 
-  const p = getParams();
-  const startTime = performance.now();
+  function hideError() {
+    dom.errorBanner.classList.remove('visible');
+  }
 
-  try {
-    const body = {
+  dom.errorDismiss.addEventListener('click', hideError);
+
+  // ── Loading state ──
+  function setLoading(loading, label) {
+    isSimulating = loading;
+    dom.runBtn.disabled = loading;
+    dom.runBtn.textContent = loading ? '⏳ Running…' : '▶ Run Simulation';
+    if (loading) {
+      dom.simTime.textContent = '';
+      dom.loading.querySelector('.label').textContent = label || 'Computing…';
+    }
+    dom.loading.classList.toggle('visible', loading);
+  }
+
+  // ── Slider / Number sync ──
+  window.syncVal = function (el) {
+    const valSpan = document.getElementById(el.id + 'Val');
+    if (valSpan) valSpan.textContent = Number(el.value).toFixed(
+      el.step && el.step.includes('.')
+        ? el.step.split('.')[1].length
+        : 0
+    );
+    const num = el.parentElement.querySelector('input[type="number"]');
+    if (num) num.value = el.value;
+  };
+
+  window.syncSlider = function (el) {
+    const range = document.getElementById(el.id);
+    if (range) { range.value = el.value; window.syncVal(range); }
+  };
+
+  // ── Parameter gathering ──
+  function getParams() {
+    const p = {
+      na:           parseFloat($('na').value),
+      sigma:        parseFloat($('sigma').value),
+      illum:        $('illum').value,
+      period_nm:    parseFloat($('period').value),
+      cd_nm:        parseFloat($('cd').value),
+      absorber:     $('absorber').value.trim() || 'Ta',
+      dose:         parseFloat($('dose').value),
+      focus_nm:     parseFloat($('focus').value),
+      thickness_nm: parseFloat($('thick').value),
+      mlPairs:      parseInt($('mlPairs').value, 10) || 0,
+      mlMo:         parseFloat($('mlMo').value) || 2.8,
+      mlSi:         parseFloat($('mlSi').value) || 4.1,
+      mlGamma:      parseFloat($('mlGamma').value) || 0.40,
+      mlGradLin:    parseFloat($('mlGradLin').value) || 0,
+      mlGradPara:   parseFloat($('mlGradPara').value) || 0,
+      mlRough:      parseFloat($('mlRough').value) || 0,
+    };
+    return p;
+  }
+
+  // ── Parameter validation ──
+  function validateParams(p) {
+    const errs = [];
+    if (isNaN(p.na) || p.na < NA_MIN || p.na > NA_MAX)
+      errs.push(`NA must be ${NA_MIN}–${NA_MAX}`);
+    if (isNaN(p.sigma) || p.sigma < SIGMA_MIN || p.sigma > SIGMA_MAX)
+      errs.push(`Sigma must be ${SIGMA_MIN}–${SIGMA_MAX}`);
+    if (isNaN(p.period_nm) || p.period_nm < PERIOD_MIN || p.period_nm > PERIOD_MAX)
+      errs.push(`Period must be ${PERIOD_MIN}–${PERIOD_MAX}`);
+    if (isNaN(p.cd_nm) || p.cd_nm < CD_MIN || p.cd_nm > CD_MAX)
+      errs.push(`CD must be ${CD_MIN}–${CD_MAX}`);
+    if (isNaN(p.dose) || p.dose < DOSE_MIN || p.dose > DOSE_MAX)
+      errs.push(`Dose must be ${DOSE_MIN}–${DOSE_MAX}`);
+    if (p.cd_nm >= p.period_nm)
+      errs.push('CD must be smaller than period');
+    if (p.absorber.length < 1 || p.absorber.length > 4)
+      errs.push('Invalid absorber symbol');
+    if (isNaN(p.mlPairs) || p.mlPairs < 0)
+      errs.push('Bilayer count must be ≥ 0');
+    return errs;
+  }
+
+  // ── API request body construction ──
+  function buildRequestBody(p) {
+    // gamma: only send a non-default value so the backend can distinguish
+    const gammaDiffers = Math.abs(p.mlGamma - GAMMA_DEFAULT) > 0.001;
+    return {
       config: {
         aerial: {
           na: p.na,
@@ -307,7 +435,7 @@ async function runSimulation() {
           multilayer_pairs: p.mlPairs,
           ml_d_mo_nm: p.mlMo,
           ml_d_si_nm: p.mlSi,
-          ml_gamma: p.mlGamma !== 0.4 ? p.mlGamma : null,
+          ml_gamma: gammaDiffers ? p.mlGamma : null,
           ml_grading_linear_nm: p.mlGradLin,
           ml_grading_parabolic_nm: p.mlGradPara,
           ml_roughness_nm: p.mlRough,
@@ -318,198 +446,221 @@ async function runSimulation() {
         },
       },
     };
-
-    const resp = await fetch('/simulate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-    const data = await resp.json();
-    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-    document.getElementById('simTime').textContent = `⏱ ${elapsed}s`;
-
-    // Parse results
-    const results = {};
-    for (const r of data.results || []) {
-      results[r.metric] = r.value;
-    }
-
-    document.getElementById('resCd').textContent = (results.cd ?? '—').toFixed(1);
-    document.getElementById('resNils').textContent = (results.nils ?? '—').toFixed(2);
-    document.getElementById('resContrast').textContent = (results.contrast ?? '—').toFixed(1);
-    document.getElementById('resDose').textContent = p.dose.toFixed(1);
-
-    // Draw plot
-    if (data.raw && data.raw.aerial_profile_nm) {
-      drawPlot(data.raw.aerial_profile_nm, p.period_nm);
-    } else {
-      drawMockPlot(p);
-    }
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('simTime').textContent = '❌ Error';
-    // Fallback: draw mock
-    drawMockPlot(p);
   }
 
-  btn.disabled = false;
-  btn.textContent = '▶ Run Simulation';
-}
+  // ── Run simulation ──
+  async function runSimulation() {
+    if (isSimulating) return;
+    hideError();
 
-// ── Draw plot ──
-function drawPlot(profile, periodNm) {
-  const canvas = document.getElementById('plotCanvas');
-  const placeholder = document.getElementById('plotPlaceholder');
-  canvas.style.display = 'block';
-  placeholder.style.display = 'none';
-
-  const parent = canvas.parentElement;
-  const dpr = window.devicePixelRatio || 1;
-  const w = parent.clientWidth - 32;
-  const h = parent.clientHeight - 32;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-
-  if (chart) { chart.destroy(); chart = null; }
-
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
-  const pad = { top: 30, bottom: 35, left: 50, right: 20 };
-  const pw = w - pad.left - pad.right;
-  const ph = h - pad.top - pad.bottom;
-  ctx.clearRect(0, 0, w, h);
-
-  // Background
-  ctx.fillStyle = '#161b22';
-  ctx.fillRect(0, 0, w, h);
-
-  // Grid
-  ctx.strokeStyle = '#30363d';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (ph * i) / 4;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
-  }
-
-  // Axes labels
-  ctx.fillStyle = '#8b949e';
-  ctx.font = '11px -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Position [nm]', pad.left + pw / 2, h - 4);
-
-  ctx.save();
-  ctx.translate(14, pad.top + ph / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('Intensity', 0, 0);
-  ctx.restore();
-
-  // Y-axis
-  ctx.fillStyle = '#8b949e';
-  ctx.textAlign = 'right';
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + ph - (ph * i) / 4;
-    ctx.fillText((i / 4).toFixed(1), pad.left - 6, y + 4);
-  }
-
-  // X-axis
-  ctx.textAlign = 'center';
-  const n = profile.length;
-  const xMin = -periodNm / 2;
-  const xMax = periodNm / 2;
-  const xStep = (xMax - xMin) / (n - 1);
-  for (let i = 0; i <= 4; i++) {
-    const x = xMin + (xMax - xMin) * i / 4;
-    ctx.fillText(x.toFixed(0), pad.left + (pw * i) / 4, h - pad.bottom + 16);
-  }
-
-  // Plot line
-  const maxVal = Math.max(...profile, 0.001);
-  ctx.beginPath();
-  ctx.strokeStyle = '#58a6ff';
-  ctx.lineWidth = 2;
-  for (let i = 0; i < n; i++) {
-    const x = pad.left + (i / (n - 1)) * pw;
-    const y = pad.top + ph - (profile[i] / maxVal) * ph;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-
-  // Threshold line
-  const threshY = pad.top + ph - 0.5 * ph;
-  ctx.strokeStyle = '#f85149';
-  ctx.setLineDash([4, 4]);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad.left, threshY);
-  ctx.lineTo(w - pad.right, threshY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = '#f85149';
-  ctx.textAlign = 'left';
-  ctx.font = '10px -apple-system, sans-serif';
-  ctx.fillText('threshold', w - pad.right - 65, threshY - 4);
-
-  // Title
-  ctx.fillStyle = '#e6edf3';
-  ctx.font = '13px -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Aerial Image Cross-Section', pad.left + pw / 2, 18);
-}
-
-// ── Mock plot (placeholder) ──
-function drawMockPlot(p) {
-  const n = 200;
-  const profile = [];
-  const period = p.period_nm;
-  const focus = p.focus_nm;
-  const defocusBlur = Math.max(0.05, 1 - Math.abs(focus) / 200);
-
-  for (let i = 0; i < n; i++) {
-    const x = (-period / 2) + (period * i) / (n - 1);
-    const duty = p.cd_nm / period;
-    const edge = period * duty / 2;
-
-    // Simple aerial image approximation
-    const raw = Math.abs(x) < edge ? 0.15 : 0.9;
-    const smooth = raw + 0.35 * (Math.sin(x * 4 / period * Math.PI) * defocusBlur);
-    const blurred = smooth + (0.4 - 0.4 * defocusBlur) * (Math.cos(x * 8 / period * Math.PI) * 0.3);
-    profile.push(Math.max(0, Math.min(1, blurred)));
-  }
-
-  drawPlot(profile, period);
-}
-
-// ── Health check ──
-async function checkHealth() {
-  try {
-    const resp = await fetch('/health');
-    const data = await resp.json();
-    document.getElementById('statusDot').className = 'status-dot online';
-    document.getElementById('statusText').textContent = 'online';
-    document.getElementById('versionText').textContent = `v${data.version}`;
-  } catch {
-    document.getElementById('statusDot').className = 'status-dot offline';
-    document.getElementById('statusText').textContent = 'offline';
-  }
-}
-
-// ── Resize handler ──
-window.addEventListener('resize', () => {
-  const canvas = document.getElementById('plotCanvas');
-  if (canvas.style.display !== 'none') {
-    // Re-run with current plot data
     const p = getParams();
-    drawMockPlot(p);
-  }
-});
+    const errs = validateParams(p);
+    if (errs.length > 0) {
+      showError(errs.join('; '));
+      return;
+    }
 
-checkHealth();
+    setLoading(true, 'Computing aerial image…');
+    const startTime = performance.now();
+
+    try {
+      const body = buildRequestBody(p);
+      const resp = await fetch('/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        let detail = `HTTP ${resp.status}`;
+        try {
+          const errData = await resp.json();
+          if (errData.detail) detail = errData.detail;
+        } catch (_) { /* ignore parse errors */ }
+        throw new Error(detail);
+      }
+
+      const data = await resp.json();
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+      dom.simTime.textContent = `⏱ ${elapsed}s`;
+
+      // Parse results
+      const results = {};
+      for (const r of data.results || []) {
+        results[r.metric] = r.value;
+      }
+
+      dom.resCd.textContent = (results.cd !== undefined)
+        ? Number(results.cd).toFixed(1) : '—';
+      dom.resNils.textContent = (results.nils !== undefined)
+        ? Number(results.nils).toFixed(2) : '—';
+      dom.resContrast.textContent = (results.contrast !== undefined)
+        ? Number(results.contrast).toFixed(1) : '—';
+
+      // Reflectivity from raw, or compute from contrast
+      const refl = data.raw && data.raw.absorber_reflectivity;
+      dom.resRefl.textContent = refl !== undefined
+        ? (refl * 100).toFixed(1) : '—';
+      dom.resDose.textContent = p.dose.toFixed(1);
+
+      // Draw plot from real data
+      if (data.raw && data.raw.aerial_profile_nm) {
+        lastProfile = { profile: data.raw.aerial_profile_nm, periodNm: p.period_nm };
+        drawChart(lastProfile.profile, lastProfile.periodNm);
+      } else {
+        showError('Server returned no aerial profile data');
+      }
+
+    } catch (err) {
+      showError('Simulation failed: ' + err.message);
+      dom.simTime.textContent = '❌ Error';
+      // NEVER fall back to a mock plot — the user must see the error
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Chart drawing (Chart.js) ──
+  function drawChart(profile, periodNm) {
+    if (!profile || profile.length === 0) return;
+
+    dom.placeholder.style.display = 'none';
+    dom.canvas.style.display = 'block';
+
+    const parent = dom.canvas.parentElement;
+    const w = parent.clientWidth - 32;
+    const h = Math.max(parent.clientHeight - 32, 250);
+
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+
+    const n = profile.length;
+    const xMin = -periodNm / 2;
+    const xMax = periodNm / 2;
+    const labels = [];
+    for (let i = 0; i < n; i++) {
+      labels.push((xMin + (xMax - xMin) * i / (n - 1)).toFixed(1));
+    }
+    const maxVal = Math.max(...profile, 0.001);
+
+    chartInstance = new Chart(dom.canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Intensity',
+          data: profile,
+          borderColor: '#58a6ff',
+          backgroundColor: (ctx) => {
+            const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, parent.clientHeight);
+            g.addColorStop(0, 'rgba(88, 166, 255, 0.15)');
+            g.addColorStop(1, 'rgba(88, 166, 255, 0)');
+            return g;
+          },
+          fill: true,
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0,
+        }, {
+          label: 'Threshold (0.5)',
+          data: Array(n).fill(maxVal * 0.5),
+          borderColor: '#f85149',
+          borderWidth: 1,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        plugins: {
+          legend: {
+            labels: { color: '#8b949e', font: { size: 11 }, boxWidth: 12, padding: 12 },
+            position: 'top',
+          },
+          tooltip: {
+            backgroundColor: '#161b22',
+            titleColor: '#e6edf3',
+            bodyColor: '#e6edf3',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            callbacks: {
+              title: (items) => `Position: ${items[0].label} nm`,
+              label: (ctx) => {
+                if (ctx.dataset.label === 'Threshold (0.5)')
+                  return `Threshold: ${ctx.parsed.y.toFixed(2)}`;
+                return `Intensity: ${ctx.parsed.y.toFixed(4)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Position [nm]', color: '#8b949e' },
+            ticks: { color: '#8b949e', maxTicksLimit: 10 },
+            grid: { color: '#21262d' },
+          },
+          y: {
+            title: { display: true, text: 'Intensity', color: '#8b949e' },
+            ticks: {
+              color: '#8b949e',
+              callback: (v) => v.toFixed(1),
+            },
+            grid: { color: '#21262d' },
+            min: 0,
+          },
+        },
+      },
+    });
+  }
+
+  // ── Resize: redraw last result ──
+  function handleResize() {
+    if (lastProfile && chartInstance) {
+      // Chart.js handles responsive resize automatically
+      chartInstance.resize();
+    }
+  }
+
+  // ── Health check ──
+  async function checkHealth() {
+    try {
+      const resp = await fetch('/health');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      dom.statusDot.className = 'status-dot online';
+      dom.statusText.textContent = 'online';
+      dom.versionText.textContent = data.version ? `v${data.version}` : '';
+    } catch (_) {
+      dom.statusDot.className = 'status-dot offline';
+      dom.statusText.textContent = 'offline';
+      dom.versionText.textContent = '';
+    }
+  }
+
+  // ── Init ──
+  function init() {
+    dom.runBtn.addEventListener('click', runSimulation);
+    window.addEventListener('resize', handleResize);
+    checkHealth();
+    setInterval(checkHealth, 30000);
+
+    // Initialise displayed values
+    document.querySelectorAll('input[type="range"]').forEach((el) => {
+      window.syncVal(el);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
 </script>
 </body>
 </html>
