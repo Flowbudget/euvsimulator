@@ -38,3 +38,10 @@ docs/_build/
 .pytest_cache/
 coverage_html/
 .coverage
+.ruff_cache/
+
+# Session / planning artifacts (not code)
+session-context.md
+AGENT_FINISH_PROMPT.md
+*destructive-review*
+*OPUS-plan*

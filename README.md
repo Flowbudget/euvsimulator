@@ -16,7 +16,7 @@ euv serve                              # REST API on :8000
 git clone https://github.com/Flowbudget/OpEnUV.git
 cd OpEnUV
 pip install -e ".[dev]"
-pytest tests/ -q                      # 504 tests, all passing
+pytest tests/ -q                      # 517 tests, all passing
 ```
 
 ## Architecture
@@ -88,7 +88,7 @@ print(f"CD = {result.cd_nm:.2f} nm")
 | Docker Deployment | ✅ | Dockerfile + docker-compose |
 | Public Release | 🔜 | CI, PyPI, v1.0 |
 
-**504 tests, all passing.**
+**517 tests, all passing.**
 
 ## License
 
