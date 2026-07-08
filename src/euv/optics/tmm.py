@@ -104,20 +104,51 @@ def _admittance(
 # ──────────────────────────────────────────────
 
 
-def _interface_smatrix(eta_a: torch.Tensor, eta_b: torch.Tensor) -> torch.Tensor:
+def _interface_smatrix(eta_a: torch.Tensor, eta_b: torch.Tensor,
+                       roughness_nm: float | None = None,
+                       kz_a: torch.Tensor | None = None,
+                       kz_b: torch.Tensor | None = None) -> torch.Tensor:
     """Scattering matrix for an interface between media *a* and *b*.
 
     S = [[r_ab,  t_ba],
          [t_ab,  r_ba]]
+
+    When ``roughness_nm > 0``, the reflection coefficients are damped by
+    the **Névot–Croce factor**::
+
+        r_ab' = r_ab · exp(−2 · kz_a · kz_b · σ²)         [σ in metres]
+
+    This models interface roughness and interdiffusion at EUV wavelengths.
+    Transmission coefficients are unmodified in the standard Névot–Croce
+    approximation (C. Névot & P. Croce, Rev. Phys. Appl. 15, 1980).
+
+    Parameters
+    ----------
+    eta_a, eta_b : (...,) complex128
+        Admittances of the two media.
+    roughness_nm : float or None
+        RMS interface width in nm.  ``None`` or 0 → ideal interface.
+    kz_a, kz_b : (...,) complex128, optional
+        Perpendicular wavevector components.  Required when
+        ``roughness_nm > 0``.
 
     Shape: (..., 2, 2)
     """
     denom = eta_a + eta_b
     r_ab = (eta_a - eta_b) / denom
     t_ab = 2.0 * eta_a / denom
-    # From side b: r_ba = (η_b − η_a) / (η_a + η_b) = −r_ab
     r_ba = (eta_b - eta_a) / denom
     t_ba = 2.0 * eta_b / denom
+
+    if roughness_nm is not None and roughness_nm > 0.0:
+        if kz_a is None or kz_b is None:
+            raise ValueError("kz_a and kz_b are required when roughness_nm > 0")
+        # Névot–Croce damping: exp(-2 · kz_a · kz_b · σ²)
+        sigma_m = roughness_nm * 1e-9  # nm → m
+        sigma2 = sigma_m * sigma_m
+        nc_factor = torch.exp(-2.0 * kz_a * kz_b * sigma2)
+        r_ab = r_ab * nc_factor
+        r_ba = r_ba * nc_factor
 
     S = torch.zeros(*eta_a.shape, 2, 2, dtype=torch.complex128, device=eta_a.device)
     S[..., 0, 0] = r_ab
@@ -192,6 +223,7 @@ def stack_smatrix(
     n_incident: torch.Tensor,
     n_substrate: torch.Tensor,
     te: bool = True,
+    roughness_nm: float | None = None,
 ) -> torch.Tensor:
     """Total scattering matrix for a multilayer stack.
 
@@ -211,6 +243,9 @@ def stack_smatrix(
         Substrate index.
     te : bool
         True → TE,  False → TM.
+    roughness_nm : float or None
+        RMS interface roughness in nm for Névot–Croce damping.
+        None or 0 → ideal (abrupt) interfaces.
 
     Returns
     -------
@@ -238,9 +273,18 @@ def stack_smatrix(
         kz_all[:, j] = _kz(n_b[:, j], k0, n0_sin2)
         eta_all[:, j] = _admittance(n_b[:, j], kz_all[:, j], k0, te)
 
+    # kz and admittance for incident and substrate
+    kz_inc = _kz(n_inc, k0, n0_sin2)
+    eta_inc = _admittance(n_inc, kz_inc, k0, te)
+    kz_sub = _kz(n_sub, k0, n0_sin2)
+    eta_sub = _admittance(n_sub, kz_sub, k0, te)
+
     # Start with the top interface: incident medium → first layer
-    eta_inc = _admittance(n_inc, _kz(n_inc, k0, n0_sin2), k0, te)
-    S_total = _interface_smatrix(eta_inc, eta_all[:, 0])  # (W, 2, 2)
+    S_total = _interface_smatrix(
+        eta_inc, eta_all[:, 0],
+        roughness_nm=roughness_nm,
+        kz_a=kz_inc, kz_b=kz_all[:, 0],
+    )  # (W, 2, 2)
 
     # Iterate: layer propagation + next interface, layer by layer
     for j in range(N):
@@ -250,10 +294,16 @@ def stack_smatrix(
 
         # Interface to the next layer (or substrate)
         if j < N - 1:
-            S_iface = _interface_smatrix(eta_all[:, j], eta_all[:, j + 1])
+            S_iface = _interface_smatrix(
+                eta_all[:, j], eta_all[:, j + 1],
+                roughness_nm=roughness_nm,
+                kz_a=kz_all[:, j], kz_b=kz_all[:, j + 1],
+            )
         else:
             S_iface = _interface_smatrix(
-                eta_all[:, j], _admittance(n_sub, _kz(n_sub, k0, n0_sin2), k0, te)
+                eta_all[:, j], eta_sub,
+                roughness_nm=roughness_nm,
+                kz_a=kz_all[:, j], kz_b=kz_sub,
             )
         S_total = _redheffer_star(S_total, S_iface)
 
@@ -268,6 +318,7 @@ def reflectivity(
     n_incident: torch.Tensor = torch.tensor(1.0 + 0.0j),
     n_substrate: torch.Tensor = torch.tensor(1.0 + 0.0j),
     te: bool = True,
+    roughness_nm: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Intensity reflectivity and complex reflection coefficient.
 
@@ -280,6 +331,8 @@ def reflectivity(
     n_incident : complex128, optional
     n_substrate : complex128, optional
     te : bool, optional (default: True → TE)
+    roughness_nm : float or None, optional
+        RMS interface roughness [nm] for Névot–Croce damping.
 
     Returns
     -------
@@ -296,6 +349,7 @@ def reflectivity(
         n_incident,
         n_substrate,
         te=te,
+        roughness_nm=roughness_nm,
     )
     # Reflection coefficient r = S₁₁ (port 0 → port 0 = reflected wave)
     r = S[..., 0, 0]
@@ -316,10 +370,11 @@ def reflectivity_at_wavelength(
     n_incident: torch.Tensor = torch.tensor(1.0 + 0.0j),
     n_substrate: torch.Tensor = torch.tensor(1.0 + 0.0j),
     te: bool = True,
+    roughness_nm: float | None = None,
 ) -> float:
     """Single-wavelength reflectivity (scalar wrapper)."""
     wl = torch.tensor([wavelength_m], dtype=torch.float64)
-    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te)
+    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm)
     return float(R.item())
 
 
@@ -331,12 +386,26 @@ def reflectivity_scan(
     n_incident: torch.Tensor = torch.tensor(1.0 + 0.0j),
     n_substrate: torch.Tensor = torch.tensor(1.0 + 0.0j),
     te: bool = True,
+    roughness_nm: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Wavelength-scan reflectivity.
+
+    Parameters
+    ----------
+    n_layers : (N,) complex128
+    thicknesses : (N,) float64 [m]
+    wavelength_range : (wl_min, wl_max, npts)
+        Wavelength range and number of points.
+    theta0 : float [rad]
+    n_incident : complex128, optional
+    n_substrate : complex128, optional
+    te : bool
+    roughness_nm : float or None, optional
+        RMS interface roughness [nm] for Névot–Croce damping.
 
     Returns (wavelengths, R) both 1D tensors.
     """
     npts = wavelength_range[2]
     wl = torch.linspace(wavelength_range[0], wavelength_range[1], npts)
-    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te)
+    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm)
     return wl, R
