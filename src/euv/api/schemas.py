@@ -34,13 +34,14 @@ class AerialImageConfig(BaseModel):
     reduction_ratio: str = Field("4x", description="Projection reduction (4x or 8x)")
     illumination_sigma: float = Field(0.8, ge=0.0, le=1.0, description="Coherence factor σ")
     illumination_shape: str = Field(
-        "annular", description="Source shape (conventional, annular, dipole, quasar)"
+        "conventional", description="Source shape (conventional, annular, dipole, quasar)"
     )
     inner_sigma: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annular inner σ")
     outer_sigma: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annular outer σ")
     zernike_coeffs: Optional[List[float]] = Field(
         None, description="Fringe Zernike coefficients (Noll-indexed)"
     )
+    focus_nm: float = Field(0.0, ge=-500, le=500, description="Defocus [nm]")
 
 
 class MaskConfig(BaseModel):

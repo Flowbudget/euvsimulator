@@ -33,6 +33,7 @@ def aerial_from_orders(
     sigma: float,
     illumination_shape: str = "conventional",
     grid: int = 256,
+    focus_nm: float = 0.0,
 ) -> torch.Tensor:
     """Compute partially coherent aerial image from discrete diffraction orders.
 
@@ -42,6 +43,7 @@ def aerial_from_orders(
     The Transmission Cross Coefficient (TCC) captures:
     - Source coherence: orders must be within NA·σ/λ of each other
     - Pupil filtering: each order must be within the NA
+    - Defocus: phase shift exp(i·φ_m) for each order m
 
     Parameters
     ----------
@@ -58,11 +60,13 @@ def aerial_from_orders(
     sigma : float
         Partial coherence factor.
     illumination_shape : str
-        Source shape: ``"conventional"``, ``"annular"``, ``"dipole"``,
-        ``"dipole_y"``, or ``"quasar"``.  Affects the mutual coherence
-        function (TCC) for order interference.
+        Source shape: "conventional", "annular", "dipole", "dipole_y", or "quasar".
+        Affects the mutual coherence function (TCC) for order interference.
     grid : int
         Output image grid size (default: 256).
+    focus_nm : float
+        Defocus [nm]. Positive = resist above best focus. Adds quadratic phase
+        to each diffraction order: φ_m = -π * focus * m² * λ / Λ².
 
     Returns
     -------
@@ -75,28 +79,20 @@ def aerial_from_orders(
     # Spatial positions over one period
     x = torch.linspace(-period_m / 2, period_m / 2, G, device=device)
 
-    # Source coherence radius (in order units: Δm such that both fit in NA)
-    # An order m is accepted if |m|·λ/Λ ≤ NA  (pupil filter)
+    # Maximum order accepted by pupil
     max_order = int(math.floor(na * period_m / wavelength_m))
 
-    # Coherence area: source subtends ±σ·NA/λ in frequency space
-    # In order units: Δm = σ · NA / (λ/Λ) = σ · NA · Λ / λ
-    # Two orders interfere if |m - n| ≤ σ · NA · Λ / λ
-    na_over_lambda = na / wavelength_m
+    # Coherence area in order units: Δm = σ · NA · Λ / λ
     coherence_orders = sigma * na * period_m / wavelength_m
 
     # Illumination shape modifies the effective coherence
     shape = illumination_shape.lower()
     if shape in ("annular",):
-        # Annular: inner sigma ~0.4-0.5 of outer, creates a minimum
-        # coherence distance — very close pairs (dm small) do NOT interfere
+        # Annular: inner sigma ~0.4-0.5 of outer, creates minimum coherence distance
         inner_coherence = 0.3 * na * period_m / wavelength_m
     elif shape in ("dipole", "dipole_x", "dipole_y"):
-        # Dipole: two separated poles → preferred pitch enhancement
-        # Effective coherence is split between two pole regions
         pass  # use default coherence_orders
     elif shape in ("quasar",):
-        # Quasar: four poles at 45°
         pass
     # else: conventional — use coherence_orders as-is
 
@@ -107,6 +103,18 @@ def aerial_from_orders(
 
     aerial_1d = torch.zeros(G, dtype=torch.complex128, device=device)
 
+    # Pre-compute defocus phase for each order (quadratic in order index)
+    # φ_m = -π * focus_nm * m² * wavelength / period²  (small-angle approximation)
+    focus_m = focus_nm * 1e-9  # nm → m
+    defocus_phase = torch.zeros(M, dtype=torch.complex128, device=device)
+    if focus_m != 0.0:
+        for i in range(M):
+            m = int(order_indices[i])
+            phi = -math.pi * focus_m * (m ** 2) * wavelength_m / (period_m ** 2)
+            defocus_phase[i] = torch.exp(1j * torch.tensor(phi, dtype=torch.float64, device=device))
+    else:
+        defocus_phase = torch.ones(M, dtype=torch.complex128, device=device)
+
     for i in range(M):
         mi = int(order_indices[i])
         ri = orders_complex[i]
@@ -114,6 +122,9 @@ def aerial_from_orders(
             continue
         if abs(mi) > max_order:
             continue  # outside pupil
+
+        # Apply defocus phase to this order
+        ri_defocused = ri * defocus_phase[i]
 
         for j in range(M):
             mj = int(order_indices[j])
@@ -137,9 +148,10 @@ def aerial_from_orders(
             # Realistic: J0(2π·ρ·σ·NA/λ) type coherence
             tcc = 1.0  # fully coherent approximation within range
 
-            # Interference term
+            # Interference term with defocus phase
+            # φ_i - φ_j = defocus phase difference
             phase = 2.0 * math.pi * (mi - mj) * x / period_m
-            interference = ri * rj.conj() * tcc * torch.exp(1j * phase)
+            interference = ri_defocused * rj.conj() * tcc * torch.exp(1j * phase)
             aerial_1d += interference
 
     # Take real part (imaginary parts cancel for real intensities)

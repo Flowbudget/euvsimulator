@@ -132,6 +132,7 @@ async def run_simulation(req: SimulationRequest) -> SimulationResponse:
         device="cpu",
         resist_model=cfg_api.resist.resist_model,
         resist_threshold_norm=cfg_api.resist.threshold_norm,
+        focus_nm=cfg_api.aerial.focus_nm,
     )
 
     try:

@@ -303,6 +303,7 @@ def run_simulation(
         sigma=cfg.sigma,
         illumination_shape=cfg.illumination_shape,
         grid=cfg.grid,
+        focus_nm=cfg.focus_nm,
     )
 
     # Normalise to dose
