@@ -76,6 +76,14 @@ class ResistConfig(BaseModel):
     )
     development_time_s: float = Field(30.0, gt=0, description="Development time [s]")
     dose_mJ_cm2: float = Field(20.0, gt=0, description="Exposure dose [mJ/cm²]")
+    resist_model: str = Field(
+        "aerial_threshold",
+        description="Resist model: 'aerial_threshold' (fast, robust) or 'full_chem' (Dill + PEB + develop)"
+    )
+    threshold_norm: float = Field(
+        0.5, ge=0.0, le=1.0,
+        description="Normalised intensity threshold for aerial_threshold model (0-1 fraction of max)"
+    )
 
 
 class SimulationConfig(BaseModel):

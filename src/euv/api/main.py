@@ -130,6 +130,8 @@ async def run_simulation(req: SimulationRequest) -> SimulationResponse:
         ml_capping=cfg_api.mask.capping_material,
         ml_capping_nm=cfg_api.mask.capping_height_nm,
         device="cpu",
+        resist_model=cfg_api.resist.resist_model,
+        resist_threshold_norm=cfg_api.resist.threshold_norm,
     )
 
     try:

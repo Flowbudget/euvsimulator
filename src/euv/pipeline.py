@@ -100,9 +100,99 @@ class SimulationConfig:
     n_rcwa_orders: int = 21
     dose_mj_cm2: float = 20.0
     resist_threshold: float = 0.5
+    resist_model: str = "aerial_threshold"
+    resist_threshold_norm: float = 0.5
     focus_nm: float = 0.0
     grid: int = 256
     device: str = "cpu"
+
+
+def _cd_via_aerial_threshold(
+    aerial: torch.Tensor,
+    cfg: SimulationConfig,
+    half: int,
+    line_width_px: int,
+) -> tuple[float, torch.Tensor, float]:
+    """Extract CD from the aerial image using a normalised intensity threshold.
+
+    For a positive-tone resist:
+    - Bright regions (space) → develop → 0 (developed)
+    - Dark regions (absorber) → undeveloped → 1 (remaining)
+    - CD = width of the undeveloped (below-threshold) region
+
+    The threshold is ``resist_threshold_norm × max(aerial)``.
+
+    Returns (cd_nm, resist_profile, nils_value).
+    """
+    G = aerial.shape[0]
+    device = aerial.device
+    cut = aerial[half, :]  # centre-row cut
+    threshold_val = cfg.resist_threshold_norm * float(aerial.max())
+    dx_nm = (cfg.period_nm / G)
+
+    # NILS at the line edge
+    nils_val = nils(aerial, half, line_width_px)
+
+    # Positive-tone developed mask
+    dev = (cut > threshold_val).float()
+    dev_2d = dev.unsqueeze(0).expand(G, G).clone()
+
+    # CD extraction: find the largest run of undeveloped pixels (dev == 0)
+    runs = _find_runs_1d(dev, target=0)
+    if len(runs) == 0:
+        cd_nm = 0.0
+    else:
+        longest = max(runs, key=lambda r: r[1] - r[0])
+        lidx, ridx = longest
+        cd_nm = (ridx - lidx + 1) * dx_nm
+
+    return cd_nm, dev_2d, nils_val
+
+
+def _cd_via_full_chem(
+    aerial: torch.Tensor,
+    cfg: SimulationConfig,
+    period_m: float,
+    half: int,
+    line_width_px: int,
+) -> tuple[float, torch.Tensor, float]:
+    """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
+
+    Uses the Dill ABC exposure model, reaction-diffusion PEB, and threshold
+    development.  Requires well-tuned parameters (C, Q, k, t_bake, sigma_diff).
+    """
+    nils_val = nils(aerial, half, line_width_px)
+    dose_map = aerial.clone().float()
+    acid = dose_to_acid(dose_map, C=0.05, Q=0.3, sigma_blur=5.0)
+    inhib_in = torch.ones_like(acid)
+    _, inhib = reaction_diffusion_analytical(
+        acid, inhib_in, k=0.3, t_bake=60.0, sigma_diff=5.0,
+        dx=period_m / cfg.grid * 1e9,
+    )
+
+    # NILS-modulated threshold
+    dev_threshold = cfg.resist_threshold + 0.15 * max(0.0, 1.0 - nils_val / 200.0)
+    dev = threshold_development(inhib, threshold=dev_threshold)
+
+    dx_nm = period_m / cfg.grid * 1e9
+    cd_nm = extract_cd(dev, dx=float(dx_nm))
+    return cd_nm, dev, nils_val
+
+
+def _find_runs_1d(x: torch.Tensor, target: int = 0) -> list:
+    """Find consecutive runs of ``x == target`` in a 1D tensor.
+
+    Returns list of (start_idx, end_idx) inclusive.
+    """
+    padded = torch.cat([
+        torch.tensor([1 - target], device=x.device),
+        x,
+        torch.tensor([1 - target], device=x.device),
+    ])
+    diffs = torch.diff(padded.float())
+    starts = torch.where(diffs < -0.5)[0]
+    ends = torch.where(diffs > 0.5)[0] - 1
+    return [(int(s), int(e)) for s, e in zip(starts, ends)]
 
 
 def run_simulation(
@@ -218,25 +308,16 @@ def run_simulation(
     # Normalise to dose
     aerial = aerial * cfg.dose_mj_cm2 / (aerial.max() + 1e-12)
 
-    # NILS at the line edge — compute edge positions in pixels
+    # ── 6. CD Extraction from Aerial Image ──────────────────────
+    # Use the aerial image directly to extract CD via intensity threshold.
+    # This is the most robust approach for general use; the full resist
+    # chemistry chain (dose_to_acid → PEB → development) is available
+    # via resist_model="full_chem" but requires carefully tuned params.
     line_width_px = int(round(cfg.line_width_nm / (period_m / cfg.grid * 1e9)))
-    nils_val = nils(aerial, half, line_width_px)
-
-    # ── 7. Resist ─────────────────────────────
-    dose_map = aerial.clone().float()
-    acid = dose_to_acid(dose_map, C=0.05, Q=0.3, sigma_blur=5.0)
-    inhib_in = torch.ones_like(acid)
-    _, inhib = reaction_diffusion_analytical(acid, inhib_in, k=0.3, t_bake=60.0, sigma_diff=5.0, dx=period_m / cfg.grid * 1e9)
-
-    # Develop via threshold with NILS-modulated bias.
-    # Physical motivation: when NILS drops (defocus), the PEB diffusion across
-    # the edge has a larger fractional effect, narrowing the line.
-    nils_threshold = cfg.resist_threshold + 0.15 * max(0.0, 1.0 - nils_val / 200.0)
-    dev = threshold_development(inhib, threshold=nils_threshold)
-
-    # CD extraction
-    dx_nm = period_m / cfg.grid * 1e9
-    cd = extract_cd(dev, dx=float(dx_nm))
+    if cfg.resist_model == "full_chem":
+        cd, dev, nils_val = _cd_via_full_chem(aerial, cfg, period_m, half, line_width_px)
+    else:
+        cd, dev, nils_val = _cd_via_aerial_threshold(aerial, cfg, half, line_width_px)
 
     return SimulationResult(
         aerial_image=aerial,
