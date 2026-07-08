@@ -45,3 +45,7 @@ session-context.md
 AGENT_FINISH_PROMPT.md
 *destructive-review*
 *OPUS-plan*
+
+# Debug / scratch files
+_debug*.py
+_test*.py
