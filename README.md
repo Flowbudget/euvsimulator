@@ -215,7 +215,9 @@ We welcome contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guideline
 
 ---
 
-## Sponsors
+## Support
 
-Development supported by [GitHub Sponsors](https://github.com/sponsors/Flowbudget).
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?logo=paypal)](https://paypal.me/gofter)
+
+Development supported by [GitHub Sponsors](https://github.com/sponsors/Flowbudget) and PayPal donations.
 OpEnUV is open source — contributions welcome. ❤️
