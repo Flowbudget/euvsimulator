@@ -217,7 +217,9 @@ We welcome contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guideline
 
 ## Support
 
-[![PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?logo=paypal)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=gofter@web.de)
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?logo=paypal)](https://www.paypal.com/donate/?business=gofter%40web.de)
+
+PayPal: **gofter@web.de** — via PayPal "Geld senden an Freunde"
 
 Development supported by [GitHub Sponsors](https://github.com/sponsors/Flowbudget) and PayPal donations.
 OpEnUV is open source — contributions welcome. ❤️
