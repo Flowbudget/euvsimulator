@@ -1,7 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene4_Optics/2873985843_4228852309_223132457.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene4_Optics/3496312638_1739194722_4130229884.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene4_Optics/3496312638_2121687518_2018394385.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene4_Optics/3496312638_1745919451_238108840.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene4_Optics/3496312638_2751725065_2652117843.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene4_Optics/3496312638_2773338303_2358810818.mp4'

@@ -49,3 +49,14 @@ AGENT_FINISH_PROMPT.md
 # Debug / scratch files
 _debug*.py
 _test*.py
+
+# EUV textbooks (not OpEnUV — keep only locally)
+EUV-Lithography_*.pdf
+
+# Manim video build artifacts
+video/media/
+video/audio_*.mp3
+video/audio_*.ogg
+video/final_narrated*.mp4
+video/final_1080p_narrated*.mp4
+video/concat*.txt

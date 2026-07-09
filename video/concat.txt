@@ -1,8 +1,0 @@
-file 'media/videos/script/480p15/Scene1_Title.mp4'
-file 'media/videos/script/480p15/Scene2_LightSource.mp4'
-file 'media/videos/script/480p15/Scene3_Mask.mp4'
-file 'media/videos/script/480p15/Scene4_Optics.mp4'
-file 'media/videos/script/480p15/Scene5_AerialImage.mp4'
-file 'media/videos/script/480p15/Scene6_Resist.mp4'
-file 'media/videos/script/480p15/Scene7_Development.mp4'
-file 'media/videos/script/480p15/Scene8_Architecture.mp4'

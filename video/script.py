@@ -23,7 +23,7 @@ class Scene1_Title(Scene):
         logo.next_to(title, UP, buff=0.3)
         self.play(FadeIn(logo), Write(title), run_time=1.5)
         self.play(Write(subtitle), Write(tagline), run_time=1.2)
-        self.wait(1.5)
+        self.wait(5.7)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 2: EUV Light Source ──────────────────────────────────
@@ -59,7 +59,7 @@ class Scene2_LightSource(Scene):
         self.play(ReplacementTransform(droplet.copy(), plasma), run_time=0.8)
         self.play(Write(eq), Write(ce), run_time=0.6)
         self.play(LaggedStart(*[FadeIn(p, scale=1.5) for p in photons], lag_ratio=0.1), run_time=1.0)
-        self.wait(1.0)
+        self.wait(4.0)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 3: Mask ──────────────────────────────────────────────
@@ -94,7 +94,7 @@ class Scene3_Mask(Scene):
         self.play(Create(arrow_bright), Write(lbl_bright), run_time=0.5)
         self.play(Create(arrow_dark), Write(lbl_dark), run_time=0.5)
         self.play(Write(bragg), run_time=0.6)
-        self.wait(1.5)
+        self.wait(4.1)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 4: Optics ────────────────────────────────────────────
@@ -128,7 +128,7 @@ class Scene4_Optics(Scene):
         self.play(LaggedStart(*[Create(m) for m in mirrors], lag_ratio=0.1), run_time=1.5)
         self.play(Create(path), run_time=0.8)
         self.play(Write(wfe), Write(anam), run_time=0.6)
-        self.wait(1.2)
+        self.wait(2.1)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 5: Aerial Image ──────────────────────────────────────
@@ -160,7 +160,7 @@ class Scene5_AerialImage(Scene):
         self.play(Create(axes), run_time=0.6)
         self.play(Create(graph), run_time=1.2)
         self.play(Write(lbl_aerial), run_time=0.4)
-        self.wait(1.0)
+        self.wait(3.4)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 6: Resist ────────────────────────────────────────────
@@ -198,7 +198,7 @@ class Scene6_Resist(Scene):
         self.play(LaggedStart(*[FadeIn(s) for s in ses], lag_ratio=0.1), run_time=0.8)
         self.play(Create(acid), run_time=0.5)
         self.play(Write(shot), Write(sec), run_time=0.5)
-        self.wait(1.2)
+        self.wait(3.7)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 7: Development & CD ──────────────────────────────────
@@ -231,7 +231,7 @@ class Scene7_Development(Scene):
         self.play(Create(cd_arrow), Write(cd_label), run_time=0.8)
         self.play(Create(axes), Create(bossung), run_time=1.0)
         self.play(Write(lbl_bossung), run_time=0.4)
-        self.wait(1.0)
+        self.wait(4.2)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)
 
 # ─── Scene 8: Architecture ──────────────────────────────────────
@@ -277,5 +277,5 @@ class Scene8_Architecture(Scene):
         self.play(Write(cli_title), run_time=0.3)
         self.play(LaggedStart(*[Write(c) for c in cli_cmds], lag_ratio=0.15), run_time=0.8)
         self.play(Write(url), run_time=0.4)
-        self.wait(1.5)
+        self.wait(1.8)
         self.play(FadeOut(Group(*self.mobjects)), run_time=0.5)

@@ -1,9 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/4156864382_2460282899_223132457.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_2694608573_3603507485.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_807188262_605776705.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_2502395115_1223887944.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_1780016915_567307292.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_3309664606_2559474983.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_1754310298_439852103.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/480p15/partial_movie_files/Scene2_LightSource/300363247_4125285251_2358810818.mp4'

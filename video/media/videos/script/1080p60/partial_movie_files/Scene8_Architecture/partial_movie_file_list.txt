@@ -1,9 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/2873985843_1548406023_223132457.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_3803758296_2006741091.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_1514063656_931452883.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_1138938034_2470953148.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_2418893643_2107272287.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_57007265_596516701.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_2704686740_1820798471.mp4'
-file 'file:/Users/pi-server/Projekte/OpEnUV/video/media/videos/script/1080p60/partial_movie_files/Scene8_Architecture/3496312638_4076633364_2358810818.mp4'
