@@ -5,7 +5,6 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Flowbudget/OpEnUV/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/OpEnUV/actions)
 [![Tests](https://img.shields.io/badge/tests-455%2F455%20passing-brightgreen)](https://github.com/Flowbudget/OpEnUV)
-[![Twitter](https://img.shields.io/badge/Follow-%40Flowbudget-1DA1F2?logo=x)](https://x.com/Flowbudget)
 
 **From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
 
