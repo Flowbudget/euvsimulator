@@ -57,8 +57,4 @@ _test*.py
 EUV-Lithography_*.pdf
 
 # Manim video build artifacts
-video/media/
-video/audio_*.mp3
-video/audio_*.ogg
-video/final_*.mp4
-video/concat*.txt
+video/
