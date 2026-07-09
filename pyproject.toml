@@ -3,14 +3,14 @@ requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "euv"
-version = "1.0.0"
-description = "Open Source EUV Lithography Simulator"
+name = "openuv"
+version = "1.0.1"
+description = "Open Source EUV Lithography Simulator — from plasma source to CD metrology"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "OpEnUV Contributors"},
+    {name = "Flowbudget"},
 ]
 
 classifiers = [
@@ -57,15 +57,14 @@ dev = [
 
 [project.scripts]
 euv = "euv.io.cli:app"
+openuv = "euv.io.cli:app"
 
 [tool.setuptools]
 include-package-data = true
+packages.find = {where = ["src"]}
 
 [tool.setuptools.package-data]
 euv = ["data/**/*", "api/static/*"]
-
-[tool.setuptools.packages.find]
-where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

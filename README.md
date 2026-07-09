@@ -1,5 +1,6 @@
 # OpEnUV — Open Source Extreme Ultraviolet Lithography Simulator
 
+[![PyPI](https://img.shields.io/pypi/v/openuv)](https://pypi.org/project/openuv/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Flowbudget/OpEnUV/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/OpEnUV/actions)
@@ -61,7 +62,8 @@ Full details in [`testberechnungen.md`](testberechnungen.md).
 ## Quick start
 
 ```bash
-pip install -e ".[dev]"
+pip install openuv                    # install from PyPI
+pip install -e ".[dev]"               # or from source (development)
 
 # End-to-end simulation
 euv simulate --period=64 --cd=32 --dose=20
