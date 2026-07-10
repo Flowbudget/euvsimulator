@@ -104,10 +104,13 @@ def _admittance(
 # ──────────────────────────────────────────────
 
 
-def _interface_smatrix(eta_a: torch.Tensor, eta_b: torch.Tensor,
-                       roughness_nm: float | None = None,
-                       kz_a: torch.Tensor | None = None,
-                       kz_b: torch.Tensor | None = None) -> torch.Tensor:
+def _interface_smatrix(
+    eta_a: torch.Tensor,
+    eta_b: torch.Tensor,
+    roughness_nm: float | None = None,
+    kz_a: torch.Tensor | None = None,
+    kz_b: torch.Tensor | None = None,
+) -> torch.Tensor:
     """Scattering matrix for an interface between media *a* and *b*.
 
     S = [[r_ab,  t_ba],
@@ -281,9 +284,11 @@ def stack_smatrix(
 
     # Start with the top interface: incident medium → first layer
     S_total = _interface_smatrix(
-        eta_inc, eta_all[:, 0],
+        eta_inc,
+        eta_all[:, 0],
         roughness_nm=roughness_nm,
-        kz_a=kz_inc, kz_b=kz_all[:, 0],
+        kz_a=kz_inc,
+        kz_b=kz_all[:, 0],
     )  # (W, 2, 2)
 
     # Iterate: layer propagation + next interface, layer by layer
@@ -295,15 +300,19 @@ def stack_smatrix(
         # Interface to the next layer (or substrate)
         if j < N - 1:
             S_iface = _interface_smatrix(
-                eta_all[:, j], eta_all[:, j + 1],
+                eta_all[:, j],
+                eta_all[:, j + 1],
                 roughness_nm=roughness_nm,
-                kz_a=kz_all[:, j], kz_b=kz_all[:, j + 1],
+                kz_a=kz_all[:, j],
+                kz_b=kz_all[:, j + 1],
             )
         else:
             S_iface = _interface_smatrix(
-                eta_all[:, j], eta_sub,
+                eta_all[:, j],
+                eta_sub,
                 roughness_nm=roughness_nm,
-                kz_a=kz_all[:, j], kz_b=kz_sub,
+                kz_a=kz_all[:, j],
+                kz_b=kz_sub,
             )
         S_total = _redheffer_star(S_total, S_iface)
 
@@ -374,7 +383,9 @@ def reflectivity_at_wavelength(
 ) -> float:
     """Single-wavelength reflectivity (scalar wrapper)."""
     wl = torch.tensor([wavelength_m], dtype=torch.float64)
-    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm)
+    R, _ = reflectivity(
+        n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm
+    )
     return float(R.item())
 
 
@@ -407,5 +418,7 @@ def reflectivity_scan(
     """
     npts = wavelength_range[2]
     wl = torch.linspace(wavelength_range[0], wavelength_range[1], npts)
-    R, _ = reflectivity(n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm)
+    R, _ = reflectivity(
+        n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm
+    )
     return wl, R

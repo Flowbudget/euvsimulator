@@ -35,9 +35,9 @@ class TestAnamorphicPupil:
         max_fx_phys = float(fx.abs().max()) * na / mag_x
         max_fy_phys = float(fy.abs().max()) * na / mag_y
         # mag_y=8 > mag_x=4 → narrower physical y-range
-        assert max_fx_phys > max_fy_phys + 0.01, (
-            f"Physical fx range ({max_fx_phys:.4f}) should be > fy range ({max_fy_phys:.4f})"
-        )
+        assert (
+            max_fx_phys > max_fy_phys + 0.01
+        ), f"Physical fx range ({max_fx_phys:.4f}) should be > fy range ({max_fy_phys:.4f})"
         assert abs(max_fx_phys - na / mag_x) < 0.01
         assert abs(max_fy_phys - na / mag_y) < 0.01
 
@@ -151,8 +151,9 @@ class TestZernikeHighNA:
         half = 32
         # Check at radius 0.5 (normalised coordinate)
         d = 16
-        assert abs(Z6[half - d, half] - Z6[half + d, half]) < 0.04, \
-            "Astigmatism should have 2-fold symmetry about x"
+        assert (
+            abs(Z6[half - d, half] - Z6[half + d, half]) < 0.04
+        ), "Astigmatism should have 2-fold symmetry about x"
 
     def test_apply_aberrations_preserves_shape(self):
         """Applying aberrations to a pupil should preserve its shape."""

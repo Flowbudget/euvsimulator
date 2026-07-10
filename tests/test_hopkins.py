@@ -168,7 +168,9 @@ class TestHopkinsAerial:
         """For thin-mask, Hopkins ≈ Abbe within ~1%."""
         fx, fy, _ = fx_fy
 
-        result = compare_hopkins_abbe(thin_mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2*na))
+        result = compare_hopkins_abbe(
+            thin_mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
 
         # Both images should have plausible shape
         assert result["hopkins_aerial"].shape == (G, G)
@@ -194,7 +196,9 @@ class TestHopkinsAerial:
     ):
         """Aerial image intensities must be non-negative."""
         fx, fy, _ = fx_fy
-        result = compare_hopkins_abbe(thin_mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2*na))
+        result = compare_hopkins_abbe(
+            thin_mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
         assert (result["hopkins_aerial"] >= -1e-12).all()
         assert (result["abbe_aerial"] >= -1e-12).all()
 
@@ -245,7 +249,9 @@ class TestDipoleIllumination:
         fx_fy,
     ):
         fx, fy, _ = fx_fy
-        result = compare_hopkins_abbe(thin_mask, dipole_src, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2*na))
+        result = compare_hopkins_abbe(
+            thin_mask, dipole_src, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
 
         # With dipole the SOCS truncation may give larger errors, but should still
         # be reasonable
@@ -256,7 +262,9 @@ class TestDipoleIllumination:
 
         # For dipole, relative error — larger due to different numerics
         rel_err = result["relative_error"]
-        assert rel_err < 0.50, f"Dipole Hopkins/Abbe relative error too large: {rel_err:.4f} (> 50%)"
+        assert (
+            rel_err < 0.50
+        ), f"Dipole Hopkins/Abbe relative error too large: {rel_err:.4f} (> 50%)"
 
 
 # ── Kernel shape ──────────────────────────────────────────────────────
@@ -358,7 +366,9 @@ class TestEdgeCases:
         """Uniform mask → constant aerial image."""
         fx, fy, _ = fx_fy
         mask = torch.ones(G, G, dtype=torch.float64)
-        result = compare_hopkins_abbe(mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2*na))
+        result = compare_hopkins_abbe(
+            mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
         # The aerial should be nearly constant
         hop_img = result["hopkins_aerial"]
         std = hop_img.std().item()

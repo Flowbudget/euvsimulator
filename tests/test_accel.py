@@ -211,8 +211,9 @@ class TestChunkedAbbe:
         full = abbe_image(mask_fft, source, fx, fy, pupil, na, period_m=1e-6, wavelength_m=13.5e-9)
 
         # Chunked Abbe with small chunks — use period_m/wavelength_m too
-        chunked = chunked_abbe(mask_fft, source, fx, fy, pupil, na, chunk_size=1,
-                               period_m=1e-6, wavelength_m=13.5e-9)
+        chunked = chunked_abbe(
+            mask_fft, source, fx, fy, pupil, na, chunk_size=1, period_m=1e-6, wavelength_m=13.5e-9
+        )
 
         assert torch.allclose(
             full, chunked, atol=1e-10

@@ -30,8 +30,9 @@ class TestPupilGrid:
         pupil_ani = anamorphic_pupil(64, na=0.55, mag_x=4.0, mag_y=8.0)
         pupil_ref = circular_pupil(64, na=0.55)
         # Anamorphic stretches the pupil in frequency space → more pixels inside
-        assert pupil_ani.sum() > pupil_ref.sum(), \
-            "Anamorphic pupil fills more of the grid than circular"
+        assert (
+            pupil_ani.sum() > pupil_ref.sum()
+        ), "Anamorphic pupil fills more of the grid than circular"
         # Check that anamorphic with different mags yields different areas
         pupil_ani2 = anamorphic_pupil(64, na=0.55, mag_x=8.0, mag_y=4.0)
         # Different orientation → different shape even though same area
