@@ -61,7 +61,9 @@ class MaskConfig(BaseModel):
     # Multilayer parameters
     ml_d_mo_nm: float = Field(2.8, gt=0, description="Mo layer thickness [nm]")
     ml_d_si_nm: float = Field(4.1, gt=0, description="Si layer thickness [nm]")
-    ml_gamma: Optional[float] = Field(None, ge=0.2, le=0.6, description="Mo fraction gamma = d_Mo/(d_Mo+d_Si)")
+    ml_gamma: Optional[float] = Field(
+        None, ge=0.2, le=0.6, description="Mo fraction gamma = d_Mo/(d_Mo+d_Si)"
+    )
     ml_grading_linear_nm: float = Field(0.0, ge=0, description="Linear period grading [nm]")
     ml_grading_parabolic_nm: float = Field(0.0, ge=0, description="Parabolic period grading [nm]")
     ml_roughness_nm: float = Field(0.0, ge=0, description="RMS interface roughness [nm]")
@@ -79,11 +81,13 @@ class ResistConfig(BaseModel):
     dose_mJ_cm2: float = Field(20.0, gt=0, description="Exposure dose [mJ/cm²]")
     resist_model: str = Field(
         "aerial_threshold",
-        description="Resist model: 'aerial_threshold' (fast, robust) or 'full_chem' (Dill + PEB + develop)"
+        description="Resist model: 'aerial_threshold' (fast, robust) or 'full_chem' (Dill + PEB + develop)",
     )
     threshold_norm: float = Field(
-        0.5, ge=0.0, le=1.0,
-        description="Normalised intensity threshold for aerial_threshold model (0-1 fraction of max)"
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description="Normalised intensity threshold for aerial_threshold model (0-1 fraction of max)",
     )
 
 

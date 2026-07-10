@@ -87,7 +87,9 @@ def chunked_abbe(
         chunk_source[chunk_indices[:, 0], chunk_indices[:, 1]] = weights[start:end]
 
         # Compute partial aerial image for this chunk
-        partial = abbe_image(mask_fft, chunk_source, fx, fy, pupil, na, period_m=period_m, wavelength_m=wavelength_m)
+        partial = abbe_image(
+            mask_fft, chunk_source, fx, fy, pupil, na, period_m=period_m, wavelength_m=wavelength_m
+        )
         aerial = aerial + partial
 
     return aerial

@@ -284,7 +284,9 @@ def compare_hopkins_abbe(
     mask_fft = torch.fft.fft2(mask)
 
     # Abbe reference
-    abbe_img = abbe_image(mask_fft, source, fx, fy, pupil, na=na, period_m=period_m, wavelength_m=wavelength_m)
+    abbe_img = abbe_image(
+        mask_fft, source, fx, fy, pupil, na=na, period_m=period_m, wavelength_m=wavelength_m
+    )
 
     abbe_rms = (abbe_img**2).mean().sqrt().item()
     if abbe_rms < 1e-30:

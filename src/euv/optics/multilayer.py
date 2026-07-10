@@ -188,8 +188,7 @@ def mo_si_stack(
     for i in range(n_bilayers):
         z = i / max(n_bilayers - 1, 1)  # 0 (top) to 1 (bottom)
         # Grading profile
-        grad = (grading_linear_nm * z
-                + grading_parabolic_nm * (1.0 - math.cos(math.pi * z)))
+        grad = grading_linear_nm * z + grading_parabolic_nm * (1.0 - math.cos(math.pi * z))
         p_i = period0 + grad
         mo_i = d_mo + (d_mo / period0) * grad
         si_i = p_i - mo_i

@@ -128,7 +128,7 @@ def _cd_via_aerial_threshold(
     device = aerial.device
     cut = aerial[half, :]  # centre-row cut
     threshold_val = cfg.resist_threshold_norm * float(aerial.max())
-    dx_nm = (cfg.period_nm / G)
+    dx_nm = cfg.period_nm / G
 
     # NILS at the line edge
     nils_val = nils(aerial, half, line_width_px)
@@ -166,7 +166,11 @@ def _cd_via_full_chem(
     acid = dose_to_acid(dose_map, C=0.05, Q=0.3, sigma_blur=5.0)
     inhib_in = torch.ones_like(acid)
     _, inhib = reaction_diffusion_analytical(
-        acid, inhib_in, k=0.3, t_bake=60.0, sigma_diff=5.0,
+        acid,
+        inhib_in,
+        k=0.3,
+        t_bake=60.0,
+        sigma_diff=5.0,
         dx=period_m / cfg.grid * 1e9,
     )
 
@@ -184,11 +188,13 @@ def _find_runs_1d(x: torch.Tensor, target: int = 0) -> list:
 
     Returns list of (start_idx, end_idx) inclusive.
     """
-    padded = torch.cat([
-        torch.tensor([1 - target], device=x.device),
-        x,
-        torch.tensor([1 - target], device=x.device),
-    ])
+    padded = torch.cat(
+        [
+            torch.tensor([1 - target], device=x.device),
+            x,
+            torch.tensor([1 - target], device=x.device),
+        ]
+    )
     diffs = torch.diff(padded.float())
     starts = torch.where(diffs < -0.5)[0]
     ends = torch.where(diffs > 0.5)[0] - 1
@@ -250,8 +256,11 @@ def run_simulation(
 
     # TMM: ML-only reflectivity (space regions)
     _, r_space = reflectivity(
-        ml_stack.n_layers, ml_stack.thicknesses,
-        wl_t, theta0, n_substrate=n_sub,
+        ml_stack.n_layers,
+        ml_stack.thicknesses,
+        wl_t,
+        theta0,
+        n_substrate=n_sub,
         roughness_nm=cfg.ml_roughness_nm,
     )
     r0_space = r_space[0]
@@ -264,7 +273,11 @@ def run_simulation(
     full_d = torch.cat([d_abs, ml_stack.thicknesses])
 
     _, r_ab = reflectivity(
-        full_n, full_d, wl_t, theta0, n_substrate=n_sub,
+        full_n,
+        full_d,
+        wl_t,
+        theta0,
+        n_substrate=n_sub,
         roughness_nm=cfg.ml_roughness_nm,
     )
     r0_abs = r_ab[0]
@@ -272,7 +285,7 @@ def run_simulation(
     # Average absorber reflectivity (diagnostic)
     space_frac = 1.0 - cfg.line_width_nm / cfg.period_nm
     absorber_reflectivity = float(
-        (abs(r0_abs)**2 * (1.0 - space_frac) + abs(r0_space)**2 * space_frac).real
+        (abs(r0_abs) ** 2 * (1.0 - space_frac) + abs(r0_space) ** 2 * space_frac).real
     )
 
     # Fourier coefficients of the binary complex mask
@@ -296,7 +309,8 @@ def run_simulation(
     # Compute aerial image from orders (Hopkins formulation)
     order_tensor = torch.tensor(order_indices, dtype=torch.int64, device=device)
     aerial = aerial_from_orders(
-        amplitudes, order_tensor,
+        amplitudes,
+        order_tensor,
         period_m=period_m,
         na=cfg.na,
         wavelength_m=wavelength_m,

@@ -138,7 +138,7 @@ def plot_reflectivity_angle(
         Ri, _ = reflectivity(
             n_layers,
             thicknesses,
-            wl_batch[i:i+1],
+            wl_batch[i : i + 1],
             angles_rad[i].item(),
             n_substrate=n_substrate,
             te=te,
@@ -184,8 +184,13 @@ def plot_reflectivity(
 
     # --- Spectral scan (left) ---
     wl, R_spec = reflectivity_scan(
-        n_layers, thicknesses, wavelength_range,
-        theta0=theta0, n_substrate=n_substrate, te=te, roughness_nm=roughness_nm,
+        n_layers,
+        thicknesses,
+        wavelength_range,
+        theta0=theta0,
+        n_substrate=n_substrate,
+        te=te,
+        roughness_nm=roughness_nm,
     )
     ax1.plot([w * 1e9 for w in wl.tolist()], R_spec.tolist(), "b-", linewidth=1.5)
     ax1.axvline(x=13.5, color="gray", linestyle="--", alpha=0.5, label="13.5 nm")
@@ -203,9 +208,13 @@ def plot_reflectivity(
     R_ang = []
     for i in range(npts):
         Ri, _ = reflectivity(
-            n_layers, thicknesses, wl_batch[i:i+1],
+            n_layers,
+            thicknesses,
+            wl_batch[i : i + 1],
             angles_rad[i].item(),
-            n_substrate=n_substrate, te=te, roughness_nm=roughness_nm,
+            n_substrate=n_substrate,
+            te=te,
+            roughness_nm=roughness_nm,
         )
         R_ang.append(Ri.item())
 
@@ -243,13 +252,18 @@ def plot_roughness_comparison(
 
     for sigma, color in zip(sigma_values, colors):
         wl, R = reflectivity_scan(
-            n_layers, thicknesses, wavelength_range,
-            theta0=theta0, n_substrate=n_substrate, te=te,
+            n_layers,
+            thicknesses,
+            wavelength_range,
+            theta0=theta0,
+            n_substrate=n_substrate,
+            te=te,
             roughness_nm=sigma,
         )
         label = f"σ = {sigma:.1f} nm" if sigma > 0 else "σ = 0 (ideal)"
-        plt.plot([w * 1e9 for w in wl.tolist()], R.tolist(),
-                 color=color, linewidth=1.5, label=label)
+        plt.plot(
+            [w * 1e9 for w in wl.tolist()], R.tolist(), color=color, linewidth=1.5, label=label
+        )
 
     plt.axvline(x=13.5, color="gray", linestyle="--", alpha=0.4)
     plt.xlabel("Wavelength [nm]")
@@ -272,14 +286,17 @@ def _apply_theme(fig) -> None:
     """Apply a clean, publication-ready theme."""
     try:
         import matplotlib.pyplot as plt
-        plt.rcParams.update({
-            "font.family": "sans-serif",
-            "font.size": 11,
-            "axes.titlesize": 13,
-            "axes.labelsize": 12,
-            "legend.fontsize": 10,
-            "figure.dpi": 120,
-        })
+
+        plt.rcParams.update(
+            {
+                "font.family": "sans-serif",
+                "font.size": 11,
+                "axes.titlesize": 13,
+                "axes.labelsize": 12,
+                "legend.fontsize": 10,
+                "figure.dpi": 120,
+            }
+        )
     except Exception:
         pass
 
@@ -287,6 +304,7 @@ def _apply_theme(fig) -> None:
 def _save_or_show(save_path: str | None, show: bool) -> None:
     """Save figure and/or display."""
     import matplotlib.pyplot as plt
+
     if save_path:
         p = Path(save_path)
         p.parent.mkdir(parents=True, exist_ok=True)

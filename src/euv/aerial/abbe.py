@@ -110,7 +110,7 @@ def aerial_from_orders(
     if focus_m != 0.0:
         for i in range(M):
             m = int(order_indices[i])
-            phi = -math.pi * focus_m * (m ** 2) * wavelength_m / (period_m ** 2)
+            phi = -math.pi * focus_m * (m**2) * wavelength_m / (period_m**2)
             defocus_phase[i] = torch.exp(1j * torch.tensor(phi, dtype=torch.float64, device=device))
     else:
         defocus_phase = torch.ones(M, dtype=torch.complex128, device=device)
@@ -336,8 +336,12 @@ def nils(
         return 0.0
 
     # NILS = CD * (dI/dx) / I  at the line edge
-    nils_left = (dIdx_left.item() / cut[left].item()) if (dIdx_left != 0 and cut[left] > 1e-12) else 0.0
-    nils_right = (dIdx_right.item() / cut[right].item()) if (dIdx_right != 0 and cut[right] > 1e-12) else 0.0
+    nils_left = (
+        (dIdx_left.item() / cut[left].item()) if (dIdx_left != 0 and cut[left] > 1e-12) else 0.0
+    )
+    nils_right = (
+        (dIdx_right.item() / cut[right].item()) if (dIdx_right != 0 and cut[right] > 1e-12) else 0.0
+    )
 
     cd_pixels = float(line_width_px)
     return float(cd_pixels * (abs(nils_left) + abs(nils_right)) / 2.0)

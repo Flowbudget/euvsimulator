@@ -148,7 +148,8 @@ async def run_simulation(req: SimulationRequest) -> SimulationResponse:
         SimulationResult(stage="aerial", metric="nils", value=result.nils_value, unit=""),
         SimulationResult(stage="resist", metric="cd", value=result.cd_nm, unit="nm"),
         SimulationResult(
-            stage="aerial", metric="contrast",
+            stage="aerial",
+            metric="contrast",
             value=(
                 (float(result.aerial_image.max()) - float(result.aerial_image.min()))
                 / (float(result.aerial_image.max()) + float(result.aerial_image.min()) + 1e-12)
