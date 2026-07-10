@@ -11,7 +11,7 @@ Endpoints
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -29,8 +29,8 @@ from euv.api.schemas import (
     SimulationResult,
 )
 from euv.materials import _ELEMENT_TABLE, get_cxro_table
-from euv.pipeline import run_simulation as run_pipeline
 from euv.pipeline import SimulationConfig as PipelineConfig
+from euv.pipeline import run_simulation as run_pipeline
 
 # ──────────────────────────────────────────────
 # App instance

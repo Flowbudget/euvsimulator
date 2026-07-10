@@ -5,8 +5,8 @@ Connects all modules: mask → RCWA → aerial image → resist → CD.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Optional
 
 import torch

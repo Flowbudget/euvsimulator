@@ -124,7 +124,6 @@ def plot_reflectivity_angle(
     angles_deg, R_values : list
     """
     import matplotlib.pyplot as plt
-    import numpy as np
 
     if n_substrate is None:
         n_substrate = n_layers[-1].detach().clone()
