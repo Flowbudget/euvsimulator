@@ -119,10 +119,20 @@ class TestDillABCExposure:
         assert (dose.grad != 0).any()
 
     def test_custom_params(self, dose_map: torch.Tensor):
-        """Custom A, B, C produce different results."""
-        acid1, _ = dill_abc_exposure(dose_map, A=0.8, n_layers=1)
-        acid2, _ = dill_abc_exposure(dose_map, A=0.1, n_layers=1)
+        """Custom A, B, C, Q produce different results."""
+        # With multiple layers, A affects absorption
+        acid1, _ = dill_abc_exposure(dose_map, A=0.8, n_layers=3)
+        acid2, _ = dill_abc_exposure(dose_map, A=0.1, n_layers=3)
         assert not torch.allclose(acid1, acid2)
+        
+        # Also test C and Q with single layer
+        acid3, _ = dill_abc_exposure(dose_map, C=0.5, n_layers=1)
+        acid4, _ = dill_abc_exposure(dose_map, C=0.1, n_layers=1)
+        assert not torch.allclose(acid3, acid4)
+        
+        acid5, _ = dill_abc_exposure(dose_map, Q=0.5, n_layers=1)
+        acid6, _ = dill_abc_exposure(dose_map, Q=0.1, n_layers=1)
+        assert not torch.allclose(acid5, acid6)
 
     def test_z_positions(self, dose_map: torch.Tensor):
         """Custom z positions are respected."""

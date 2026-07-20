@@ -242,10 +242,8 @@ def surface_advancement_level_set(
         # simpler: developed depth = number of cleared layers
         # build mask voxel-by-voxel
         profile_3d = torch.zeros_like(inhibitor_3d)
-        for k in range(N):
-            for i in range(H):
-                for j in range(W):
-                    profile_3d[k, i, j] = 1.0 if cum_time[k, i, j] <= t_vals[-1] else 0.0
+        # Vectorized: use broadcasting to compare all voxels at once
+        profile_3d = (cum_time <= t_vals[-1]).float()
         return profile_3d
     else:
         # developed depth: deepest layer where cum_time <= t_develop
@@ -254,11 +252,16 @@ def surface_advancement_level_set(
         # depth = (last True index + 1) * dz
         # if no layer is cleared, depth = 0
         depth_map = torch.zeros((H, W), device=inhibitor_3d.device)
-        for i in range(H):
-            for j in range(W):
-                cleared = torch.where(developed_mask[:, i, j])[0]
-                if len(cleared) > 0:
-                    depth_map[i, j] = (cleared[-1].item() + 1) * dz
+        # Vectorized: find last True along depth dimension for each (i,j)
+        # Convert bool to int for argmax
+        rev_mask = developed_mask.flip(dims=(0,)).int()
+        # first True in reversed = last True in original
+        first_true = rev_mask.argmax(dim=0)  # (H, W) - index in reversed
+        has_true = developed_mask.any(dim=0)  # (H, W) bool
+        # last true index = N - 1 - first_true
+        last_true_idx = (N - 1 - first_true).float()
+        # only where at least one layer is cleared
+        depth_map[has_true] = (last_true_idx[has_true] + 1) * dz
         return depth_map
 
 

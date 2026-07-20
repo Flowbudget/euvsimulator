@@ -49,7 +49,8 @@ def dill_abc_exposure(
     dose: torch.Tensor,
     A: float | torch.Tensor = 0.5,
     B: float | torch.Tensor = 0.2,
-    C: float | torch.Tensor = 0.01,
+    C: float | torch.Tensor = 0.1,
+    Q: float | torch.Tensor = 0.1,
     z_positions: torch.Tensor | None = None,
     thickness: float = 0.1,
     n_layers: int = 1,
@@ -68,7 +69,10 @@ def dill_abc_exposure(
     B : float or torch.Tensor
         Non-bleachable absorption coefficient [1/µm].  Default 0.2.
     C : float or torch.Tensor
-        Photo-rate constant [cm²/mJ].  Default 0.01.
+        Photo-rate constant [cm²/mJ].  Default 0.1 (realistic for EUV CAR).
+    Q : float or torch.Tensor
+        Quantum efficiency — maximum acid yield per absorbed photon.
+        Default 0.1 (typical for EUV CAR).  NOT the same as A!
     z_positions : torch.Tensor, optional
         Depth positions in [µm] along the resist thickness.  Shape ``(N,)``.
         If ``None``, ``n_layers`` equally spaced positions are used.
@@ -117,7 +121,9 @@ def dill_abc_exposure(
     inhibitor = torch.exp(-C * dose_z)
 
     # --- acid concentration [H⁺] ---
-    acid = (1.0 - inhibitor) * A
+    # Correct: acid = Q * (1 - M), where Q is quantum efficiency (max acid yield).
+    # A is the bleachable absorption coefficient (1/µm), NOT a concentration!
+    acid = Q * (1.0 - inhibitor)
 
     # restore input dims: (N, H, W) for 2D input, (B, N, H, W) for batched
     if not has_batch:
@@ -232,7 +238,7 @@ def gaussian_se_blur(
 
 def dose_to_acid(
     dose: torch.Tensor,
-    C: float | torch.Tensor = 0.01,
+    C: float | torch.Tensor = 0.1,
     Q: float | torch.Tensor = 0.04,
     sigma_blur: float | torch.Tensor = 5.0,
     dx: float = 1.0,
@@ -253,7 +259,7 @@ def dose_to_acid(
     dose : torch.Tensor
         Input dose map [mJ/cm²].  Shape ``(H, W)`` or ``(B, H, W)``.
     C : float or torch.Tensor
-        Photo-rate constant [cm²/mJ].  Default 0.01.
+        Photo-rate constant [cm²/mJ].  Default 0.1 (realistic for EUV CAR).
     Q : float or torch.Tensor
         Quantum efficiency — maximum acid molecules per absorbed
         photon.  Default 0.04 (typical for EUV CAR).

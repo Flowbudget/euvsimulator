@@ -45,9 +45,10 @@ class TestDeviceSelection:
 
     def test_set_default_dtype(self):
         """set_default_dtype does not raise."""
+        original_dtype = torch.get_default_dtype()
         set_default_dtype(torch.complex128, torch.float64)
         # Restore to avoid side-effects on other tests
-        torch.set_default_dtype(torch.float64)
+        torch.set_default_dtype(original_dtype)
 
 
 # ──────────────────────────────────────────────

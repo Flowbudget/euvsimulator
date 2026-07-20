@@ -51,7 +51,7 @@ Full details in [`testberechnungen.md`](testberechnungen.md).
 | **Mo/Si multilayer** 50 BL @ 6° | **R = 64.7%** (ideal) / 60.6% (σ=0.5 nm) | S-matrix TMM + Névot-Croce |
 | **Wavelength: 13.5 nm** | — | E = hc/λ = 91.84 eV |
 | **Illumination: NA 0.33** | Conventional, σ = 0.8 | Dipole / annular / quasar |
-| **Aerial image NILS** | **4.36** @ 64 nm pitch, 32 nm CD | Hopkins formulation |
+| **Aerial image NILS** | **5.46** @ 64 nm pitch, 32 nm CD (ideal) → **2.67** with SE blur 10 nm | Hopkins formulation + SE blur |
 | **Process window** | CD vs. dose × focus | Bossung plot |
 
 > *"The calculations are solid and physically sound."* — Grok (independent review, 2026-07-09)
@@ -66,6 +66,12 @@ pip install -e ".[dev]"               # or from source (development)
 
 # End-to-end simulation
 euv simulate --period=64 --cd=32 --dose=20
+
+# End-to-end with realistic SE blur (10 nm)
+euv simulate --period=64 --cd=32 --dose=20 --se-blur=10
+
+# Use CAR resist preset (5 nm SE blur)
+euv simulate --period=64 --cd=32 --dose=20 --resist-preset=CAR
 
 # Process window (dose-focus Bossung plot)
 euv process-window --period=64 --cd=32
@@ -156,24 +162,42 @@ src/euv/
 |-----------|--------|
 | Project scaffold & CXRO materials | ✅ |
 | Multilayer optics (S-matrix TMM) | ✅ |
-| Mask 3D (RCWA 1D + 2D) | ✅ |
-| Aerial image (Abbe/Hopkins) | ✅ |
+| Mask 3D (RCWA 1D + 2D) | ⚠️ RCWA API exists, thin-mask analytic used in pipeline |
+| Aerial image (Abbe/Hopkins + SE blur) | ✅ |
 | High-NA imaging (anamorphic) | ✅ |
 | End-to-end pipeline | ✅ |
 | LPP source model | ✅ |
-| Resist chemistry (Dill ABC + PEB) | ✅ |
-| Stochastic effects (shot noise, LER/LWR) | ✅ |
+| Resist chemistry (Dill ABC + PEB + Mack) | ✅ |
+| Stochastic effects (shot noise, LER/LWR) | ⚠️ Module exists, not integrated in main pipeline |
 | CD metrology & process window | ✅ |
 | Inverse lithography (OpenILT bridge) | ✅ |
 | GPU acceleration | ✅ |
 | REST API + web UI | ✅ |
-| Tutorials & documentation | ✅ |
+| Tutorials & documentation | 🚧 In progress |
 | Docker deployment | ✅ |
-| CI/CD pipeline | ✅ |
-| **Test count** | **455 / 455 passing** |
+| CI/CD pipeline | 🚧 In progress |
+| **Test count** | **522 / 522 passing** |
 | **License** | Apache 2.0 |
-| **PyPI** | 🔜 |
-| **v1.0 release** | 🔜 |
+| **PyPI** | v1.0.1 |
+| **v1.0 release** | ✅ Released |
+
+---
+
+## Roadmap / Known TODOs
+
+> **Note:** The core physics pipeline is validated and production-ready. These items are enhancements for specific use cases.
+
+| Area | Description | Priority |
+|------|-------------|----------|
+| **Resist `full_chem` parameters** | Expose Dill A/B/C/Q, PEB k/t/D/σ, Mack params in Config & CLI | High |
+| **Stochastics in pipeline** | Integrate photon shot noise + LER/LWR → `SimulationResult` | Medium |
+| **Process window visualization** | `--output-plot` (PNG heatmap) + `--output-csv` for `euv process-window` | Medium |
+| **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | Low |
+| **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
+| **Jupyter tutorials** | 6 notebooks: aerial, NILS/CD, resist, process window, stochastics, mask3D | High (teaching) |
+| **CI/CD** | GitHub Actions (Linux/macOS/Windows), wheel builds, PyPI publish | Ops |
+
+See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with code sketches.
 
 ---
 

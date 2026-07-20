@@ -1,6 +1,13 @@
 """Full simulation pipeline — end-to-end EUV lithography simulation.
 
 Connects all modules: mask → RCWA → aerial image → resist → CD.
+
+Resist presets (typical SE blur sigma for different resist types):
+    RESIST_PRESETS = {
+        "CAR": 5.0,      # Chemically Amplified Resist (typical EUV)
+        "nonCAR": 2.5,   # Non-chemically amplified / metal resist
+        "HighNA": 3.0,   # High-NA EUV (thinner resist)
+    }
 """
 
 from __future__ import annotations
@@ -22,7 +29,14 @@ from euv.resist.develop import (
 from euv.resist.exposure import dose_to_acid
 from euv.resist.peb import reaction_diffusion_analytical
 
+# Resist presets — typical SE blur sigma [nm] for different resist types
+RESIST_PRESETS = {
+    "CAR": 5.0,      # Chemically Amplified Resist (typical EUV)
+    "nonCAR": 2.5,   # Non-chemically amplified / metal resist
+    "HighNA": 3.0,   # High-NA EUV (thinner resist)
+}
 
+@dataclass
 @dataclass
 class SimulationResult:
     """Results from a full pipeline simulation.
@@ -102,6 +116,7 @@ class SimulationConfig:
     resist_threshold: float = 0.5
     resist_model: str = "aerial_threshold"
     resist_threshold_norm: float = 0.5
+    se_blur_nm: float = 0.0
     focus_nm: float = 0.0
     grid: int = 256
     device: str = "cpu"
@@ -127,11 +142,18 @@ def _cd_via_aerial_threshold(
     G = aerial.shape[0]
     device = aerial.device
     cut = aerial[half, :]  # centre-row cut
-    threshold_val = cfg.resist_threshold_norm * float(aerial.max())
+    # FIXED threshold relative to nominal-dose intensity (c0² × nominal dose),
+    # NOT 0.5 × max(aerial).  This makes CD dose-dependent and physically correct.
+    # c0 is the mean reflectivity (a·duty + b·(1−duty)); reconstructed here from
+    # the aerial DC level.
+    dc_level = float(aerial.mean())
+    nominal_dose = 20.0
+    threshold_val = cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
     dx_nm = cfg.period_nm / G
 
     # NILS at the line edge
-    nils_val = nils(aerial, half, line_width_px)
+    dx_nm = cfg.period_nm / cfg.grid
+    nils_val = nils(aerial, half, line_width_px, dx_nm)
 
     # Positive-tone developed mask
     dev = (cut > threshold_val).float()
@@ -161,9 +183,15 @@ def _cd_via_full_chem(
     Uses the Dill ABC exposure model, reaction-diffusion PEB, and threshold
     development.  Requires well-tuned parameters (C, Q, k, t_bake, sigma_diff).
     """
-    nils_val = nils(aerial, half, line_width_px)
+    dx_nm = period_m / cfg.grid * 1e9
+    nils_val = nils(aerial, half, line_width_px, dx_nm)
+
+    # ── Resist-chemie-Kette (Dill ABC → PEB → Entwicklung) ──
+    # Berechnet das resist-chemische Profil (inhib) für die Visualisierung.
+    # Die CD-Extraktion nutzt den gleichen fixen, dosisabhängigen Threshold
+    # wie der aerial_threshold-Pfad, damit beide Pfade konsistent sind.
     dose_map = aerial.clone().float()
-    acid = dose_to_acid(dose_map, C=0.05, Q=0.3, sigma_blur=5.0)
+    acid = dose_to_acid(dose_map, C=0.05, Q=1.0, sigma_blur=5.0, dx=dx_nm)
     inhib_in = torch.ones_like(acid)
     _, inhib = reaction_diffusion_analytical(
         acid,
@@ -171,16 +199,28 @@ def _cd_via_full_chem(
         k=0.3,
         t_bake=60.0,
         sigma_diff=5.0,
-        dx=period_m / cfg.grid * 1e9,
+        dx=dx_nm,
     )
+    # Resist-Profil für Visualisierung (1 = undeveloped/remaining)
+    dev_chem = threshold_development(inhib, threshold=0.2)
 
-    # NILS-modulated threshold
-    dev_threshold = cfg.resist_threshold + 0.15 * max(0.0, 1.0 - nils_val / 200.0)
-    dev = threshold_development(inhib, threshold=dev_threshold)
+    # CD-Extraktion: gleicher fixer Threshold wie aerial_threshold-Pfad
+    cut = aerial[half, :]
+    dc_level = float(aerial.mean())
+    nominal_dose = 20.0
+    threshold_val = cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    dev = (cut > threshold_val).float()
+    dev_2d = dev.unsqueeze(0).expand(cfg.grid, cfg.grid).clone()
 
-    dx_nm = period_m / cfg.grid * 1e9
-    cd_nm = extract_cd(dev, dx=float(dx_nm))
-    return cd_nm, dev, nils_val
+    runs = _find_runs_1d(dev, target=0)
+    if len(runs) == 0:
+        cd_nm = 0.0
+    else:
+        longest = max(runs, key=lambda r: r[1] - r[0])
+        lidx, ridx = longest
+        cd_nm = (ridx - lidx + 1) * dx_nm
+
+    return cd_nm, dev_2d, nils_val
 
 
 def _find_runs_1d(x: torch.Tensor, target: int = 0) -> list:
@@ -318,10 +358,13 @@ def run_simulation(
         illumination_shape=cfg.illumination_shape,
         grid=cfg.grid,
         focus_nm=cfg.focus_nm,
+        se_blur_nm=cfg.se_blur_nm,
     )
 
-    # Normalise to dose
-    aerial = aerial * cfg.dose_mj_cm2 / (aerial.max() + 1e-12)
+    # Normalise to dose (absolute intensity scaling, NOT max-normalisation).
+    # The threshold is a FIXED fraction of the nominal-dose intensity, so the
+    # CD becomes dose-dependent (higher dose -> narrower line for positive resist).
+    aerial = aerial * cfg.dose_mj_cm2
 
     # ── 6. CD Extraction from Aerial Image ──────────────────────
     # Use the aerial image directly to extract CD via intensity threshold.

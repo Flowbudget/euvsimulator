@@ -25,6 +25,9 @@ class TestPipeline:
         vals = result.resist_profile.unique()
         assert all(v.item() in (0.0, 1.0) for v in vals)
 
-    def test_nils_positive(self):
-        result = run_simulation(grid=64)
-        assert result.nils_value >= 0
+    def test_nils_realistic(self):
+        """NILS with realistic SE blur (10nm) should be in literature range ~1.5-4.0."""
+        result = run_simulation(grid=128, se_blur_nm=10.0)
+        # For 64nm pitch, 32nm line, NA=0.33, sigma=0.8 with SE blur
+        # NILS should be in realistic range (literature: ~2-3 for k1≈0.78)
+        assert 1.5 <= result.nils_value <= 4.0, f"NILS={result.nils_value:.3f} not in realistic range"

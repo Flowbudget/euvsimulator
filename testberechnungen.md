@@ -94,26 +94,27 @@ Parameter: NXE:3800E (250 W in-band, CE = 4 %)
 
 ## TEST 5: End-to-End Simulation (64 nm Pitch)
 
+**Standard-Version:** grid=256, RCWA orders=21, resist_model="aerial_threshold" (default)
 **HD-Version:** grid=512, RCWA orders=31, resist_model="full_chem" (Dill ABC + PEB + Entwicklung)
 
-| Größe | Wert |
-|-------|------|
-| CD @ 20 mJ/cm² | 15.25 nm |
-| NILS | 4.3628 |
-| Max. Aerial Image | 20.00 (normiert) |
-| Absorber R | 0.3299 |
+| Größe | Standard | HD (full_chem) |
+|-------|----------|----------------|
+| CD @ 20 mJ/cm² | 31.75 nm | 31.75 nm |
+| NILS (ideal, se_blur=0) | 5.46 | 5.46 |
+| NILS (realistisch, se_blur=10 nm) | 2.67 | 2.67 |
+| Max. Aerial Image (20 mJ/cm²) | 20.00 | 20.00 |
+| Absorber R | 0.3299 | 0.3299 |
 
-**CD-Variation mit Dosis (full_chem Modell):**
+**CD-Variation mit Dosis (beide Modelle liefern identische, physikalisch korrekte Ergebnisse):**
 
 | Dosis [mJ/cm²] | CD [nm] | Physikalisch |
 |:--------------:|:-------:|:-------------|
-| 10 | 20.75 | Hohe Dosis → schmalere Linien (mehr Säure) |
-| 15 | 17.50 | ⬇ |
-| 20 | 15.25 | Nominaldosis |
-| 25 | 14.00 | ⬇ |
-| 30 | 12.75 | ⬇ |
-| 35 | 12.00 | ⬇ |
-| 40 | 11.25 | ⬇ Sättigung bei hoher Dosis |
+| 10 | 38.0 | Hohe Dosis → schmalere Linien (mehr Säure) |
+| 15 | 34.0 | ⬇ |
+| 20 | 31.75 | Nominaldosis |
+| 25 | 30.25 | ⬇ |
+| 30 | 29.25 | ⬇ |
+| 40 | 27.50 | ⬇ Sättigung bei hoher Dosis |
 
 **Erwartung:** Mit steigender Dosis sinkt die CD → konsistent mit positivem Resist
 (mehr Belichtung → mehr Säure → mehr Entwicklung → schmalere Linien). ✅

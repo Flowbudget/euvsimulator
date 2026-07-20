@@ -201,9 +201,10 @@ def reaction_diffusion_adi(
         # RHS = (I + α·∂²/∂y²) A
         lap_y = _laplacian_y_explicit(A, boundary)
         R = A + alpha * lap_y  # (H, W)
-        # Solve T_x · A_new[j]^T = R[i, :]^T for each row i
-        # T_x @ A_new[i,:] = R[i,:]  →  A_new = (T_x^-1 @ R^T)^T
-        A = R @ T_x.inverse().T  # (H, W) @ (W, W) = (H, W)
+        # Solve T_x · A_new[i,:]^T = R[i,:]^T for each row i
+        # T_x @ A_new[i,:] = R[i,:]  →  A_new = solve(T_x, R.T).T
+        # Using torch.linalg.solve instead of inverse for numerical stability
+        A = torch.linalg.solve(T_x, R.T).T  # (H, W)
 
         # --- reaction half-step ---
         M = M * torch.exp(-k * A * (dt / 2.0))
@@ -211,8 +212,8 @@ def reaction_diffusion_adi(
         # --- half-step 2: implicit in y, explicit in x ---
         lap_x = _laplacian_x_explicit(A, boundary)
         R = A + alpha * lap_x  # (H, W)
-        # T_y @ A_new[:,j] = R[:,j] for each column j
-        A = T_y.inverse() @ R  # (H, H) @ (H, W) = (H, W)
+        # T_y · A_new[:,j] = R[:,j] for each column j
+        A = torch.linalg.solve(T_y, R)  # (H, W)
 
         # --- reaction half-step ---
         M = M * torch.exp(-k * A * (dt / 2.0))
