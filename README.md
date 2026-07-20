@@ -3,7 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Flowbudget/OpEnUV/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/OpEnUV/actions)
-[![Tests](https://img.shields.io/badge/tests-455%2F455%20passing-brightgreen)](https://github.com/Flowbudget/OpEnUV)
+[![Tests](https://img.shields.io/badge/tests-522%2F522%20passing-brightgreen)](https://github.com/Flowbudget/OpEnUV)
 
 **From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
 
@@ -11,7 +11,7 @@
 |---|---|
 | ⚛️ **First-principles physics** | CXRO atomic scattering → TMM reflectivity → RCWA mask diffraction → Hopkins imaging → Dill ABC resist |
 | 🚀 **GPU-native** | PyTorch autograd throughout — differentiable from mask geometry to CD |
-| 🧪 **Validated** | 455 unit tests, cross-checked against CXRO database, independent literature, and Grok verification |
+| 🧪 **Validated** | 522 unit tests, cross-checked against CXRO database, independent literature, and Grok verification |
 | 📦 **Zero commercial dependencies** | Apache 2.0 — fork, modify, deploy freely |
 
 ---
@@ -29,7 +29,7 @@ OpEnUV is the **only open-source tool that models the complete EUV lithography p
 | **High-NA optics** | Anamorphic 4×/8×, Zernike | ✅ | ❌ | ❌ | ❌ |
 | **Resist chemistry** | Dill ABC + PEB + development | ✅ | ❌ | ❌ | ❌ |
 | **Plasma source** | LPP Sn-droplet spectral model | ✅ | ❌ | ❌ | ❌ |
-| **Stochastics** | Shot noise, LER/LWR | ✅ | ❌ | ❌ | ✅ |
+| **Stochastics** | Shot noise, LER/LWR | ⚠️ | ❌ | ❌ | ✅ |
 | **CD metrology** | Process window, Bossung | ✅ | ❌ | ❌ | ❌ |
 | **Optimization** | Differentiable OPC/ILT bridge | ✅ | ❌ | ❌ | ✅ |
 | **Web API** | REST + dashboard | ✅ | ❌ | ❌ | ❌ |
@@ -50,7 +50,7 @@ Full details in [`testberechnungen.md`](testberechnungen.md).
 | **Mo/Si multilayer** 50 BL @ 6° | **R = 64.7%** (ideal) / 60.6% (σ=0.5 nm) | S-matrix TMM + Névot-Croce |
 | **Wavelength: 13.5 nm** | — | E = hc/λ = 91.84 eV |
 | **Illumination: NA 0.33** | Conventional, σ = 0.8 | Dipole / annular / quasar |
-| **Aerial image NILS** | **5.46** @ 64 nm pitch, 32 nm CD (ideal) → **2.67** with SE blur 10 nm | Hopkins formulation + SE blur |
+| **Aerial image NILS** | **5.48** @ 64 nm pitch, 32 nm CD (ideal) → **2.70** with SE blur 10 nm | Hopkins formulation + SE blur |
 | **Process window** | CD vs. dose × focus | Bossung plot |
 
 > *"The calculations are solid and physically sound."* — Grok (independent review, 2026-07-09)
