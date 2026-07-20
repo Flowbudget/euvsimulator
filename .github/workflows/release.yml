@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:  # manuell triggern: "Run workflow" Button in Actions
   push:
     tags:
       - 'v*'
@@ -30,7 +31,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch'  # NUR manuell
     permissions:
       id-token: write  # Required for PyPI trusted publishing
     steps:
