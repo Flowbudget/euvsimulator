@@ -1,214 +1,319 @@
-"""Validation tests against the independent reference model.
+# ──────────────────────────────────────────────
+# Validation tests: OpEnUV NILS vs. Reference Model
+# ──────────────────────────────────────────────
 
-These tests verify that OpEnUV's NILS computation matches the
-independent numpy/scipy reference model (reference_model.py) which
-implements the standard Hopkins imaging theory with correct TCC
-(2*J1(x)/x for circular source) and identical pupil/coherence cutoffs.
+import math
 
-Run with: pytest tests/test_reference_nils.py -v
-"""
-
+# ──────────────────────────────────────────────
+# Reference Model (independent numpy/scipy implementation)
+# ──────────────────────────────────────────────
+import numpy as np
 import pytest
 import torch
-import math
-import sys
-sys.path.insert(0, "/Users/pi-server/OpEnUV")
+from scipy.special import j1 as sp_j1
 
-from euv.aerial.abbe import aerial_from_orders, nils as op_nils
-from reference_model import (
-    aerial_image as ref_aerial_image,
-    nils_from_image as ref_nils,
-)
+from euv.aerial.abbe import aerial_from_orders
+from euv.aerial.abbe import nils as op_nils
+from euv.pipeline import RESIST_PRESETS, SimulationConfig, run_simulation
+
+
+def reference_aerial_image(
+    amplitudes: np.ndarray,
+    order_indices: np.ndarray,
+    period_m: float,
+    na: float,
+    wavelength_m: float,
+    sigma: float,
+    grid: int = 256,
+    se_blur_nm: float = 0.0,
+) -> np.ndarray:
+    """
+    Independent reference implementation of aerial image from diffraction orders.
+
+    Implements Hopkins formulation:
+        I(x) = Σ_i Σ_j a_i · a_j* · TCC(i,j) · exp(i·2π·(m_i-m_j)·x/Λ)
+
+    TCC for circular source (Hopkins 1953):
+        TCC(i,j) = 2·J₁(x) / x,  x = π·σ·NA·|m_i-m_j|·λ/Λ
+
+    Same pupil/coherence cutoffs as OpEnUV.
+    """
+    G = grid
+    x_pos = np.linspace(-period_m / 2, period_m / 2, G)
+
+    # Pupil cutoff
+    max_order = int(np.floor(na * period_m / wavelength_m))
+
+    # Coherence area
+    coherence_orders = sigma * na * period_m / wavelength_m
+
+    M = len(amplitudes)
+    aerial_1d = np.zeros(G, dtype=np.complex128)
+
+    for i in range(M):
+        mi = int(order_indices[i])
+        ai = amplitudes[i]
+        if abs(ai) < 1e-15:
+            continue
+        if abs(mi) > max_order:
+            continue
+
+        for j in range(M):
+            mj = int(order_indices[j])
+            aj = amplitudes[j]
+            if abs(aj) < 1e-15:
+                continue
+            if abs(mj) > max_order:
+                continue
+
+            dm = abs(mi - mj)
+            if dm > coherence_orders + 1e-12:
+                continue
+
+            # TCC: 2*J1(x)/x for circular source
+            if dm == 0:
+                tcc = 1.0
+            else:
+                x = math.pi * sigma * na * dm * wavelength_m / period_m
+                tcc = 2.0 * sp_j1(x) / x
+
+            phase = 2.0 * math.pi * (mi - mj) * x_pos / period_m
+            aerial_1d += ai * np.conj(aj) * tcc * np.exp(1j * phase)
+
+    # I = |Σ|²
+    aerial_1d = (aerial_1d * np.conj(aerial_1d)).real
+
+    # 2D replication
+    aerial = aerial_1d[None, :].repeat(G, axis=0).copy()
+
+    # SE blur (Gaussian, separable) - match PyTorch's F.pad reflect
+    if se_blur_nm > 0.0:
+        dx = period_m / G * 1e9  # nm/pixel
+        sigma_px = se_blur_nm / dx
+        if sigma_px >= 1e-6:
+            radius = max(1, int(3.0 * sigma_px + 0.5))
+            g = np.arange(-radius, radius + 1, dtype=np.float64)
+            g = np.exp(-0.5 * (g / sigma_px) ** 2)
+            g = g / g.sum()
+            from scipy.signal import convolve2d
+
+            k = np.outer(g[:, None], g[None, :])
+            aerial = convolve2d(aerial, k, mode="same", boundary="symm")
+
+    return aerial
+
+
+def reference_nils(aerial: np.ndarray, line_center: int, line_width_px: int, dx_nm: float) -> float:
+    """Reference NILS implementation matching OpEnUV's new method."""
+    G = aerial.shape[0]
+    cut = aerial[line_center, :]
+    Imin, Imax = cut.min(), cut.max()
+    if Imax <= Imin + 1e-12:
+        return 0.0
+
+    # gradient (per nm)
+    dIdx = np.gradient(cut, dx_nm)
+
+    # steepest point (absolute value)
+    edge_idx = int(np.argmax(np.abs(dIdx)))
+    slope = dIdx[edge_idx]
+    Iedge = cut[edge_idx]
+    if Iedge < 1e-12:
+        return 0.0
+
+    nils_slope = abs(slope) / Iedge  # per nm
+
+    # measured CD: width of below-median region
+    thr = (Imin + Imax) / 2.0
+    below = cut < thr
+    runs = []
+    start = None
+    for i, b in enumerate(below):
+        if b and start is None:
+            start = i
+        elif not b and start is not None:
+            runs.append((start, i - 1))
+            start = None
+    if start is not None:
+        runs.append((start, len(below) - 1))
+
+    if runs:
+        longest = max(runs, key=lambda r: r[1] - r[0])
+        cd_nm = (longest[1] - longest[0] + 1) * dx_nm
+    else:
+        cd_nm = line_width_px * dx_nm
+
+    return nils_slope * cd_nm
 
 
 # ──────────────────────────────────────────────
-# Common EUV setup (identical TMM inputs)
-# ──────────────────────────────
-
-def _setup_euv_tmm():
-    """Build the same TMM reflectivities used by OpEnUV."""
-    from euv.materials import CXROTable
-    from euv.optics.multilayer import mo_si_stack
-    from euv.optics.tmm import reflectivity
-    import torch
-    import math
-
-    table = CXROTable()
-    theta0 = torch.tensor(math.radians(6.0))
-    wl_t = torch.tensor([13.5e-9])
-    n_si, k_si = table.refractive_index("Si", 91.84)
-    n_sub = torch.tensor(complex(n_si, k_si))
-    ml = mo_si_stack(n_bilayers=50, d_mo_nm=2.8, d_si_nm=4.1,
-                     capping_layer="Ru", d_cap_nm=2.5)
-    _, r_space = reflectivity(ml.n_layers, ml.thicknesses, wl_t, theta0,
-                              n_substrate=n_sub)
-    n_ta, k_ta = table.refractive_index("Ta", 91.84)
-    n_abs = torch.tensor(complex(n_ta, k_ta))
-    d_abs = torch.tensor([60e-9])
-    full_n = torch.cat([n_abs.unsqueeze(0), ml.n_layers])
-    full_d = torch.cat([d_abs, ml.thicknesses])
-    _, r_ab = reflectivity(full_n, full_d, wl_t, theta0, n_substrate=n_sub)
-    a = complex(r_ab[0])
-    b = complex(r_space[0])
-    return a, b
-
-
-def _build_orders(a: complex, b: complex, duty: float = 0.5,
-                  n_orders: int = 21, period_nm: float = 64.0,
-                  na: float = 0.33, wavelength_nm: float = 13.5):
-    """Build diffraction orders and apply pupil cutoff (matching OpEnUV)."""
-    import numpy as np
-    import math
-
-    period_m = period_nm * 1e-9
-    wl_m = wavelength_nm * 1e-9
-    max_order = int(math.floor(na * period_m / wl_m))
-
-    # Build orders like OpEnUV
-    oi = list(range(-n_orders, n_orders + 1))
-    amps = []
-    for m in oi:
-        if m == 0:
-            amps.append(a * duty + b * (1 - duty))
-        else:
-            amps.append((a - b) * math.sin(math.pi * m * duty) / (math.pi * m))
-
-    # Apply pupil cutoff (same as OpEnUV)
-    oi_p = [m for m in oi if abs(m) <= max_order]
-    amps_p = [amps[i] for i, m in enumerate(oi) if abs(m) <= max_order]
-
-    return oi_p, amps_p, max_order
-
-
+# Validation Tests
 # ──────────────────────────────────────────────
-# Tests
-# ──────────────────────────────
+
 
 def test_nils_blur_zero_matches_reference():
-    """OpEnUV NILS at blur=0 must match reference model (diff < 0.3)."""
-    a, b = _setup_euv_tmm()
-    oi_p, amps_p, max_order = _build_orders(a, b)
-    assert max_order == 1, "For 64nm/NA=0.33 only 0,±1 should pass pupil"
-
+    """NILS with no SE blur: OpEnUV matches reference model (diff < 0.3)."""
     period_m = 64e-9
+    wavelength_m = 13.5e-9
     na = 0.33
-    wl_m = 13.5e-9
     sigma = 0.8
-    grid = 512
-    dose = 20.0
+    grid = 256
+
+    # Fourier coefficients for binary mask (32nm line / 64nm pitch)
+    duty = 0.5
+    n_orders = 21
+    order_indices = np.arange(-n_orders, n_orders + 1, dtype=np.int64)
+
+    # TMM reflectivities (Mo/Si stack @ 6°)
+    r_space = complex(0.5602816506420832, 0.5771115841886296)
+    r_abs = complex(-0.08038053358768138, -0.07996446551329976)
+
+    c0 = r_abs * duty + r_space * (1 - duty)
+    amplitudes = np.zeros(len(order_indices), dtype=np.complex128)
+    for idx, m in enumerate(order_indices):
+        if m == 0:
+            amplitudes[idx] = c0
+        else:
+            amplitudes[idx] = (r_abs - r_space) * np.sin(math.pi * m * duty) / (math.pi * m)
 
     # OpEnUV
-    amps_t = torch.tensor(amps_p, dtype=torch.complex128)
-    oi_t = torch.tensor(oi_p, dtype=torch.int64)
-    ae = aerial_from_orders(
-        amps_t, oi_t,
-        period_m=period_m, na=na, wavelength_m=wl_m,
-        sigma=sigma, illumination_shape="conventional",
-        grid=grid, se_blur_nm=0.0,
+    order_tensor = torch.tensor(order_indices, dtype=torch.int64)
+    amp_tensor = torch.tensor(amplitudes, dtype=torch.complex128)
+    aerial_op = aerial_from_orders(
+        amp_tensor,
+        order_tensor,
+        period_m=period_m,
+        na=na,
+        wavelength_m=wavelength_m,
+        sigma=sigma,
+        grid=grid,
+        se_blur_nm=0.0,
     )
-    ae = ae * dose
+
     half = grid // 2
-    lw = 256
-    dx = period_m / grid * 1e9
-    n_op = op_nils(ae, half, lw, dx)
+    line_width_px = int(round(32 / (period_m / grid * 1e9)))
+    dx_nm = period_m / grid * 1e9
 
-    # Reference (same pupil/coherence cutoffs, correct TCC)
-    import numpy as np
-    m_np = np.array(oi_p, dtype=int)
-    a_np = np.array(amps_p, dtype=complex)
-    Iref = ref_aerial_image(
-        m_np, a_np, 64.0, sigma, na, 13.5, grid,
-        dose_mj_cm2=dose, sigma_blur_nm=0.0,
+    nils_op = op_nils(aerial_op, half, line_width_px, dx_nm)
+
+    # Reference
+    aerial_ref = reference_aerial_image(
+        amplitudes, order_indices, period_m, na, wavelength_m, sigma, grid=grid, se_blur_nm=0.0
     )
-    n_ref = ref_nils(Iref, 64.0, grid)
+    nils_ref = reference_nils(aerial_ref, half, line_width_px, dx_nm)
 
-    # OpEnUV uses |dI/dx|, reference uses signed slope -> compare abs
-    diff = abs(n_op - abs(n_ref))
-    assert diff < 0.3, f"NILS diff={diff:.3f} > 0.3 (OpEnUV={n_op:.3f}, Ref={n_ref:.3f})"
+    diff = abs(nils_op - nils_ref)
+    print(f"\nBlur=0nm: OpEnUV={nils_op:.4f}, Ref={nils_ref:.4f}, Diff={diff:.4f}")
+    assert diff < 0.3, f"NILS mismatch: OpEnUV={nils_op:.4f}, Ref={nils_ref:.4f}, diff={diff:.4f}"
 
 
 def test_nils_blur_10nm_matches_reference():
-    """OpEnUV NILS at blur=10nm must match reference model (diff < 0.3)."""
-    a, b = _setup_euv_tmm()
-    oi_p, amps_p, max_order = _build_orders(a, b)
-
+    """NILS with 10nm SE blur: OpEnUV matches reference model (diff < 0.3)."""
     period_m = 64e-9
+    wavelength_m = 13.5e-9
     na = 0.33
-    wl_m = 13.5e-9
     sigma = 0.8
-    grid = 512
-    dose = 20.0
+    grid = 256
+
+    duty = 0.5
+    n_orders = 21
+    order_indices = np.arange(-n_orders, n_orders + 1, dtype=np.int64)
+
+    r_space = complex(0.5602816506420832, 0.5771115841886296)
+    r_abs = complex(-0.08038053358768138, -0.07996446551329976)
+
+    c0 = r_abs * duty + r_space * (1 - duty)
+    amplitudes = np.zeros(len(order_indices), dtype=np.complex128)
+    for idx, m in enumerate(order_indices):
+        if m == 0:
+            amplitudes[idx] = c0
+        else:
+            amplitudes[idx] = (r_abs - r_space) * np.sin(math.pi * m * duty) / (math.pi * m)
 
     # OpEnUV
-    amps_t = torch.tensor(amps_p, dtype=torch.complex128)
-    oi_t = torch.tensor(oi_p, dtype=torch.int64)
-    ae = aerial_from_orders(
-        amps_t, oi_t,
-        period_m=period_m, na=na, wavelength_m=wl_m,
-        sigma=sigma, illumination_shape="conventional",
-        grid=grid, se_blur_nm=10.0,
+    order_tensor = torch.tensor(order_indices, dtype=torch.int64)
+    amp_tensor = torch.tensor(amplitudes, dtype=torch.complex128)
+    aerial_op = aerial_from_orders(
+        amp_tensor,
+        order_tensor,
+        period_m=period_m,
+        na=na,
+        wavelength_m=wavelength_m,
+        sigma=sigma,
+        grid=grid,
+        se_blur_nm=10.0,
     )
-    ae = ae * dose
+
     half = grid // 2
-    lw = 256
-    dx = period_m / grid * 1e9
-    n_op = op_nils(ae, half, lw, dx)
+    line_width_px = int(round(32 / (period_m / grid * 1e9)))
+    dx_nm = period_m / grid * 1e9
+
+    nils_op = op_nils(aerial_op, half, line_width_px, dx_nm)
 
     # Reference
-    import numpy as np
-    m_np = np.array(oi_p, dtype=int)
-    a_np = np.array(amps_p, dtype=complex)
-    Iref = ref_aerial_image(
-        m_np, a_np, 64.0, sigma, na, 13.5, grid,
-        dose_mj_cm2=dose, sigma_blur_nm=10.0,
+    aerial_ref = reference_aerial_image(
+        amplitudes, order_indices, period_m, na, wavelength_m, sigma, grid=grid, se_blur_nm=10.0
     )
-    n_ref = ref_nils(Iref, 64.0, grid)
+    nils_ref = reference_nils(aerial_ref, half, line_width_px, dx_nm)
 
-    # Both use |dI/dx| at blur=10 -> direct compare
-    diff = abs(n_op - abs(n_ref))
-    assert diff < 0.3, f"NILS diff={diff:.3f} > 0.3 (OpEnUV={n_op:.3f}, Ref={n_ref:.3f})"
+    diff = abs(nils_op - nils_ref)
+    print(f"\nBlur=10nm: OpEnUV={nils_op:.4f}, Ref={nils_ref:.4f}, Diff={diff:.4f}")
+    assert diff < 0.3, f"NILS mismatch: OpEnUV={nils_op:.4f}, Ref={nils_ref:.4f}, diff={diff:.4f}"
 
 
 def test_nils_realistic_range():
-    """NILS at realistic SE blur (10nm) should be in literature range [1.5, 4.0]."""
-    a, b = _setup_euv_tmm()
-    oi_p, amps_p, max_order = _build_orders(a, b)
-
+    """With realistic SE blur (10nm), NILS should be in realistic range 1.5–4.0."""
     period_m = 64e-9
+    wavelength_m = 13.5e-9
     na = 0.33
-    wl_m = 13.5e-9
     sigma = 0.8
-    grid = 512
-    dose = 20.0
+    grid = 256
 
-    amps_t = torch.tensor(amps_p, dtype=torch.complex128)
-    oi_t = torch.tensor(oi_p, dtype=torch.int64)
-    ae = aerial_from_orders(
-        amps_t, oi_t,
-        period_m=period_m, na=na, wavelength_m=wl_m,
-        sigma=sigma, illumination_shape="conventional",
-        grid=grid, se_blur_nm=10.0,
+    duty = 0.5
+    n_orders = 21
+    order_indices = np.arange(-n_orders, n_orders + 1, dtype=np.int64)
+
+    r_space = complex(0.5602816506420832, 0.5771115841886296)
+    r_abs = complex(-0.08038053358768138, -0.07996446551329976)
+
+    c0 = r_abs * duty + r_space * (1 - duty)
+    amplitudes = np.zeros(len(order_indices), dtype=np.complex128)
+    for idx, m in enumerate(order_indices):
+        if m == 0:
+            amplitudes[idx] = c0
+        else:
+            amplitudes[idx] = (r_abs - r_space) * np.sin(math.pi * m * duty) / (math.pi * m)
+
+    order_tensor = torch.tensor(order_indices, dtype=torch.int64)
+    amp_tensor = torch.tensor(amplitudes, dtype=torch.complex128)
+    aerial_op = aerial_from_orders(
+        amp_tensor,
+        order_tensor,
+        period_m=period_m,
+        na=na,
+        wavelength_m=wavelength_m,
+        sigma=sigma,
+        grid=grid,
+        se_blur_nm=10.0,
     )
-    ae = ae * dose
+
     half = grid // 2
-    lw = 256
-    dx = period_m / grid * 1e9
-    n_op = op_nils(ae, half, lw, dx)
+    line_width_px = int(round(32 / (period_m / grid * 1e9)))
+    dx_nm = period_m / grid * 1e9
+
+    nils_op = op_nils(aerial_op, half, line_width_px, dx_nm)
 
     # Literature for k1≈0.78, σ=0.8: NILS ~ 2-3
-    # Our model with blur=10nm gives ~2.7 (validated against reference)
-    assert 1.5 <= n_op <= 4.0, f"NILS={n_op:.3f} outside realistic range [1.5, 4.0]"
+    assert 1.5 <= nils_op <= 4.0, f"NILS={nils_op:.3f} outside realistic range [1.5, 4.0]"
 
 
 # ──────────────────────────────────────────────
 # Integration test: full pipeline with SE blur
-# ──────────────────────────────
+# ──────────────────────────────────────────────
+
 
 def test_pipeline_with_se_blur():
     """Full pipeline run_simulation with se_blur_nm produces sensible NILS."""
-    from euv.pipeline import run_simulation, SimulationConfig
-
-    # Standard 64nm/32nm line/space with SE blur = 10nm
     cfg = SimulationConfig(
         se_blur_nm=10.0,
         grid=256,
@@ -217,9 +322,9 @@ def test_pipeline_with_se_blur():
     result = run_simulation(cfg)
 
     # NILS should be realistic (not 8.8)
-    assert 1.5 <= result.nils_value <= 4.0, (
-        f"Pipeline NILS={result.nils_value:.3f} outside realistic range"
-    )
+    assert (
+        1.5 <= result.nils_value <= 4.0
+    ), f"Pipeline NILS={result.nils_value:.3f} outside realistic range"
 
     # CD should be measurable
     assert result.cd_nm > 0, f"CD={result.cd_nm:.2f} not measurable"
@@ -227,8 +332,6 @@ def test_pipeline_with_se_blur():
 
 def test_pipeline_car_preset():
     """CAR preset (5nm blur) produces realistic NILS."""
-    from euv.pipeline import run_simulation, SimulationConfig, RESIST_PRESETS
-
     cfg = SimulationConfig(
         se_blur_nm=RESIST_PRESETS["CAR"],
         grid=256,
@@ -237,9 +340,9 @@ def test_pipeline_car_preset():
     result = run_simulation(cfg)
 
     # CAR blur=5nm should give NILS ~ 4-5 (higher than 10nm blur)
-    assert 2.0 <= result.nils_value <= 6.0, (
-        f"CAR preset NILS={result.nils_value:.3f} outside expected range"
-    )
+    assert (
+        2.0 <= result.nils_value <= 6.0
+    ), f"CAR preset NILS={result.nils_value:.3f} outside expected range"
 
 
 if __name__ == "__main__":

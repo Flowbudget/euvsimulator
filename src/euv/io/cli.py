@@ -92,8 +92,12 @@ def simulate(
     orders: int = typer.Option(21, "--orders", "-o", help="RCWA Fourier orders"),
     material: str = typer.Option("Ta", "--material", "-m", help="Absorber material"),
     threshold: float = typer.Option(0.5, "--threshold", "-t", help="Resist threshold"),
-    se_blur: float = typer.Option(0.0, "--se-blur", help="Secondary-electron blur sigma [nm]; 0 = ideal, 5-10 realistic CAR"),
-    resist_preset: Optional[str] = typer.Option(None, "--resist-preset", help="Resist preset: CAR (5nm), nonCAR (2.5nm), HighNA (3nm)"),
+    se_blur: float = typer.Option(
+        0.0, "--se-blur", help="Secondary-electron blur sigma [nm]; 0 = ideal, 5-10 realistic CAR"
+    ),
+    resist_preset: Optional[str] = typer.Option(
+        None, "--resist-preset", help="Resist preset: CAR (5nm), nonCAR (2.5nm), HighNA (3nm)"
+    ),
     output: Optional[str] = typer.Option(
         None, "--output", help="Output directory (prints to stdout if omitted)"
     ),
@@ -102,7 +106,7 @@ def simulate(
 
     Reads from a YAML/JSON config file, or uses command-line parameters.
     """
-    from euv.pipeline import SimulationConfig, run_simulation, RESIST_PRESETS
+    from euv.pipeline import RESIST_PRESETS, SimulationConfig, run_simulation
 
     if config is not None:
         cfg_path = Path(config)
@@ -121,7 +125,11 @@ def simulate(
         se_blur_nm = se_blur
         if resist_preset is not None:
             if resist_preset not in RESIST_PRESETS:
-                typer.echo(f"Unknown resist preset: {resist_preset}. Available: {list(RESIST_PRESETS.keys())}", err=True)
+                typer.echo(
+                    "Unknown resist preset: "
+                    f"{resist_preset}. Available: {list(RESIST_PRESETS.keys())}",
+                    err=True,
+                )
                 raise typer.Exit(1)
             se_blur_nm = RESIST_PRESETS[resist_preset]
 

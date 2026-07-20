@@ -124,12 +124,12 @@ class TestDillABCExposure:
         acid1, _ = dill_abc_exposure(dose_map, A=0.8, n_layers=3)
         acid2, _ = dill_abc_exposure(dose_map, A=0.1, n_layers=3)
         assert not torch.allclose(acid1, acid2)
-        
+
         # Also test C and Q with single layer
         acid3, _ = dill_abc_exposure(dose_map, C=0.5, n_layers=1)
         acid4, _ = dill_abc_exposure(dose_map, C=0.1, n_layers=1)
         assert not torch.allclose(acid3, acid4)
-        
+
         acid5, _ = dill_abc_exposure(dose_map, Q=0.5, n_layers=1)
         acid6, _ = dill_abc_exposure(dose_map, Q=0.1, n_layers=1)
         assert not torch.allclose(acid5, acid6)

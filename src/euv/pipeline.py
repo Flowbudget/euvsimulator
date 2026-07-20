@@ -23,7 +23,6 @@ from euv.materials import CXROTable
 from euv.optics.multilayer import mo_si_stack
 from euv.optics.tmm import reflectivity
 from euv.resist.develop import (
-    extract_cd,
     threshold_development,
 )
 from euv.resist.exposure import dose_to_acid
@@ -31,10 +30,11 @@ from euv.resist.peb import reaction_diffusion_analytical
 
 # Resist presets — typical SE blur sigma [nm] for different resist types
 RESIST_PRESETS = {
-    "CAR": 5.0,      # Chemically Amplified Resist (typical EUV)
-    "nonCAR": 2.5,   # Non-chemically amplified / metal resist
-    "HighNA": 3.0,   # High-NA EUV (thinner resist)
+    "CAR": 5.0,  # Chemically Amplified Resist (typical EUV)
+    "nonCAR": 2.5,  # Non-chemically amplified / metal resist
+    "HighNA": 3.0,  # High-NA EUV (thinner resist)
 }
+
 
 @dataclass
 @dataclass
@@ -148,7 +148,9 @@ def _cd_via_aerial_threshold(
     # the aerial DC level.
     dc_level = float(aerial.mean())
     nominal_dose = 20.0
-    threshold_val = cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    threshold_val = (
+        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    )
     dx_nm = cfg.period_nm / G
 
     # NILS at the line edge
@@ -208,7 +210,9 @@ def _cd_via_full_chem(
     cut = aerial[half, :]
     dc_level = float(aerial.mean())
     nominal_dose = 20.0
-    threshold_val = cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    threshold_val = (
+        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    )
     dev = (cut > threshold_val).float()
     dev_2d = dev.unsqueeze(0).expand(cfg.grid, cfg.grid).clone()
 

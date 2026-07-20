@@ -50,6 +50,7 @@ def _j1(x: float) -> float:
         return float(torch.special.bessel_j1(torch.tensor(x)).item())
     except (AttributeError, ImportError):
         from scipy.special import j1
+
         return float(j1(x))
 
 
@@ -314,6 +315,7 @@ def nils(
 
 # Backward-compatible alias for hopkins.py
 # abbe_image was the old name; now aerial_from_orders
+
 
 def abbe_image(
     mask_fft: torch.Tensor,
