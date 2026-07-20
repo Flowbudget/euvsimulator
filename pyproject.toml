@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openuv"
-version = "1.0.1"
+version = "1.0.3"
 description = "Open Source EUV Lithography Simulator — from plasma source to CD metrology"
 readme = "README.md"
 license = {text = "Apache-2.0"}
