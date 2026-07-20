@@ -202,11 +202,13 @@ See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with
 
 ## Benchmark: small system performance
 
-| Config | Grid | Orders | Time (CPU) | Time (GPU) |
-|--------|------|--------|------------|------------|
-| Small | 256×256 | 21 | ~0.1 s | — |
-| Medium | 512×512 | 31 | ~0.3 s | — |
-| Standard | 1024×1024 | 51 | ~1.2 s | ~0.1 s |
+*Measured on Apple Mac mini M1 (16 GB RAM), CPU-only.*
+
+| Config | Grid | Orders | Time |
+|--------|------|--------|------|
+| Small | 256×256 | 21 | ~0.7 s |
+| Medium | 512×512 | 31 | ~0.7 s |
+| Standard | 1024×1024 | 51 | ~0.7 s |
 
 ---
 
