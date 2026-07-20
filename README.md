@@ -60,11 +60,9 @@ Full details in [`testberechnungen.md`](testberechnungen.md).
 ## Quick start
 
 ```bash
-# Clone and install from source
+# Clone the repository
 git clone https://github.com/Flowbudget/OpEnUV.git
 cd OpEnUV
-pip install -e .                       # minimal install
-pip install -e ".[dev]"                # with development tools
 
 # End-to-end simulation
 euv simulate --period=64 --cd=32 --dose=20
