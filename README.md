@@ -202,13 +202,13 @@ See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with
 
 ## Benchmark: small system performance
 
-*Measured on Apple Mac mini M1 (16 GB RAM), CPU-only.*
+*Measured on Apple Mac mini M1 (16 GB RAM), CPU-only. After warm imports (module load time ~0.7s on first call).*
 
 | Config | Grid | Orders | Time |
 |--------|------|--------|------|
-| Small | 256×256 | 21 | ~0.7 s |
-| Medium | 512×512 | 31 | ~0.7 s |
-| Standard | 1024×1024 | 51 | ~0.7 s |
+| Small | 256×256 | 21 | ~0.03 s |
+| Medium | 512×512 | 31 | ~0.03 s |
+| Standard | 1024×1024 | 51 | ~0.04 s |
 
 ---
 
