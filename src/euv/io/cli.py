@@ -229,7 +229,7 @@ def simulate(
             mask_sidewall_roughness_nm=mask_sidewall_roughness_nm,
         )
 
-    typer.echo("🔬 Running EUV lithography simulation...")
+    typer.echo("\U0001f52c Running EUV lithography simulation...")
     result = run_simulation(cfg)
 
     out = {
@@ -276,9 +276,9 @@ def simulate(
             plt.tight_layout()
             plt.savefig(str(out_dir / "simulation.png"), dpi=150)
             plt.close()
-            typer.echo(f"📁 Results saved to {out_dir.resolve()}")
+            typer.echo(f"\U0001f4c1 Results saved to {out_dir.resolve()}")
         except Exception:
-            typer.echo(f"📁 Results saved to {out_dir.resolve()} (PNG skipped)")
+            typer.echo(f"\U0001f4c1 Results saved to {out_dir.resolve()} (PNG skipped)")
     else:
         print(json.dumps(out, indent=2))
 
@@ -347,7 +347,7 @@ def process_window(
     focuses = np.linspace(focus_start, focus_end, focus_steps)
     target_cd = cd
 
-    typer.echo(f"📊 Computing process window: {dose_steps}×{focus_steps} grid...")
+    typer.echo(f"\U0001f4ca Computing process window: {dose_steps}×{focus_steps} grid...")
     cd_matrix = np.zeros((dose_steps, focus_steps))
     nils_matrix = np.zeros((dose_steps, focus_steps))
 
@@ -420,7 +420,7 @@ def process_window(
 
     if output:
         Path(output).write_text(json.dumps(result, indent=2))
-        typer.echo(f"📁 Results saved to {output}")
+        typer.echo(f"\U0001f4c1 Results saved to {output}")
 
     # Generate heatmap plot
     if output_plot:
@@ -473,7 +473,7 @@ def process_window(
             plt.tight_layout()
             plt.savefig(output_plot, dpi=150)
             plt.close()
-            typer.echo(f"📊 Heatmap saved to {output_plot}")
+            typer.echo(f"\U0001f4ca Heatmap saved to {output_plot}")
         except Exception as e:
             typer.echo(f"⚠️  Plot generation failed: {e}", err=True)
 
@@ -489,7 +489,7 @@ def process_window(
             for j, f in enumerate(focuses):
                 row = [f"{f:.0f}"] + [f"{cd_matrix[i, j]:.2f}" for i in range(dose_steps)]
                 writer.writerow(row)
-        typer.echo(f"📄 CSV saved to {output_csv}")
+        typer.echo(f"\U0001f4c4 CSV saved to {output_csv}")
 
 
 # ── materials ──────────────────────────────────────────────────────────────
@@ -553,7 +553,7 @@ def serve(
     """Start the REST API server."""
     import uvicorn
 
-    typer.echo(f"🚀 Starting OpEnUV API server on http://{host}:{port}")
+    typer.echo(f"\U0001f680 Starting OpEnUV API server on http://{host}:{port}")
     typer.echo("   Docs: http://{host}:{port}/docs")
     uvicorn.run(
         "euv.api.main:app",
@@ -695,7 +695,7 @@ def calibrate(
         raise typer.Exit(1)
 
     typer.echo(
-        f"📊 Loaded wafer data: {data.n_dose}×{data.n_focus} FEM "
+        f"\U0001f4ca Loaded wafer data: {data.n_dose}×{data.n_focus} FEM "
         f"({data.cd_matrix_nm.shape[0]}×{data.cd_matrix_nm.shape[1]})"
     )
     typer.echo(f"   Dose range: {data.dose_values.min():.1f}–{data.dose_values.max():.1f} mJ/cm²")
@@ -772,7 +772,7 @@ def calibrate(
         return float(result.cd_nm)
 
     # Run fitting
-    typer.echo("🔬 Fitting resist parameters...")
+    typer.echo("\U0001f52c Fitting resist parameters...")
     fit_result = fit_resist_params(
         data,
         initial_params,
@@ -795,7 +795,7 @@ def calibrate(
     boot_result = None
     if bootstrap_samples > 0:
         typer.echo(
-            f"\n🔄 Running {bootstrap_samples} bootstrap samples for confidence intervals..."
+            f"\n\U0001f504 Running {bootstrap_samples} bootstrap samples for confidence intervals..."
         )
         boot_result = bootstrap_fit(
             data,
@@ -824,7 +824,7 @@ def calibrate(
 
     if output:
         Path(output).write_text(json.dumps(output_data, indent=2))
-        typer.echo(f"\n📁 Results saved to {output}")
+        typer.echo(f"\n\U0001f4c1 Results saved to {output}")
     else:
         print(json.dumps(output_data, indent=2))
 
