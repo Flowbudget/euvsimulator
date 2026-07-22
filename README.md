@@ -246,7 +246,7 @@ cd docs && make html
 |-----------|--------|
 | Project scaffold & CXRO materials | ✅ |
 | Multilayer optics (S-matrix TMM) | ✅ |
-| Mask 3D (RCWA 1D + 2D) | ⚠️ RCWA API exists, thin-mask analytic used in pipeline |
+| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), taper/undercut, integrated via `use_rcwa=True` |
 | Aerial image (Abbe/Hopkins + SE blur) | ✅ |
 | High-NA imaging (anamorphic) | ✅ |
 | End-to-end pipeline | ✅ |
@@ -274,7 +274,7 @@ cd docs && make html
 | **Resist `full_chem` parameters** | Expose Dill A/B/C/Q, PEB k/t/D/σ, Mack params in Config & CLI | High |
 | **Stochastics in pipeline** | Integrate photon shot noise + LER/LWR → `SimulationResult` | ✅ Done |
 | **Process window visualization** | `--output-plot` (PNG heatmap) + `--output-csv` for `euv process-window` | Medium |
-| **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | Low |
+| **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | ✅ Done (v1.0) |
 | **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
 | **Citation metadata** | `CITATION.cff` + Zenodo DOI for v1.0 | Medium |
 
