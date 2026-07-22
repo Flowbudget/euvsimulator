@@ -3,7 +3,9 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Flowbudget/OpEnUV/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/OpEnUV/actions)
-[![Tests](https://img.shields.io/badge/tests-522%2F522%20passing-brightgreen)](https://github.com/Flowbudget/OpEnUV)
+[![Tests](https://img.shields.io/badge/tests-534%2F534%20passing-brightgreen)](https://github.com/Flowbudget/OpEnUV)
+[![Release](https://img.shields.io/github/v/release/Flowbudget/OpEnUV?include_prereleases&sort=semver)](https://github.com/Flowbudget/OpEnUV/releases)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
 
 **From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
 
@@ -11,8 +13,10 @@
 |---|---|
 | ⚛️ **First-principles physics** | CXRO atomic scattering → TMM reflectivity → RCWA mask diffraction → Hopkins imaging → Dill ABC resist |
 | 🚀 **GPU-native** | PyTorch autograd throughout — differentiable from mask geometry to CD |
-| 🧪 **Validated** | 522 unit tests, cross-checked against CXRO database, independent literature, and Grok verification |
+| 🧪 **Validated** | 534 unit tests, cross-checked against CXRO database, independent literature, and Grok verification |
 | 📦 **Zero commercial dependencies** | Apache 2.0 — fork, modify, deploy freely |
+| 🌐 **Web API + Dashboard** | FastAPI REST server with interactive web UI |
+| 📓 **Teaching-ready** | 6 executable Jupyter notebooks covering full pipeline |
 
 ---
 
@@ -88,12 +92,22 @@ Typical values:
 
 ## Quick start
 
+### Installation
+
 ```bash
-# Clone and install from source
+# From GitHub (latest main branch)
+pip install git+https://github.com/Flowbudget/OpEnUV.git
+
+# Or clone and install from source (for development)
 git clone https://github.com/Flowbudget/OpEnUV.git
 cd OpEnUV
 pip install -e .                       # install from local source
+pip install -e ".[dev]"                # with dev dependencies
+```
 
+### Command-line interface
+
+```bash
 # End-to-end simulation
 euv simulate --period=64 --cd=32 --dose=20
 
@@ -106,18 +120,25 @@ euv simulate --period=64 --cd=32 --dose=20 --resist-preset=CAR
 # Process window (dose-focus Bossung plot)
 euv process-window --period=64 --cd=32
 
-# Web dashboard
+# Web dashboard (REST API + interactive UI)
 euv serve
 # → http://localhost:8000
 
 # Query material database
 euv materials Mo --energy=91.84
 
+# Generate test mask (GDSII)
+euv make-mask --period=64 --cd=32 --output=mask.gds
+
 # Performance benchmark
 euv bench
+
+# System info
+euv info
 ```
 
-Or from Python:
+### Python API
+
 ```python
 from euv.pipeline import SimulationConfig, run_simulation
 
@@ -125,11 +146,34 @@ cfg = SimulationConfig(
     period_nm=64, line_width_nm=32,
     dose_mj_cm2=20, na=0.33, sigma=0.8,
     resist_model="full_chem",
+    se_blur_nm=5.0,  # CAR resist
 )
 result = run_simulation(cfg)
 print(f"CD = {result.cd_nm:.1f} nm")
 print(f"NILS = {result.nils_value:.3f}")
+
+# With RCWA mask-3D (Phase 4)
+result_rcwa = run_simulation(cfg, use_rcwa=True)
+print(f"RCWA CD = {result_rcwa.cd_nm:.1f} nm")
 ```
+
+### Jupyter Notebooks (6 tutorials)
+
+```bash
+cd notebooks
+jupyter lab  # or: jupyter notebook
+```
+
+| Notebook | Description |
+|----------|-------------|
+| `01_aerial_image.ipynb` | TMM → RCWA → Hopkins → SE blur → NA/σ sensitivity |
+| `02_nils_cd.ipynb` | NILS definition, SE blur impact, Bossung curves, resolution limits |
+| `03_resist_chain.ipynb` | Dill ABC → PEB reaction-diffusion → Mack development → 1/√D scaling |
+| `04_process_window.ipynb` | DoF/EL extraction, MEEF, SE blur/NA sweeps, CSV/PNG export |
+| `05_stochastics.ipynb` | Poisson shot noise, LER/LWR extraction, multi-realisation stats, QE sweep |
+| `06_mask3d.ipynb` | Thin-mask vs RCWA, taper/undercut, best focus shift, TE/TM |
+
+All notebooks execute cleanly via `jupyter nbconvert --execute` (tested in CI).
 
 ---
 
@@ -173,16 +217,26 @@ src/euv/
 | `euv serve` | Launch the REST API + web dashboard |
 | `euv bench` | Performance benchmark |
 | `euv info` | System + module overview |
+| `euv version` | Print version |
+| `euv calibrate` | Calibrate resist-model parameters to measured wafer CD data |
 
 ---
 
-## Tutorials
+## Documentation
 
-| Notebook | Description |
-|----------|-------------|
-| [`basic_simulation.ipynb`](docs/tutorials/basic_simulation.ipynb) | Run your first EUV simulation |
-| [`materials.ipynb`](docs/tutorials/materials.ipynb) | Query CXRO optical constants |
-| [`process_window.ipynb`](docs/tutorials/process_window.ipynb) | Compute a Bossung plot |
+Full Sphinx documentation at [`docs/`](docs/):
+- [Overview](docs/overview.rst)
+- [Installation](docs/install.rst)
+- [Architecture](docs/architecture.rst)
+- [Quickstart](docs/quickstart.rst)
+- [API reference](docs/api/modules.rst)
+- [Contributing](docs/contributing.rst)
+
+Build locally:
+```bash
+pip install sphinx sphinx-rtd-theme
+cd docs && make html
+```
 
 ---
 
@@ -205,7 +259,7 @@ src/euv/
 | REST API + web UI | ✅ |
 | Tutorials & documentation | ✅ 6 notebooks complete |
 | Docker deployment | ✅ |
-| CI/CD pipeline | 🚧 In progress |
+| **CI/CD pipeline** | ✅ **GitHub Actions: Linux/macOS/Windows × Python 3.10–3.13** |
 | **Test count** | **534 / 534 passing** |
 | **License** | Apache 2.0 |
 
@@ -222,24 +276,33 @@ src/euv/
 | **Process window visualization** | `--output-plot` (PNG heatmap) + `--output-csv` for `euv process-window` | Medium |
 | **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | Low |
 | **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
-| **Jupyter tutorials** | 6 notebooks: aerial, NILS/CD, resist, process window, stochastics, mask3D | High (teaching) |
-| **CI/CD** | GitHub Actions (Linux/macOS/Windows), wheel builds, PyPI publish | Ops |
+| **Citation metadata** | `CITATION.cff` + Zenodo DOI for v1.0 | Medium |
 
 See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with code sketches.
 
 ---
 
----
+## Discoverability & Citation
 
-## Documentation
+### GitHub Topics
+`euv-lithography` `semiconductor-simulation` `computational-lithography` `rcwa` `hopkins-imaging` `resist-modeling` `dill-model` `multilayer-optics` `plasma-physics` `open-source` `python` `pytorch` `fastapi` `scientific-computing`
 
-Full Sphinx documentation at [`docs/`](docs/):
-- [Overview](docs/overview.rst)
-- [Installation](docs/install.rst)
-- [Architecture](docs/architecture.rst)
-- [Quickstart](docs/quickstart.rst)
-- [API reference](docs/api/modules.rst)
-- [Contributing](docs/contributing.rst)
+### For researchers
+If you use OpEnUV in your research, please cite it:
+
+```bibtex
+@software{openeuv2026,
+  author       = {Flowbudget},
+  title        = {OpEnUV: Open Source EUV Lithography Simulator},
+  version      = {1.0.3},
+  year         = {2026},
+  url          = {https://github.com/Flowbudget/OpEnUV},
+  license      = {Apache-2.0},
+  doi          = {10.5281/zenodo.XXXXXXX}
+}
+```
+
+A Zenodo DOI will be minted with the v1.0 release.
 
 ---
 
@@ -252,6 +315,7 @@ Apache 2.0 — see [`LICENSE`](LICENSE).
 ## How to contribute
 
 We welcome contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines.
+
 - 🐛 Open an [issue](https://github.com/Flowbudget/OpEnUV/issues) for bugs
 - 💡 Start a [discussion](https://github.com/Flowbudget/OpEnUV/discussions) for features
 - 🔀 Submit pull requests on the `main` branch
