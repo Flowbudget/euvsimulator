@@ -795,7 +795,7 @@ def calibrate(
     boot_result = None
     if bootstrap_samples > 0:
         typer.echo(
-            f"\n\U0001f504 Running {bootstrap_samples} bootstrap samples for confidence intervals..."
+            f"\n[~] Running {bootstrap_samples} bootstrap samples for confidence intervals..."
         )
         boot_result = bootstrap_fit(
             data,

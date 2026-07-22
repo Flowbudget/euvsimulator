@@ -33,10 +33,14 @@ class TestMakeLineSpace:
         polys = make_linespace(period_nm=64, line_width_nm=32, height_nm=1000, nlines=5)
         geom = MaskGeometry()
         geom.polygons[(0, 0)] = polys
-        geom.to_gds("/tmp/test_export.gds")
         import pathlib
+        import tempfile
 
-        assert pathlib.Path("/tmp/test_export.gds").exists()
+        with tempfile.NamedTemporaryFile(suffix=".gds", delete=False) as tmp:
+            tmp_path = pathlib.Path(tmp.name)
+        geom.to_gds(tmp_path)
+        assert tmp_path.exists()
+        tmp_path.unlink()
 
 
 class TestMaskGeometry:
