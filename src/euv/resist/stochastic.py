@@ -149,7 +149,8 @@ def poisson_shot_noise(
         lam = acid * 100.0  # heuristic scale factor
         photons_per_voxel = None
 
-    # Ensure lam is non-negative (clamp to zero)
+    # Ensure lam is non-negative (clamp to zero) - handle NaN too
+    lam = torch.nan_to_num(lam, nan=0.0, posinf=0.0, neginf=0.0)
     lam = torch.clamp(lam, min=0.0)
 
     # Sample Poisson: torch.poisson draws from Pois(λ) for each

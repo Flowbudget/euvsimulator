@@ -261,6 +261,7 @@ def surface_advancement_level_set(
         # last true index = N - 1 - first_true
         last_true_idx = (N - 1 - first_true).float()
         # only where at least one layer is cleared
+        depth_map = depth_map.to(dtype=last_true_idx.dtype)  # match dtype
         depth_map[has_true] = (last_true_idx[has_true] + 1) * dz
         return depth_map
 

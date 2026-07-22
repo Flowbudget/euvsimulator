@@ -57,6 +57,35 @@ Full details in [`testberechnungen.md`](testberechnungen.md).
 
 ---
 
+### Secondary-Electron (SE) Blur
+
+The `se_blur_nm` parameter models the resist point-spread function: EUV photoelectrons
+and Auger electrons undergo a random walk before generating photoacid, blurring the
+aerial image at the nm scale. This is **the dominant physical cause of finite NILS**
+in real EUV processes.
+
+```python
+from euv.pipeline import SimulationConfig, RESIST_PRESETS
+
+# Ideal optical image (unrealistically high NILS)
+cfg = SimulationConfig(se_blur_nm=0.0)
+
+# Realistic CAR resist
+cfg = SimulationConfig(se_blur_nm=RESIST_PRESETS["CAR"])  # 5.0 nm
+
+# Or explicit
+cfg = SimulationConfig(se_blur_nm=10.0)
+```
+
+Typical values:
+- `RESIST_PRESETS["CAR"]` = 5.0 nm (chemically amplified resist)
+- `RESIST_PRESETS["nonCAR"]` = 2.5 nm (non-CAR)
+- `RESIST_PRESETS["HighNA"]` = 3.0 nm (High-NA EUV, smaller features)
+
+**Without SE blur, NILS reflects only the 3-order optical contrast and is unrealistically high (~5–8). With 5–10 nm blur, NILS drops to the physically correct range of 2–3.**
+
+---
+
 ## Quick start
 
 ```bash
@@ -169,15 +198,15 @@ src/euv/
 | End-to-end pipeline | ✅ |
 | LPP source model | ✅ |
 | Resist chemistry (Dill ABC + PEB + Mack) | ✅ |
-| Stochastic effects (shot noise, LER/LWR) | ⚠️ Module exists, not integrated in main pipeline |
+| Stochastic effects (shot noise, LER/LWR) | ⚠️ Module exists, integrated in `full_chem` pipeline |
 | CD metrology & process window | ✅ |
 | Inverse lithography (OpenILT bridge) | ✅ |
 | GPU acceleration | ✅ |
 | REST API + web UI | ✅ |
-| Tutorials & documentation | 🚧 In progress |
+| Tutorials & documentation | ✅ 6 notebooks complete |
 | Docker deployment | ✅ |
 | CI/CD pipeline | 🚧 In progress |
-| **Test count** | **522 / 522 passing** |
+| **Test count** | **534 / 534 passing** |
 | **License** | Apache 2.0 |
 
 ---

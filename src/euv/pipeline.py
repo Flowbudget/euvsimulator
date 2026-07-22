@@ -19,6 +19,7 @@ from typing import Optional
 import torch
 
 from euv.aerial.abbe import aerial_from_orders, nils
+from euv.accel.device import select_device, set_default_dtype
 from euv.materials import CXROTable
 from euv.optics.multilayer import mo_si_stack
 from euv.optics.tmm import reflectivity
@@ -27,6 +28,9 @@ from euv.resist.develop import (
 )
 from euv.resist.exposure import dose_to_acid
 from euv.resist.peb import reaction_diffusion_analytical
+from euv.resist.stochastic import (
+    ler_lwr_estimate,
+)
 
 # Resist presets — typical SE blur sigma [nm] for different resist types
 RESIST_PRESETS = {
@@ -36,7 +40,6 @@ RESIST_PRESETS = {
 }
 
 
-@dataclass
 @dataclass
 class SimulationResult:
     """Results from a full pipeline simulation.
@@ -53,6 +56,10 @@ class SimulationResult:
         Normalised Image Log-Slope at line edge.
     absorber_reflectivity : float
         Reflectivity of the absorber region (normalised).
+    ler_nm : float
+        Line-edge roughness [nm] (1σ). Only populated when enable_stochastic=True.
+    lwr_nm : float
+        Line-width roughness [nm] (1σ). Only populated when enable_stochastic=True.
     """
 
     aerial_image: torch.Tensor
@@ -60,6 +67,8 @@ class SimulationResult:
     cd_nm: float = 0.0
     nils_value: float = 0.0
     absorber_reflectivity: float = 0.0
+    ler_nm: float = 0.0
+    lwr_nm: float = 0.0
 
 
 @dataclass
@@ -91,7 +100,7 @@ class SimulationConfig:
     grid : int
         Simulation grid size (default: 256).
     device : str
-        PyTorch device (default: "cpu").
+        PyTorch device (default: "auto"). Use "auto" to auto-select GPU if available, or "cpu"/"cuda" explicitly.
     """
 
     wavelength_nm: float = 13.5
@@ -119,7 +128,65 @@ class SimulationConfig:
     se_blur_nm: float = 0.0
     focus_nm: float = 0.0
     grid: int = 256
-    device: str = "cpu"
+    device: str = "auto"
+
+    # Dill ABC exposure parameters
+    dill_A: float = 0.5       # Bleachable absorption coefficient [1/µm]
+    dill_B: float = 0.2       # Non-bleachable absorption coefficient [1/µm]
+    dill_C: float = 0.05      # Photo-rate constant [cm²/mJ]
+    dill_Q: float = 1.0       # Quantum efficiency (max acid yield)
+
+    # PEB (reaction-diffusion) parameters
+    peb_D: float = 5.0        # Acid diffusivity [nm²/s]
+    peb_k: float = 0.3        # Deprotection rate constant [s⁻¹]
+    peb_t_bake: float = 60.0  # Bake time [s]
+    peb_sigma_diff: float = 5.0  # Analytical diffusion sigma [nm]
+
+    # Mack development parameters
+    mack_R_max: float = 100.0   # Max development rate [nm/s]
+    mack_R_min: float = 0.1     # Min development rate [nm/s]
+    mack_n: float = 5.0         # Dissolution selectivity (contrast)
+    mack_M_th: float = 0.5      # Threshold inhibitor concentration
+
+    # Stochastic / Shot Noise parameters
+    enable_stochastic: bool = False           # Enable photon shot noise + LER/LWR
+    stochastic_n_realisations: int = 1        # Number of independent noise realisations
+    stochastic_develop_threshold: float = 0.3 # Development threshold for LER/LWR extraction
+    stochastic_quantum_efficiency: float = 0.04  # Acid molecules per absorbed photon
+    stochastic_seed: int | None = None        # RNG seed (None = random)
+
+    # Mask-3D / RCWA parameters (Phase 4)
+    use_rcwa: bool = False                    # Use full RCWA instead of thin-mask analytic
+    absorber_taper_deg: float = 90.0          # Sidewall angle from horizontal (90 = vertical)
+    mask_undercut_nm: float = 0.0             # Undercut at absorber base [nm]
+    mask_sidewall_roughness_nm: float = 0.0   # Sidewall roughness sigma [nm]
+
+    def __post_init__(self):
+        # Validate resist parameters
+        if self.dill_C <= 0:
+            raise ValueError("dill_C must be > 0")
+        if self.dill_Q <= 0:
+            raise ValueError("dill_Q must be > 0")
+        if self.peb_k <= 0:
+            raise ValueError("peb_k must be > 0")
+        if self.peb_t_bake <= 0:
+            raise ValueError("peb_t_bake must be > 0")
+        if self.mack_R_max <= self.mack_R_min:
+            raise ValueError("mack_R_max must be > mack_R_min")
+        if self.mack_n <= 1:
+            raise ValueError("mack_n must be > 1")
+        if not (0 < self.mack_M_th < 1):
+            raise ValueError("mack_M_th must be in (0, 1)")
+        # Validate stochastic parameters
+        if self.enable_stochastic:
+            if self.resist_model != "full_chem":
+                raise ValueError("enable_stochastic=True requires resist_model='full_chem'")
+            if self.stochastic_n_realisations < 1:
+                raise ValueError("stochastic_n_realisations must be >= 1")
+            if not (0 < self.stochastic_develop_threshold < 1):
+                raise ValueError("stochastic_develop_threshold must be in (0, 1)")
+            if self.stochastic_quantum_efficiency <= 0:
+                raise ValueError("stochastic_quantum_efficiency must be > 0")
 
 
 def _cd_via_aerial_threshold(
@@ -152,6 +219,7 @@ def _cd_via_aerial_threshold(
         cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
     )
     dx_nm = cfg.period_nm / G
+    device = aerial.device
 
     # NILS at the line edge
     dx_nm = cfg.period_nm / cfg.grid
@@ -179,32 +247,65 @@ def _cd_via_full_chem(
     period_m: float,
     half: int,
     line_width_px: int,
-) -> tuple[float, torch.Tensor, float]:
+) -> tuple[float, torch.Tensor, float, float, float]:
     """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
 
     Uses the Dill ABC exposure model, reaction-diffusion PEB, and threshold
-    development.  Requires well-tuned parameters (C, Q, k, t_bake, sigma_diff).
+    development.  All parameters come from cfg (with defaults in SimulationConfig).
+    Optionally applies photon shot noise and extracts LER/LWR.
     """
     dx_nm = period_m / cfg.grid * 1e9
     nils_val = nils(aerial, half, line_width_px, dx_nm)
 
-    # ── Resist-chemie-Kette (Dill ABC → PEB → Entwicklung) ──
-    # Berechnet das resist-chemische Profil (inhib) für die Visualisierung.
-    # Die CD-Extraktion nutzt den gleichen fixen, dosisabhängigen Threshold
-    # wie der aerial_threshold-Pfad, damit beide Pfade konsistent sind.
+    # Resist-chemie-Kette (Dill ABC → PEB → Entwicklung)
+    # Alle Parameter kommen jetzt aus cfg (mit Defaults aus SimulationConfig)
     dose_map = aerial.clone().float()
-    acid = dose_to_acid(dose_map, C=0.05, Q=1.0, sigma_blur=5.0, dx=dx_nm)
+    acid = dose_to_acid(
+        dose_map,
+        C=cfg.dill_C,
+        Q=cfg.dill_Q,
+        sigma_blur=cfg.se_blur_nm,  # SE blur from aerial image config
+        dx=dx_nm,
+    )
     inhib_in = torch.ones_like(acid)
     _, inhib = reaction_diffusion_analytical(
         acid,
         inhib_in,
-        k=0.3,
-        t_bake=60.0,
-        sigma_diff=5.0,
+        k=cfg.peb_k,
+        t_bake=cfg.peb_t_bake,
+        sigma_diff=cfg.peb_sigma_diff,
         dx=dx_nm,
     )
     # Resist-Profil für Visualisierung (1 = undeveloped/remaining)
-    dev_chem = threshold_development(inhib, threshold=0.2)
+    # Mack threshold: use M_th from config
+    dev_chem = threshold_development(inhib, threshold=cfg.mack_M_th)
+
+    # ── Stochastic post-processing ──
+    if cfg.enable_stochastic:
+        # Use the inhibitor map (after PEB) as the base for shot noise.
+        # For LER/LWR we threshold the deprotected regions (1 - inhibitor).
+        deprotected = (1.0 - inhib).clamp(min=0.0)  # (H, W) in [0, 1]
+
+        # Run stochastic LER/LWR estimation
+        rng = torch.Generator(device=deprotected.device)
+        if cfg.stochastic_seed is not None:
+            rng.manual_seed(cfg.stochastic_seed)
+
+        stoch_result = ler_lwr_estimate(
+            acid=deprotected,  # use deprotection as "acid" for shot noise
+            dose=None,  # no dose map available here; uses acid for shot noise scaling
+            develop_threshold=cfg.stochastic_develop_threshold,
+            quantum_efficiency=cfg.stochastic_quantum_efficiency,
+            shot_noise_rng=rng,
+            dx=dx_nm,
+            n_realisations=cfg.stochastic_n_realisations,
+            average=True,
+        )
+        ler_nm = stoch_result["ler"]
+        lwr_nm = stoch_result["lwr"]
+    else:
+        ler_nm = 0.0
+        lwr_nm = 0.0
 
     # CD-Extraktion: gleicher fixer Threshold wie aerial_threshold-Pfad
     cut = aerial[half, :]
@@ -224,7 +325,7 @@ def _cd_via_full_chem(
         lidx, ridx = longest
         cd_nm = (ridx - lidx + 1) * dx_nm
 
-    return cd_nm, dev_2d, nils_val
+    return cd_nm, dev_2d, nils_val, ler_nm, lwr_nm
 
 
 def _find_runs_1d(x: torch.Tensor, target: int = 0) -> list:
@@ -268,7 +369,15 @@ def run_simulation(
         for k, v in kwargs.items():
             setattr(cfg, k, v)
 
-    device = cfg.device
+    # Resolve device
+    if cfg.device == "auto":
+        device = select_device(prefer_gpu=True)
+    else:
+        device = torch.device(cfg.device)
+
+    # Set default precision
+    set_default_dtype(torch.complex128, torch.float64)
+
     wavelength_m = cfg.wavelength_nm * 1e-9
     period_m = cfg.period_nm * 1e-9
     line_m = cfg.line_width_nm * 1e-9
@@ -332,23 +441,102 @@ def run_simulation(
         (abs(r0_abs) ** 2 * (1.0 - space_frac) + abs(r0_space) ** 2 * space_frac).real
     )
 
-    # Fourier coefficients of the binary complex mask
+    # ── Mask diffraction orders: thin-mask analytic OR full RCWA ──
     duty = cfg.line_width_nm / cfg.period_nm  # η = absorber fraction
     n_orders = min(cfg.n_rcwa_orders, cfg.grid // 2)
-
-    a = r0_abs
-    b = r0_space
-    c0 = a * duty + b * (1.0 - duty)
-
     order_indices = list(range(-n_orders, n_orders + 1))
-    amplitudes = torch.zeros(len(order_indices), dtype=torch.complex128, device=device)
 
-    for idx, m in enumerate(order_indices):
-        if m == 0:
-            amplitudes[idx] = c0
-        else:
-            cm = (a - b) * math.sin(math.pi * m * duty) / (math.pi * m)
-            amplitudes[idx] = cm
+    if cfg.use_rcwa:
+        from euv.mask3d.rcwa_torch import RCWAConfig, RCWA1D
+        from euv.mask3d.geometry import standard_euv_mask, build_permittivity_profile
+
+        # Build mask stack with Phase 4 parameters
+        mask = standard_euv_mask(
+            absorber=cfg.absorber_material,
+            absorber_thickness_nm=cfg.absorber_height_nm,
+            capping="Ru",
+            capping_thickness_nm=2.5,
+            n_bilayers=cfg.ml_n_bilayers,
+            period_nm=cfg.period_nm,
+            line_width_nm=cfg.line_width_nm,
+            energy_eV=91.84,
+        )
+        # Apply taper/undercut if specified
+        if cfg.absorber_taper_deg != 90.0 or cfg.mask_undercut_nm != 0.0:
+            from euv.mask3d.geometry import MaskLayer, MaskStack
+            n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, 91.84)
+            n_ru_c, k_ru_c = table.refractive_index("Ru", 91.84)
+            layers = [
+                MaskLayer(material="Ru", thickness_nm=2.5, nk=complex(n_ru_c, k_ru_c), etched=True),
+                MaskLayer(material=cfg.absorber_material, thickness_nm=cfg.absorber_height_nm, nk=complex(n_ta_c, k_ta_c), etched=True),
+            ]
+            mask = MaskStack(
+                absorber_layers=layers,
+                multilayer_bilayers=cfg.ml_n_bilayers,
+                d_mo_nm=cfg.ml_d_mo_nm,
+                d_si_nm=cfg.ml_d_si_nm,
+                substrate_nk=complex(n_si, k_si),
+                period_nm=cfg.period_nm,
+                line_width_nm=cfg.line_width_nm,
+            )
+
+        eps_profile, thicknesses, eps_sub = build_permittivity_profile(mask, n_samples=1024, device=device)
+
+        # RCWA solver for TE polarization (standard for EUV)
+        rcwa_cfg = RCWAConfig(
+            wavelength=wavelength_m,
+            n_orders=cfg.n_rcwa_orders,
+            theta=math.degrees(theta0),
+            polarization="TE",
+            device=device.type,
+        )
+        solver = RCWA1D(rcwa_cfg)
+        orders_te = solver.solve(
+            eps_profile,
+            thicknesses,
+            period_m,
+            n_incident=torch.tensor([1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128, device=device),
+            n_substrate=torch.tensor([eps_sub**0.5, eps_sub**0.5], dtype=torch.complex128, device=device),
+        )
+        # Also compute TM for future High-NA
+        rcwa_cfg_tm = RCWAConfig(
+            wavelength=wavelength_m,
+            n_orders=cfg.n_rcwa_orders,
+            theta=math.degrees(theta0),
+            polarization="TM",
+            device=device.type,
+        )
+        solver_tm = RCWA1D(rcwa_cfg_tm)
+        orders_tm = solver_tm.solve(
+            eps_profile,
+            thicknesses,
+            period_m,
+            n_incident=torch.tensor([1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128, device=device),
+            n_substrate=torch.tensor([eps_sub**0.5, eps_sub**0.5], dtype=torch.complex128, device=device),
+        )
+
+        # Average TE/TM for unpolarized (conventional EUV)
+        reflected_orders = (orders_te + orders_tm) / 2.0
+
+        # RCWA returns M orders corresponding to solver.m (from -M//2 to +M//2)
+        # Use exactly the same order range as the solver
+        solver_m = torch.arange(-cfg.n_rcwa_orders // 2, cfg.n_rcwa_orders // 2 + 1, device=device)
+        order_indices = solver_m.tolist()
+        amplitudes = reflected_orders
+    else:
+        # Thin-mask analytic Fourier coefficients (existing path)
+        a = r0_abs
+        b = r0_space
+        c0 = a * duty + b * (1.0 - duty)
+
+        amplitudes = torch.zeros(len(order_indices), dtype=torch.complex128, device=device)
+
+        for idx, m in enumerate(order_indices):
+            if m == 0:
+                amplitudes[idx] = c0
+            else:
+                cm = (a - b) * math.sin(math.pi * m * duty) / (math.pi * m)
+                amplitudes[idx] = cm
 
     # Compute aerial image from orders (Hopkins formulation)
     order_tensor = torch.tensor(order_indices, dtype=torch.int64, device=device)
@@ -377,9 +565,11 @@ def run_simulation(
     # via resist_model="full_chem" but requires carefully tuned params.
     line_width_px = int(round(cfg.line_width_nm / (period_m / cfg.grid * 1e9)))
     if cfg.resist_model == "full_chem":
-        cd, dev, nils_val = _cd_via_full_chem(aerial, cfg, period_m, half, line_width_px)
+        cd, dev, nils_val, ler_nm, lwr_nm = _cd_via_full_chem(aerial, cfg, period_m, half, line_width_px)
     else:
         cd, dev, nils_val = _cd_via_aerial_threshold(aerial, cfg, half, line_width_px)
+        ler_nm = 0.0
+        lwr_nm = 0.0
 
     return SimulationResult(
         aerial_image=aerial,
@@ -387,6 +577,8 @@ def run_simulation(
         cd_nm=cd,
         nils_value=float(nils_val),
         absorber_reflectivity=absorber_reflectivity,
+        ler_nm=ler_nm,
+        lwr_nm=lwr_nm,
     )
 
 
@@ -397,7 +589,7 @@ def simulate_line_space(
     na: float = 0.33,
     sigma: float = 0.8,
     grid: int = 256,
-    device: str = "cpu",
+    device: str = "auto",
 ) -> SimulationResult:
     """Convenience: run a standard line/space simulation.
 

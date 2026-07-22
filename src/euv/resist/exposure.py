@@ -178,6 +178,10 @@ def gaussian_se_blur(
         Blurred output, same shape as *image*.
     """
     sigma_px = sigma / dx
+    
+    # Handle sigma = 0 (no blur) as a special case
+    if sigma_px < 1e-12:
+        return image
 
     if kernel_size is None:
         radius = int(truncate * sigma_px + 0.5)
@@ -249,8 +253,7 @@ def dose_to_acid(
     This is a simplified end-to-end dose-to-acid pipeline:
 
         1. Apply secondary-electron Gaussian blur to the dose map.
-        2. Convert to photoacid concentration: ``[H⁺] = Q · (1 − exp[−C ·
-        dose])``
+        2. Convert to photoacid concentration: ``[H⁺] = Q · (1 − exp[−C · dose])``
 
     where *Q* is the maximum acid yield and *C* is the Dill C parameter.
 
@@ -262,7 +265,10 @@ def dose_to_acid(
         Photo-rate constant [cm²/mJ].  Default 0.1 (realistic for EUV CAR).
     Q : float or torch.Tensor
         Quantum efficiency — maximum acid molecules per absorbed
-        photon.  Default 0.04 (typical for EUV CAR).
+        photon.  Default 0.04 (typical for EUV CAR in simplified model).
+        The full dill_abc_exposure uses Q=0.1 with explicit depth-dependent
+        absorption; the simplified model uses lower Q to account for
+        average depth absorption.
     sigma_blur : float or torch.Tensor
         Secondary-electron blur sigma [nm].  Default 5.0.
     dx : float

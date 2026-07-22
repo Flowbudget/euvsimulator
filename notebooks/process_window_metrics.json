@@ -1,0 +1,9 @@
+{
+  "target_cd_nm": 32.0,
+  "tolerance_pct": 10.0,
+  "dof_nm": 120.0,
+  "el_pct": 26.666666666666668,
+  "best_dose": 15.0,
+  "best_focus": -60.0,
+  "meef": 0.0
+}

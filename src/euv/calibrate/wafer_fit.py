@@ -44,6 +44,9 @@ class WaferCDData:
 
     def __post_init__(self) -> None:
         """Validate shapes and units."""
+        self.dose_values = np.asarray(self.dose_values, dtype=float)
+        self.focus_values = np.asarray(self.focus_values, dtype=float)
+        self.cd_matrix_nm = np.asarray(self.cd_matrix_nm, dtype=float)
         D = len(self.dose_values)
         F = len(self.focus_values)
         if self.cd_matrix_nm.shape != (D, F):
@@ -51,9 +54,6 @@ class WaferCDData:
                 f"cd_matrix_nm shape {self.cd_matrix_nm.shape} does not match "
                 f"(dose={D}, focus={F})"
             )
-        self.dose_values = np.asarray(self.dose_values, dtype=float)
-        self.focus_values = np.asarray(self.focus_values, dtype=float)
-        self.cd_matrix_nm = np.asarray(self.cd_matrix_nm, dtype=float)
 
     @property
     def n_dose(self) -> int:
