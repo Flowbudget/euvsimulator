@@ -13,7 +13,6 @@ concurrency:
 
 env:
   PYTHON_VERSIONS: '["3.10", "3.11", "3.12", "3.13"]'
-  POETRY_VERSION: "1.8.3"
 
 jobs:
   test:
@@ -47,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -e ".[test,dev]" --python ${{ matrix.python-version }}
+          uv sync --all-extras --python ${{ matrix.python-version }}
           uv pip list
 
       - name: Run tests
@@ -90,7 +89,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -e ".[dev,test]" --python 3.12
+          uv sync --all-extras --python 3.12
           uv pip install ruff mypy pyright
 
       - name: Run ruff (lint)
@@ -131,8 +130,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -e ".[notebook,test]" --python 3.12
-          uv pip install jupyter nbconvert
+          uv sync --extra notebook --extra test --python 3.12
 
       - name: Execute notebooks
         run: |
