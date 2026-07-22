@@ -36,13 +36,16 @@ jobs:
           enable-cache: true
 
       - name: Install build dependencies
+        shell: bash
         run: |
           pip install --upgrade pip setuptools wheel build
 
       - name: Build wheel
+        shell: bash
         run: python -m build --wheel --no-isolation
 
       - name: Verify wheel
+        shell: bash
         run: |
           pip install dist/*.whl
           python -c "import euv; print(f'openuv {euv.__version__} imported successfully')"
@@ -71,6 +74,7 @@ jobs:
         run: ls -la dist/
 
       - name: Create source distribution
+        shell: bash
         run: |
           pip install --upgrade pip
           pip install build
