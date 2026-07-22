@@ -229,7 +229,7 @@ def simulate(
             mask_sidewall_roughness_nm=mask_sidewall_roughness_nm,
         )
 
-    typer.echo("\U0001f52c Running EUV lithography simulation...")
+    typer.echo("[>] Running EUV lithography simulation...")
     result = run_simulation(cfg)
 
     out = {
@@ -772,7 +772,7 @@ def calibrate(
         return float(result.cd_nm)
 
     # Run fitting
-    typer.echo("\U0001f52c Fitting resist parameters...")
+    typer.echo("[>] Fitting resist parameters...")
     fit_result = fit_resist_params(
         data,
         initial_params,
