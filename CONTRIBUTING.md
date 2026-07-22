@@ -15,7 +15,7 @@ Thank you for your interest in contributing to OpEnUV, the open-source EUV litho
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/your-org/OpEnUV.git
+   git clone https://github.com/Flowbudget/OpEnUV.git
    cd OpEnUV
    ```
 
