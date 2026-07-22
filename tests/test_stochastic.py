@@ -451,9 +451,9 @@ class TestRMSScaling:
             # Each product should be within 50% of mean (loose tolerance
             # for stochastic simulation)
             deviations = (product[finite] - mean_product).abs() / mean_product
-            assert (
-                deviations < 0.5
-            ).all(), f"LER×√(dose) deviations too large: {deviations.tolist()}"
+            assert (deviations < 0.5).all(), (
+                f"LER×√(dose) deviations too large: {deviations.tolist()}"
+            )
 
     def test_fit_exponent_near_neg_half(self, line_acid: torch.Tensor, device: torch.device):
         """Power-law fit exponent is close to -0.5."""

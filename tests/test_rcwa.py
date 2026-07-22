@@ -152,9 +152,9 @@ class TestRCWA1D:
 
         # ±1 orders should be approximately equal
         if 1 in eff and -1 in eff:
-            assert (
-                abs(eff[1] - eff[-1]) < 1e-4
-            ), f"+1 order ({eff[1]:.6f}) ≠ -1 order ({eff[-1]:.6f})"
+            assert abs(eff[1] - eff[-1]) < 1e-4, (
+                f"+1 order ({eff[1]:.6f}) ≠ -1 order ({eff[-1]:.6f})"
+            )
         # ±2 orders should be approximately equal
         if 2 in eff and -2 in eff:
             assert abs(eff[2] - eff[-2]) < 1e-4
@@ -181,9 +181,9 @@ class TestRCWA1D:
 
         # At oblique incidence, ±1 should differ
         if 1 in eff and -1 in eff:
-            assert (
-                abs(eff[1] - eff[-1]) > 1e-6
-            ), f"Oblique: +1 ({eff[1]:.6f}) ≈ -1 ({eff[-1]:.6f}), expected difference"
+            assert abs(eff[1] - eff[-1]) > 1e-6, (
+                f"Oblique: +1 ({eff[1]:.6f}) ≈ -1 ({eff[-1]:.6f}), expected difference"
+            )
 
     def test_orders_list(self):
         """Returned orders should have correct mapping of indices."""

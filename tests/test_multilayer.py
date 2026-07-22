@@ -123,9 +123,9 @@ class TestInterdiffusion:
         R_corr, _ = reflectivity(n_corr, d_corr, wl, theta0, te=True)
 
         # Interdiffusion should reduce reflectivity (Debye-Waller damping)
-        assert (
-            R_corr.item() < R_ideal.item()
-        ), f"Interdiffused R ({R_corr:.4f}) should be < ideal R ({R_ideal:.4f})"
+        assert R_corr.item() < R_ideal.item(), (
+            f"Interdiffused R ({R_corr:.4f}) should be < ideal R ({R_ideal:.4f})"
+        )
 
 
 class TestDefaultMaterials:

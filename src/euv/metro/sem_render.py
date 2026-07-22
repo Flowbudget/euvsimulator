@@ -118,7 +118,7 @@ def render_sem(
         kernel_size = 2 * radius + 1
 
         kernel_1d = torch.exp(
-            -torch.arange(-radius, radius + 1, device=device, dtype=torch.float32) ** 2
+            -(torch.arange(-radius, radius + 1, device=device, dtype=torch.float32) ** 2)
             / (2.0 * sigma_px**2)
         )
         kernel_1d = kernel_1d / kernel_1d.sum()

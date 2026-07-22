@@ -35,9 +35,9 @@ class TestAnamorphicPupil:
         max_fx_phys = float(fx.abs().max()) * na / mag_x
         max_fy_phys = float(fy.abs().max()) * na / mag_y
         # mag_y=8 > mag_x=4 → narrower physical y-range
-        assert (
-            max_fx_phys > max_fy_phys + 0.01
-        ), f"Physical fx range ({max_fx_phys:.4f}) should be > fy range ({max_fy_phys:.4f})"
+        assert max_fx_phys > max_fy_phys + 0.01, (
+            f"Physical fx range ({max_fx_phys:.4f}) should be > fy range ({max_fy_phys:.4f})"
+        )
         assert abs(max_fx_phys - na / mag_x) < 0.01
         assert abs(max_fy_phys - na / mag_y) < 0.01
 
@@ -51,18 +51,18 @@ class TestAnamorphicPupil:
         # Anamorphic 0.55 squashed by 8× should have area comparable to 0.33
         # (0.55/4) * (0.55/8) ≈ 0.0094 vs (0.33/4)² ≈ 0.0068
         # So anam should be slightly larger
-        assert (
-            area_anam > area_circ * 0.5
-        ), f"Anamorphic area ({area_anam}) should be > 0.5× circular ({area_circ})"
+        assert area_anam > area_circ * 0.5, (
+            f"Anamorphic area ({area_anam}) should be > 0.5× circular ({area_circ})"
+        )
 
     def test_anamorphic_na_scaling(self):
         """Higher NA should produce a larger physical frequency range."""
         fx_lo, _, _ = pupil_grid(64, na=0.33, mag_x=4.0, mag_y=8.0)
         fx_hi, _, _ = pupil_grid(64, na=0.55, mag_x=4.0, mag_y=8.0)
         # In normalised coords both are [-1,1]; physical range = coord * NA/mag
-        assert float(fx_hi.abs().max() * 0.55 / 8.0) > float(
-            fx_lo.abs().max() * 0.33 / 8.0
-        ), "Higher NA should have larger physical frequency extent"
+        assert float(fx_hi.abs().max() * 0.55 / 8.0) > float(fx_lo.abs().max() * 0.33 / 8.0), (
+            "Higher NA should have larger physical frequency extent"
+        )
 
     def test_anamorphic_device(self):
         """Pupil on CPU should work."""
@@ -151,9 +151,9 @@ class TestZernikeHighNA:
         half = 32
         # Check at radius 0.5 (normalised coordinate)
         d = 16
-        assert (
-            abs(Z6[half - d, half] - Z6[half + d, half]) < 0.04
-        ), "Astigmatism should have 2-fold symmetry about x"
+        assert abs(Z6[half - d, half] - Z6[half + d, half]) < 0.04, (
+            "Astigmatism should have 2-fold symmetry about x"
+        )
 
     def test_apply_aberrations_preserves_shape(self):
         """Applying aberrations to a pupil should preserve its shape."""

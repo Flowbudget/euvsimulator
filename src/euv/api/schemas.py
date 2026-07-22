@@ -82,8 +82,7 @@ class ResistConfig(BaseModel):
     resist_model: str = Field(
         "aerial_threshold",
         description=(
-            "Resist model: 'aerial_threshold' (fast, robust) "
-            "or 'full_chem' (Dill + PEB + develop)"
+            "Resist model: 'aerial_threshold' (fast, robust) or 'full_chem' (Dill + PEB + develop)"
         ),
     )
     threshold_norm: float = Field(
@@ -91,7 +90,7 @@ class ResistConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description=(
-            "Normalised intensity threshold for " "aerial_threshold model (0-1 fraction of max)"
+            "Normalised intensity threshold for aerial_threshold model (0-1 fraction of max)"
         ),
     )
 

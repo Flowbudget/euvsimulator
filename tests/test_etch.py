@@ -43,7 +43,7 @@ class TestIsotropicBias:
         biased = isotropic_bias(contour, bias_nm=10.0, pixel_size_nm=1.0)
         n_after = int(biased.sum().item())
         assert n_after > n_before, (
-            f"Positive bias should expand the feature; " f"{n_before} → {n_after}"
+            f"Positive bias should expand the feature; {n_before} → {n_after}"
         )
 
     def test_negative_bias_erodes_feature(self):
@@ -53,7 +53,7 @@ class TestIsotropicBias:
         biased = isotropic_bias(contour, bias_nm=-5.0, pixel_size_nm=1.0)
         n_after = int(biased.sum().item())
         assert n_after < n_before, (
-            f"Negative bias should shrink the feature; " f"{n_before} → {n_after}"
+            f"Negative bias should shrink the feature; {n_before} → {n_after}"
         )
 
     def test_output_shape_matches_input(self):

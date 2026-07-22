@@ -120,9 +120,9 @@ class TestTccDecomposition:
         for i in range(min(8, n_kernels)):
             for j in range(i + 1, min(8, n_kernels)):
                 inner = (flat[i].conj() * flat[j]).sum().abs().item()
-                assert (
-                    inner < 1e-8
-                ), f"SOCS kernels {i} and {j} not orthogonal (inner = {inner:.2e})"
+                assert inner < 1e-8, (
+                    f"SOCS kernels {i} and {j} not orthogonal (inner = {inner:.2e})"
+                )
 
     def test_kernel_shape(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
         tcc = compute_tcc(source, pupil, na=na, grid=G)
@@ -262,9 +262,9 @@ class TestDipoleIllumination:
 
         # For dipole, relative error — larger due to different numerics
         rel_err = result["relative_error"]
-        assert (
-            rel_err < 0.50
-        ), f"Dipole Hopkins/Abbe relative error too large: {rel_err:.4f} (> 50%)"
+        assert rel_err < 0.50, (
+            f"Dipole Hopkins/Abbe relative error too large: {rel_err:.4f} (> 50%)"
+        )
 
 
 # ── Kernel shape ──────────────────────────────────────────────────────

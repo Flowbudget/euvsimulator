@@ -70,6 +70,6 @@ class TestBuildPermittivity:
         # Weighted average with 2.8/4.1 ratio
         eps_mo = complex(0.9238 + 0.00637j) ** 2
         eps_si = complex(0.999 + 0.00183j) ** 2
-        assert (
-            eps_mo.real < eps_sub.real < eps_si.real
-        ), f"eps_sub.real={eps_sub.real:.4f} outside [{eps_mo.real:.4f}, {eps_si.real:.4f}]"
+        assert eps_mo.real < eps_sub.real < eps_si.real, (
+            f"eps_sub.real={eps_sub.real:.4f} outside [{eps_mo.real:.4f}, {eps_si.real:.4f}]"
+        )

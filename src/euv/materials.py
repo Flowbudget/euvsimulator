@@ -230,8 +230,7 @@ class CXROTable:
         csv_path = self._data_dir / f"{symbol}.csv"
         if not csv_path.exists():
             raise FileNotFoundError(
-                f"CXRO table not found: {csv_path}. "
-                f"Run ``python scripts/download_cxro.py`` first."
+                f"CXRO table not found: {csv_path}. Run ``python scripts/download_cxro.py`` first."
             )
 
         energies: List[float] = []
@@ -406,7 +405,7 @@ class CXROTable:
         try:
             return _ELEMENT_TABLE[symbol]
         except KeyError:
-            raise KeyError(f"Unknown element '{symbol}'. " f"CXRO loader covers Z = 1–92.")
+            raise KeyError(f"Unknown element '{symbol}'. CXRO loader covers Z = 1–92.")
 
 
 # ──────────────────────────────────────────────

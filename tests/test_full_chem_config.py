@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+
 from euv.pipeline import SimulationConfig, run_simulation
 
 
@@ -33,11 +34,12 @@ def test_full_chem_params_passed_through():
 
 def test_full_chem_chemistry_affected_by_params():
     """Resist params affect internal chemistry (acid, inhib, dev_chem)."""
+    import math
+
     from euv.aerial.abbe import aerial_from_orders
+    from euv.resist.develop import threshold_development
     from euv.resist.exposure import dose_to_acid
     from euv.resist.peb import reaction_diffusion_analytical
-    from euv.resist.develop import threshold_development
-    import math
 
     # Build aerial image
     G = 128
@@ -59,7 +61,9 @@ def test_full_chem_chemistry_affected_by_params():
 
     orders_complex = torch.tensor(amps, dtype=torch.complex128)
     order_indices = torch.tensor(oi)
-    ae = aerial_from_orders(orders_complex, order_indices, period_m, na, wl_m, sigma, grid=G, se_blur_nm=0.0)
+    ae = aerial_from_orders(
+        orders_complex, order_indices, period_m, na, wl_m, sigma, grid=G, se_blur_nm=0.0
+    )
     ae_dose = ae * 20.0
     dx_nm = 64.0 / G
 
@@ -71,9 +75,15 @@ def test_full_chem_chemistry_affected_by_params():
     # Test peb_k affects inhibitor
     inhib_low = torch.ones_like(acid_high)
     inhib_high = torch.ones_like(acid_high)
-    _, inhib_low = reaction_diffusion_analytical(acid_high, inhib_low, k=0.1, t_bake=60.0, sigma_diff=5.0, dx=dx_nm)
-    _, inhib_high = reaction_diffusion_analytical(acid_high, inhib_high, k=0.5, t_bake=60.0, sigma_diff=5.0, dx=dx_nm)
-    assert inhib_high.mean() < inhib_low.mean(), "Higher peb_k should deprotect more (lower inhibitor)"
+    _, inhib_low = reaction_diffusion_analytical(
+        acid_high, inhib_low, k=0.1, t_bake=60.0, sigma_diff=5.0, dx=dx_nm
+    )
+    _, inhib_high = reaction_diffusion_analytical(
+        acid_high, inhib_high, k=0.5, t_bake=60.0, sigma_diff=5.0, dx=dx_nm
+    )
+    assert inhib_high.mean() < inhib_low.mean(), (
+        "Higher peb_k should deprotect more (lower inhibitor)"
+    )
 
     # Test mack_M_th affects dev_chem
     dev_low = threshold_development(inhib_high, threshold=0.3)
@@ -91,12 +101,15 @@ def test_both_paths_identical_cd():
 
     # CDs should be identical (within numerical precision)
     assert abs(r1.cd_nm - r2.cd_nm) < 0.01, f"CDs differ: {r1.cd_nm} vs {r2.cd_nm}"
-    assert abs(r1.nils_value - r2.nils_value) < 0.01, f"NILS differ: {r1.nils_value} vs {r2.nils_value}"
+    assert abs(r1.nils_value - r2.nils_value) < 0.01, (
+        f"NILS differ: {r1.nils_value} vs {r2.nils_value}"
+    )
 
 
 def test_config_file_with_resist_params(tmp_path):
     """Test loading resist params from YAML config file."""
     import yaml
+
     config = {
         "resist_model": "full_chem",
         "dill_C": 0.1,
@@ -109,6 +122,7 @@ def test_config_file_with_resist_params(tmp_path):
     config_path.write_text(yaml.dump(config))
 
     from euv.pipeline import SimulationConfig
+
     cfg = SimulationConfig(**yaml.safe_load(config_path.read_text()))
     assert cfg.dill_C == 0.1
     assert cfg.peb_k == 0.25
@@ -118,12 +132,15 @@ def test_config_file_with_resist_params(tmp_path):
 
 def test_cli_resist_model_option():
     """Test that --resist-model CLI option works."""
-    import subprocess
     import os
+    import subprocess
+
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     result = subprocess.run(
         ["euv", "simulate", "--resist-model=full_chem", "--grid=64"],
-        capture_output=True, text=True, cwd=project_root
+        capture_output=True,
+        text=True,
+        cwd=project_root,
     )
     assert result.returncode == 0, f"CLI failed: {result.stderr}"
     assert "cd_nm" in result.stdout

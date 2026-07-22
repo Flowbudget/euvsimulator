@@ -244,7 +244,7 @@ def etch_bias_from_formula(
     formulas = _CHEMISTRY_FORMULAS
     if chemistry not in formulas:
         raise ValueError(
-            f"Unknown chemistry '{chemistry}'.  " f"Supported: {', '.join(sorted(formulas))}"
+            f"Unknown chemistry '{chemistry}'.  Supported: {', '.join(sorted(formulas))}"
         )
 
     f = formulas[chemistry]

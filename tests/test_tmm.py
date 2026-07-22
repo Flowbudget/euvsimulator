@@ -143,9 +143,9 @@ class TestTMMPolarization:
             te=False,
         )
 
-        assert (
-            R_te.item() >= R_tm.item()
-        ), f"TE ({R_te:.4f}) should be >= TM ({R_tm:.4f}) at oblique incidence"
+        assert R_te.item() >= R_tm.item(), (
+            f"TE ({R_te:.4f}) should be >= TM ({R_tm:.4f}) at oblique incidence"
+        )
 
 
 class TestTMMDifferentiability:

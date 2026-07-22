@@ -178,7 +178,7 @@ def gaussian_se_blur(
         Blurred output, same shape as *image*.
     """
     sigma_px = sigma / dx
-    
+
     # Handle sigma = 0 (no blur) as a special case
     if sigma_px < 1e-12:
         return image

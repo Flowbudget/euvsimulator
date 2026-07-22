@@ -589,7 +589,6 @@ class TestCDExtraction:
 
 
 class TestEndToEnd:
-
     def test_pipeline_basic(self, device: torch.device):
         """End-to-end: dose -> acid -> inhib -> dev -> no NaNs, valid range."""
         x = torch.linspace(-32, 32, 64, device=device)

@@ -6,8 +6,8 @@ of Hopkins imaging with correct TCC (2*J1/x) and SE blur. It uses no OpEnUV code
 This test ensures OpEnUV's aerial image + NILS computation stays physically correct.
 """
 
-import torch
 import numpy as np
+import torch
 from scipy.special import j1
 
 from euv.aerial.abbe import aerial_from_orders, nils
@@ -34,8 +34,17 @@ def tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm):
     return 2.0 * j1(x) / x
 
 
-def aerial_image_ref(m_orders, a_coeffs, period_nm, sigma, na, wavelength_nm, grid,
-                     dose_mj_cm2=1.0, sigma_blur_nm=0.0):
+def aerial_image_ref(
+    m_orders,
+    a_coeffs,
+    period_nm,
+    sigma,
+    na,
+    wavelength_nm,
+    grid,
+    dose_mj_cm2=1.0,
+    sigma_blur_nm=0.0,
+):
     period_m = period_nm * 1e-9
     x = np.linspace(-period_m / 2, period_m / 2, grid)
 
@@ -47,8 +56,9 @@ def aerial_image_ref(m_orders, a_coeffs, period_nm, sigma, na, wavelength_nm, gr
     coherence_orders = sigma * na * period_nm / wavelength_nm
 
     max_dm = len(m_orders_p) - 1
-    tcc_cache = {dm: tcc_ref(0, dm, sigma, na, wavelength_nm, period_nm)
-                 for dm in range(max_dm + 1)}
+    tcc_cache = {
+        dm: tcc_ref(0, dm, sigma, na, wavelength_nm, period_nm) for dm in range(max_dm + 1)
+    }
 
     a1 = np.zeros(grid, dtype=complex)
     for i, mi in enumerate(m_orders_p):
@@ -67,6 +77,7 @@ def aerial_image_ref(m_orders, a_coeffs, period_nm, sigma, na, wavelength_nm, gr
 
     if sigma_blur_nm > 0:
         from scipy.signal import convolve2d
+
         dx = period_nm / grid
         sigma_px = sigma_blur_nm / dx
         radius = max(1, int(3 * sigma_px + 0.5))
@@ -129,8 +140,7 @@ COMMON = dict(
 
 def build_orders():
     m_np, a_np = mask_amplitudes_ref(
-        COMMON["period_nm"], COMMON["duty"],
-        COMMON["r_space"], COMMON["r_abs"], COMMON["n_orders"]
+        COMMON["period_nm"], COMMON["duty"], COMMON["r_space"], COMMON["r_abs"], COMMON["n_orders"]
     )
     # Apply pupil cutoff (same as OpEnUV)
     max_order = int(np.floor(COMMON["na"] * COMMON["period_nm"] / COMMON["wavelength_nm"]))
@@ -149,7 +159,8 @@ def test_nils_blur_zero():
 
     # OpEnUV
     ae = aerial_from_orders(
-        orders_complex, order_indices,
+        orders_complex,
+        order_indices,
         period_m=COMMON["period_nm"] * 1e-9,
         na=COMMON["na"],
         wavelength_m=COMMON["wavelength_nm"] * 1e-9,
@@ -163,9 +174,15 @@ def test_nils_blur_zero():
 
     # Reference
     Iref = aerial_image_ref(
-        m_p, a_p, COMMON["period_nm"], COMMON["sigma"],
-        COMMON["na"], COMMON["wavelength_nm"], COMMON["grid"],
-        dose_mj_cm2=COMMON["dose_mj_cm2"], sigma_blur_nm=0.0,
+        m_p,
+        a_p,
+        COMMON["period_nm"],
+        COMMON["sigma"],
+        COMMON["na"],
+        COMMON["wavelength_nm"],
+        COMMON["grid"],
+        dose_mj_cm2=COMMON["dose_mj_cm2"],
+        sigma_blur_nm=0.0,
     )
     n_ref = nils_from_image_ref(Iref, COMMON["period_nm"], COMMON["grid"])
 
@@ -179,7 +196,8 @@ def test_nils_blur_10nm():
 
     # OpEnUV
     ae = aerial_from_orders(
-        orders_complex, order_indices,
+        orders_complex,
+        order_indices,
         period_m=COMMON["period_nm"] * 1e-9,
         na=COMMON["na"],
         wavelength_m=COMMON["wavelength_nm"] * 1e-9,
@@ -193,9 +211,15 @@ def test_nils_blur_10nm():
 
     # Reference
     Iref = aerial_image_ref(
-        m_p, a_p, COMMON["period_nm"], COMMON["sigma"],
-        COMMON["na"], COMMON["wavelength_nm"], COMMON["grid"],
-        dose_mj_cm2=COMMON["dose_mj_cm2"], sigma_blur_nm=10.0,
+        m_p,
+        a_p,
+        COMMON["period_nm"],
+        COMMON["sigma"],
+        COMMON["na"],
+        COMMON["wavelength_nm"],
+        COMMON["grid"],
+        dose_mj_cm2=COMMON["dose_mj_cm2"],
+        sigma_blur_nm=10.0,
     )
     n_ref = nils_from_image_ref(Iref, COMMON["period_nm"], COMMON["grid"])
 
@@ -208,7 +232,8 @@ def test_nils_realistic_range():
     m_p, a_p, orders_complex, order_indices = build_orders()
 
     ae = aerial_from_orders(
-        orders_complex, order_indices,
+        orders_complex,
+        order_indices,
         period_m=COMMON["period_nm"] * 1e-9,
         na=COMMON["na"],
         wavelength_m=COMMON["wavelength_nm"] * 1e-9,

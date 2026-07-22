@@ -105,14 +105,18 @@ def simulate(
     ),
     # Dill ABC exposure options
     dill_A: float = typer.Option(0.5, "--dill-A", help="Bleachable absorption coefficient [1/µm]"),
-    dill_B: float = typer.Option(0.2, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]"),
+    dill_B: float = typer.Option(
+        0.2, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]"
+    ),
     dill_C: float = typer.Option(0.05, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
     dill_Q: float = typer.Option(1.0, "--dill-Q", help="Quantum efficiency (max acid yield)"),
     # PEB options
     peb_D: float = typer.Option(5.0, "--peb-D", help="Acid diffusivity [nm²/s]"),
     peb_k: float = typer.Option(0.3, "--peb-k", help="Deprotection rate constant [s⁻¹]"),
     peb_t_bake: float = typer.Option(60.0, "--peb-t-bake", help="Bake time [s]"),
-    peb_sigma_diff: float = typer.Option(5.0, "--peb-sigma-diff", help="Analytical diffusion sigma [nm]"),
+    peb_sigma_diff: float = typer.Option(
+        5.0, "--peb-sigma-diff", help="Analytical diffusion sigma [nm]"
+    ),
     # Stochastic / Shot Noise options
     enable_stochastic: bool = typer.Option(
         False, "--stochastic", help="Enable photon shot noise and LER/LWR extraction"
@@ -143,15 +147,9 @@ def simulate(
         0.0, "--mask-sidewall-roughness", help="Sidewall roughness sigma [nm]"
     ),
     # Mack development options
-    mack_R_max: float = typer.Option(
-        100.0, "--mack-R-max", help="Max development rate [nm/s]"
-    ),
-    mack_R_min: float = typer.Option(
-        0.1, "--mack-R-min", help="Min development rate [nm/s]"
-    ),
-    mack_n: float = typer.Option(
-        5.0, "--mack-n", help="Dissolution selectivity (contrast)"
-    ),
+    mack_R_max: float = typer.Option(100.0, "--mack-R-max", help="Max development rate [nm/s]"),
+    mack_R_min: float = typer.Option(0.1, "--mack-R-min", help="Min development rate [nm/s]"),
+    mack_n: float = typer.Option(5.0, "--mack-n", help="Dissolution selectivity (contrast)"),
     mack_M_th: float = typer.Option(
         0.5, "--mack-M-th", help="Threshold inhibitor concentration [0-1]"
     ),
@@ -323,9 +321,13 @@ def process_window(
     focus_end: float = typer.Option(50.0, "--focus-end", help="End focus [nm]"),
     focus_steps: int = typer.Option(7, "--focus-steps", help="Number of focus values"),
     output: Optional[str] = typer.Option(None, "--output", help="Output JSON file path"),
-    output_plot: Optional[str] = typer.Option(None, "--output-plot", help="Output heatmap PNG file path"),
+    output_plot: Optional[str] = typer.Option(
+        None, "--output-plot", help="Output heatmap PNG file path"
+    ),
     output_csv: Optional[str] = typer.Option(None, "--output-csv", help="Output CSV file path"),
-    tolerance: float = typer.Option(0.1, "--tolerance", help="CD tolerance fraction (e.g., 0.1 = ±10%)"),
+    tolerance: float = typer.Option(
+        0.1, "--tolerance", help="CD tolerance fraction (e.g., 0.1 = ±10%)"
+    ),
     na: float = typer.Option(0.33, "--na", help="Numerical aperture"),
     sigma: float = typer.Option(0.8, "--sigma", help="Partial coherence factor"),
     grid: int = typer.Option(256, "--grid", help="Grid size"),
@@ -365,7 +367,10 @@ def process_window(
             result = run_simulation(cfg)
             cd_matrix[i, j] = result.cd_nm
             nils_matrix[i, j] = result.nils_value
-            typer.echo(f"  dose={d:.1f}, focus={f:.0f} → CD={result.cd_nm:.2f} nm, NILS={result.nils_value:.3f}")
+            typer.echo(
+                f"  dose={d:.1f}, focus={f:.0f} → "
+                f"CD={result.cd_nm:.2f} nm, NILS={result.nils_value:.3f}"
+            )
 
     # Compute process window metrics
     lo = target_cd * (1 - tolerance)
@@ -429,22 +434,36 @@ def process_window(
 
             # CD heatmap
             im1 = ax1.imshow(
-                cd_matrix.T, origin="lower", aspect="auto",
+                cd_matrix.T,
+                origin="lower",
+                aspect="auto",
                 extent=[dose_start, dose_end, focus_start, focus_end],
-                cmap="RdYlGn", vmin=lo, vmax=hi
+                cmap="RdYlGn",
+                vmin=lo,
+                vmax=hi,
             )
             ax1.set_xlabel("Dose [mJ/cm²]")
             ax1.set_ylabel("Focus [nm]")
-            ax1.set_title(f"CD Heatmap (target={target_cd:.0f} nm, tol=±{tolerance*100:.0f}%)")
+            ax1.set_title(f"CD Heatmap (target={target_cd:.0f} nm, tol=±{tolerance * 100:.0f}%)")
             plt.colorbar(im1, ax=ax1, label="CD [nm]")
             # Contour lines at spec limits
-            ax1.contour(doses, focuses, cd_matrix.T, levels=[lo, hi], colors="k", linewidths=1, linestyles="--")
+            ax1.contour(
+                doses,
+                focuses,
+                cd_matrix.T,
+                levels=[lo, hi],
+                colors="k",
+                linewidths=1,
+                linestyles="--",
+            )
 
             # NILS heatmap
             im2 = ax2.imshow(
-                nils_matrix.T, origin="lower", aspect="auto",
+                nils_matrix.T,
+                origin="lower",
+                aspect="auto",
                 extent=[dose_start, dose_end, focus_start, focus_end],
-                cmap="viridis"
+                cmap="viridis",
             )
             ax2.set_xlabel("Dose [mJ/cm²]")
             ax2.set_ylabel("Focus [nm]")
@@ -461,6 +480,7 @@ def process_window(
     # Export CSV
     if output_csv:
         import csv
+
         with open(output_csv, "w", newline="") as f:
             writer = csv.writer(f)
             # Header row
@@ -514,8 +534,8 @@ def materials(
             print(f"n (refractive): {n:.6f}")
             print(f"k (extinction): {k:.6f}")
             print(f"delta (1-n):   {delta:.6f}")
-            print(f"eps_real:      {n*n - k*k:.6f}")
-            print(f"eps_imag:      {2*n*k:.6f}")
+            print(f"eps_real:      {n * n - k * k:.6f}")
+            print(f"eps_imag:      {2 * n * k:.6f}")
         except ValueError as e:
             typer.echo(f"❌ {e}", err=True)
             raise typer.Exit(1)
@@ -601,10 +621,18 @@ def bench():
 @app.command(name="calibrate")
 def calibrate(
     data_file: str = typer.Argument(..., help="Path to wafer CD data (CSV or JSON)"),
-    initial_params_file: Optional[str] = typer.Option(None, "--initial-params", "-i", help="YAML/JSON file with initial parameter guesses"),
-    bounds_file: Optional[str] = typer.Option(None, "--bounds", "-b", help="YAML/JSON file with parameter bounds"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output JSON file for results"),
-    bootstrap_samples: int = typer.Option(50, "--bootstrap", help="Number of bootstrap samples for confidence intervals"),
+    initial_params_file: Optional[str] = typer.Option(
+        None, "--initial-params", "-i", help="YAML/JSON file with initial parameter guesses"
+    ),
+    bounds_file: Optional[str] = typer.Option(
+        None, "--bounds", "-b", help="YAML/JSON file with parameter bounds"
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output JSON file for results"
+    ),
+    bootstrap_samples: int = typer.Option(
+        50, "--bootstrap", help="Number of bootstrap samples for confidence intervals"
+    ),
     method: str = typer.Option("Nelder-Mead", "--method", help="SciPy minimisation method"),
     maxiter: int = typer.Option(500, "--maxiter", help="Maximum iterations for optimiser"),
     seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for bootstrap"),
@@ -630,6 +658,7 @@ def calibrate(
     if data_path.suffix.lower() == ".csv":
         # CSV format: dose,focus,cd_nm
         import csv
+
         doses = []
         foci = []
         cd_values = []
@@ -654,21 +683,34 @@ def calibrate(
         )
     elif data_path.suffix.lower() in (".json", ".yaml", ".yml"):
         import yaml
-        raw = yaml.safe_load(data_path.read_text()) if data_path.suffix.lower() in (".yaml", ".yml") else json.loads(data_path.read_text())
+
+        raw = (
+            yaml.safe_load(data_path.read_text())
+            if data_path.suffix.lower() in (".yaml", ".yml")
+            else json.loads(data_path.read_text())
+        )
         data = WaferCDData(**raw)
     else:
         typer.echo(f"Unsupported format: {data_path.suffix}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"📊 Loaded wafer data: {data.n_dose}×{data.n_focus} FEM ({data.cd_matrix_nm.shape[0]}×{data.cd_matrix_nm.shape[1]})")
+    typer.echo(
+        f"📊 Loaded wafer data: {data.n_dose}×{data.n_focus} FEM "
+        f"({data.cd_matrix_nm.shape[0]}×{data.cd_matrix_nm.shape[1]})"
+    )
     typer.echo(f"   Dose range: {data.dose_values.min():.1f}–{data.dose_values.max():.1f} mJ/cm²")
     typer.echo(f"   Focus range: {data.focus_values.min():.1f}–{data.focus_values.max():.1f} nm")
 
     # Load initial parameters
     if initial_params_file:
         import yaml
+
         ip_path = Path(initial_params_file)
-        initial_params = yaml.safe_load(ip_path.read_text()) if ip_path.suffix.lower() in (".yaml", ".yml") else json.loads(ip_path.read_text())
+        initial_params = (
+            yaml.safe_load(ip_path.read_text())
+            if ip_path.suffix.lower() in (".yaml", ".yml")
+            else json.loads(ip_path.read_text())
+        )
     else:
         # Default initial guess for typical EUV CAR resist
         initial_params = {
@@ -686,8 +728,13 @@ def calibrate(
     # Load bounds
     if bounds_file:
         import yaml
+
         b_path = Path(bounds_file)
-        bounds = yaml.safe_load(b_path.read_text()) if b_path.suffix.lower() in (".yaml", ".yml") else json.loads(b_path.read_text())
+        bounds = (
+            yaml.safe_load(b_path.read_text())
+            if b_path.suffix.lower() in (".yaml", ".yml")
+            else json.loads(b_path.read_text())
+        )
     else:
         bounds = {
             "dill_C": (0.01, 0.2),
@@ -735,7 +782,10 @@ def calibrate(
         options={"maxiter": maxiter},
     )
 
-    typer.echo(f"\n✅ Fit {'succeeded' if fit_result['success'] else 'failed'}: RMSE = {fit_result['rmse']:.3f} nm")
+    typer.echo(
+        f"\n✅ Fit {'succeeded' if fit_result['success'] else 'failed'}: "
+        f"RMSE = {fit_result['rmse']:.3f} nm"
+    )
     typer.echo(f"   Iterations: {fit_result['n_iter']}, Function evals: {fit_result['nfev']}")
     typer.echo("   Fitted parameters:")
     for name, val in fit_result["fitted_params"].items():
@@ -744,7 +794,9 @@ def calibrate(
     # Bootstrap confidence intervals
     boot_result = None
     if bootstrap_samples > 0:
-        typer.echo(f"\n🔄 Running {bootstrap_samples} bootstrap samples for confidence intervals...")
+        typer.echo(
+            f"\n🔄 Running {bootstrap_samples} bootstrap samples for confidence intervals..."
+        )
         boot_result = bootstrap_fit(
             data,
             pipeline_fn,
@@ -754,7 +806,7 @@ def calibrate(
             method=method,
             seed=seed,
         )
-        valid_count = int(np.sum(~np.any(np.isnan(boot_result['bootstrap_samples']), axis=1)))
+        valid_count = int(np.sum(~np.any(np.isnan(boot_result["bootstrap_samples"]), axis=1)))
         typer.echo(f"   Valid samples: {valid_count}/{bootstrap_samples}")
         typer.echo("   95% Confidence intervals:")
         for name in boot_result["param_names"]:

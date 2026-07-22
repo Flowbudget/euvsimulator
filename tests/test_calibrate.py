@@ -183,9 +183,9 @@ class TestFitResistParams:
             pipeline_fn=const_pipeline,
         )
         expected_keys = {"fitted_params", "rmse", "success", "message", "n_iter", "nfev"}
-        assert expected_keys.issubset(
-            result.keys()
-        ), f"Missing keys: {expected_keys - set(result.keys())}"
+        assert expected_keys.issubset(result.keys()), (
+            f"Missing keys: {expected_keys - set(result.keys())}"
+        )
 
     def test_fits_simple_pipeline(self):
         """Fitting works on a simple analytical pipeline."""

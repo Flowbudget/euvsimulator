@@ -351,9 +351,9 @@ class TestSymmetry:
         r1 = eff.get(1, 0.0)
         r_neg1 = eff.get(-1, 0.0)
         # They should not be exactly equal
-        assert abs(r1 - r_neg1) > 1e-10 or (
-            r1 < 1e-10 and r_neg1 < 1e-10
-        ), f"At θ=6°, R(1)={r1:.6e} should differ from R(-1)={r_neg1:.6e}"
+        assert abs(r1 - r_neg1) > 1e-10 or (r1 < 1e-10 and r_neg1 < 1e-10), (
+            f"At θ=6°, R(1)={r1:.6e} should differ from R(-1)={r_neg1:.6e}"
+        )
 
 
 class TestTMMConsistency:

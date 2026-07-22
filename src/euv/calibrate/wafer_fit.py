@@ -51,8 +51,7 @@ class WaferCDData:
         F = len(self.focus_values)
         if self.cd_matrix_nm.shape != (D, F):
             raise ValueError(
-                f"cd_matrix_nm shape {self.cd_matrix_nm.shape} does not match "
-                f"(dose={D}, focus={F})"
+                f"cd_matrix_nm shape {self.cd_matrix_nm.shape} does not match (dose={D}, focus={F})"
             )
 
     @property

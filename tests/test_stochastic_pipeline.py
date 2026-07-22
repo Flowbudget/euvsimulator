@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+
 from euv.pipeline import SimulationConfig, run_simulation
 
 
@@ -40,12 +41,18 @@ def test_stochastic_produces_ler_lwr():
 def test_stochastic_reproducible_with_seed():
     """Same seed gives identical LER/LWR."""
     cfg1 = SimulationConfig(
-        resist_model="full_chem", enable_stochastic=True,
-        stochastic_n_realisations=5, stochastic_seed=123, grid=128
+        resist_model="full_chem",
+        enable_stochastic=True,
+        stochastic_n_realisations=5,
+        stochastic_seed=123,
+        grid=128,
     )
     cfg2 = SimulationConfig(
-        resist_model="full_chem", enable_stochastic=True,
-        stochastic_n_realisations=5, stochastic_seed=123, grid=128
+        resist_model="full_chem",
+        enable_stochastic=True,
+        stochastic_n_realisations=5,
+        stochastic_seed=123,
+        grid=128,
     )
     r1 = run_simulation(cfg1)
     r2 = run_simulation(cfg2)
@@ -55,10 +62,20 @@ def test_stochastic_reproducible_with_seed():
 
 def test_stochastic_different_seeds_different_results():
     """Different seeds give different LER/LWR (statistically)."""
-    cfg1 = SimulationConfig(resist_model="full_chem", enable_stochastic=True,
-                            stochastic_n_realisations=10, stochastic_seed=1, grid=128)
-    cfg2 = SimulationConfig(resist_model="full_chem", enable_stochastic=True,
-                            stochastic_n_realisations=10, stochastic_seed=2, grid=128)
+    cfg1 = SimulationConfig(
+        resist_model="full_chem",
+        enable_stochastic=True,
+        stochastic_n_realisations=10,
+        stochastic_seed=1,
+        grid=128,
+    )
+    cfg2 = SimulationConfig(
+        resist_model="full_chem",
+        enable_stochastic=True,
+        stochastic_n_realisations=10,
+        stochastic_seed=2,
+        grid=128,
+    )
     r1 = run_simulation(cfg1)
     r2 = run_simulation(cfg2)
     # Should differ (not exactly, but very unlikely to be identical)

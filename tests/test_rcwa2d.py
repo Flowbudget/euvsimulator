@@ -211,9 +211,9 @@ class TestRCWA2DSolver:
         )
         assert eps.shape == (64, 64)
         # Background corner (pixel 0,0 = x=0,y=0, outside island)
-        assert eps[0, 0] == 1.0 + 0.0j, f"Expected background at corner, got {eps[0,0]}"
+        assert eps[0, 0] == 1.0 + 0.0j, f"Expected background at corner, got {eps[0, 0]}"
         # Island centre (x=64nm, y=32nm → pixel 32, 32 for 2nm/pixel)
-        assert eps[32, 32] == 2.0 + 0.0j, f"Expected island at centre, got {eps[32,32]}"
+        assert eps[32, 32] == 2.0 + 0.0j, f"Expected island at centre, got {eps[32, 32]}"
 
     def test_contact_hole_profile(self):
         """Contact hole profile should have correct shape."""

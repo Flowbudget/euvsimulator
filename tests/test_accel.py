@@ -71,9 +71,9 @@ class TestVramBudget:
         adjusted_11 = est_11 - overhead
         ratio = adjusted_21 / adjusted_11 if adjusted_11 > 0 else float("inf")
         expected_ratio = (43**2) / (23**2)
-        assert ratio == pytest.approx(
-            expected_ratio, rel=0.05
-        ), f"Expected M² scaling ratio ~{expected_ratio:.3f}, got {ratio:.3f}"
+        assert ratio == pytest.approx(expected_ratio, rel=0.05), (
+            f"Expected M² scaling ratio ~{expected_ratio:.3f}, got {ratio:.3f}"
+        )
 
     def test_vram_estimate_abbe(self):
         """Abbe estimate returns a positive integer."""
@@ -216,9 +216,9 @@ class TestChunkedAbbe:
             mask_fft, source, fx, fy, pupil, na, chunk_size=1, period_m=1e-6, wavelength_m=13.5e-9
         )
 
-        assert torch.allclose(
-            full, chunked, atol=1e-10
-        ), f"Max diff: {(full - chunked).abs().max().item():.2e}"
+        assert torch.allclose(full, chunked, atol=1e-10), (
+            f"Max diff: {(full - chunked).abs().max().item():.2e}"
+        )
 
     def test_chunked_empty_source(self):
         """chunked_abbe handles empty source gracefully."""

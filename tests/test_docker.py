@@ -61,8 +61,7 @@ def test_dockerfile_multi_stage() -> None:
     content = _read_dockerfile("Dockerfile")
     stages = re.findall(r"^FROM\s+\S+", content, re.MULTILINE)
     assert len(stages) >= 2, (
-        f"Expected at least 2 FROM statements (builder + runtime), "
-        f"found {len(stages)}: {stages}"
+        f"Expected at least 2 FROM statements (builder + runtime), found {len(stages)}: {stages}"
     )
 
 
@@ -77,9 +76,9 @@ def test_dockerfile_python_311_slim() -> None:
 def test_dockerfile_has_correct_cmd() -> None:
     """Dockerfile must end with the expected uvicorn CMD."""
     content = _read_dockerfile("Dockerfile")
-    assert (
-        'CMD ["uvicorn", "euv.api.main:app"' in content
-    ), "Dockerfile missing or has wrong CMD for uvicorn"
+    assert 'CMD ["uvicorn", "euv.api.main:app"' in content, (
+        "Dockerfile missing or has wrong CMD for uvicorn"
+    )
 
 
 def test_dockerfile_installs_required_packages() -> None:
@@ -104,9 +103,9 @@ def test_dockerfile_installs_required_packages() -> None:
 def test_dockerfile_torch_cpu_index() -> None:
     """Dockerfile must use the CPU-only PyTorch index URL."""
     content = _read_dockerfile("Dockerfile")
-    assert (
-        "download.pytorch.org/whl/cpu" in content
-    ), "Dockerfile missing CPU-only PyTorch index URL"
+    assert "download.pytorch.org/whl/cpu" in content, (
+        "Dockerfile missing CPU-only PyTorch index URL"
+    )
 
 
 def test_dockerfile_exposes_port() -> None:
@@ -150,9 +149,9 @@ def test_cli_dockerfile_no_uvicorn() -> None:
     uvicorn_in_install = any(
         "uvicorn" in line and line.strip().startswith("RUN pip") for line in lines
     )
-    assert (
-        not uvicorn_in_install
-    ), "Dockerfile.cli should not install uvicorn — it's a CLI-only image"
+    assert not uvicorn_in_install, (
+        "Dockerfile.cli should not install uvicorn — it's a CLI-only image"
+    )
 
 
 # ── docker-compose content checks ─────────────────────────────────────────────
@@ -161,9 +160,9 @@ def test_cli_dockerfile_no_uvicorn() -> None:
 def test_compose_api_port() -> None:
     """docker-compose.yml must map port 8000."""
     text = COMPOSE_FILES["docker-compose.yml"].read_text()
-    assert (
-        '"8000:8000"' in text or "'8000:8000'" in text or "8000:8000" in text
-    ), "docker-compose.yml missing port mapping 8000:8000"
+    assert '"8000:8000"' in text or "'8000:8000'" in text or "8000:8000" in text, (
+        "docker-compose.yml missing port mapping 8000:8000"
+    )
 
 
 def test_compose_api_volume() -> None:

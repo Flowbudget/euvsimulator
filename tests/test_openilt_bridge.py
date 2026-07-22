@@ -64,9 +64,9 @@ class TestEUVForwardModel:
         resist_after = model.forward(mask_opt)
         loss_after = model.loss(resist_after).item()
 
-        assert (
-            loss_after < loss_before * 0.95
-        ), f"Loss should decrease: {loss_before:.6f} → {loss_after:.6f}"
+        assert loss_after < loss_before * 0.95, (
+            f"Loss should decrease: {loss_before:.6f} → {loss_after:.6f}"
+        )
 
     def test_optimize_mask_binary(self):
         """Optimisation should push mask toward {0, 1} or reduce loss."""
