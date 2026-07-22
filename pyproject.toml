@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
     "Intended Audience :: Science/Research",
 ]
@@ -72,7 +73,7 @@ python_files = ["test_*.py"]
 
 [tool.black]
 line-length = 100
-target-version = ["py310", "py311", "py312"]
+target-version = ["py310", "py311", "py312", "py313"]
 
 [tool.ruff]
 line-length = 100
@@ -80,16 +81,6 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "N", "I", "D"]
-# D100/D104/D401/D413: relaxed docstring conventions.
-# D203/D205/D211/D212/D213/D415/D417/D301/D400: docstring-*formatting*
-#   pedantry that conflicts with the NumPy docstring style used throughout;
-#   we keep the "must have a docstring" rules (D101/D102/D103) but not the
-#   whitespace/summary-placement nitpicks.
-# N802/N803/N806: physics code uses standard mathematical notation for
-#   matrices and vectors (E, Kx, W, V, S11, ...) which is uppercase by
-#   convention and far clearer than snake_case for anyone reading the
-#   underlying equations (Moharam, Li, Hopkins).
-# E741: single-letter names like I (identity), l (layer) are standard here.
 ignore = [
     "D100", "D104", "D401", "D413",
     "D203", "D205", "D211", "D212", "D213", "D415", "D417", "D301", "D400",
@@ -98,8 +89,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests do not require docstrings or import-ordering rigor, and F841
-# (unused local) is common in assertion-heavy test setup.
 "tests/*" = ["D101", "D102", "D103", "D105", "D107", "F841", "F401"]
 "docs/conf.py" = ["D", "F401"]
 
