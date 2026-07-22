@@ -119,9 +119,11 @@ def test_config_file_with_resist_params(tmp_path):
 def test_cli_resist_model_option():
     """Test that --resist-model CLI option works."""
     import subprocess
+    import os
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     result = subprocess.run(
         ["euv", "simulate", "--resist-model=full_chem", "--grid=64"],
-        capture_output=True, text=True, cwd="/Users/pi-server/Projekte/OpEnUV"
+        capture_output=True, text=True, cwd=project_root
     )
     assert result.returncode == 0, f"CLI failed: {result.stderr}"
     assert "cd_nm" in result.stdout
