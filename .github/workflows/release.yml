@@ -37,7 +37,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          uv pip install build --python ${{ matrix.python-version }}
+          pip install build
 
       - name: Build wheel
         run: python -m build --wheel --no-isolation
