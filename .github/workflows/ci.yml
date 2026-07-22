@@ -51,7 +51,7 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run pytest -x -v --tb=short -n auto --cov=src/euv --cov-report=xml --cov-report=term-missing ${{ matrix.os == 'windows-latest' && '-k "not test_plot and not test_gui"' || '' }}
+          uv run pytest -x -v --tb=short -n auto --cov=src/euv --cov-report=xml --cov-report=term-missing ${{ matrix.os == 'windows-latest' && '-k "not (TestPlotting or test_export_gds)"' || '' }}
         env:
           PYTHONPATH: src
           MPLBACKEND: Agg
