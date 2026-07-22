@@ -162,6 +162,10 @@ jobs:
           version: "latest"
           enable-cache: true
 
+      - name: Install project dependencies
+        run: |
+          uv sync --python 3.12
+
       - name: Install build dependencies
         run: |
           uv pip install build twine
