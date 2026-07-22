@@ -33,7 +33,7 @@ OpEnUV is the **only open-source tool that models the complete EUV lithography p
 | **High-NA optics** | Anamorphic 4×/8×, Zernike | ✅ | ❌ | ❌ | ❌ |
 | **Resist chemistry** | Dill ABC + PEB + development | ✅ | ❌ | ❌ | ❌ |
 | **Plasma source** | LPP Sn-droplet spectral model | ✅ | ❌ | ❌ | ❌ |
-| **Stochastics** | Shot noise, LER/LWR | ⚠️ | ❌ | ❌ | ✅ |
+| **Stochastics** | Shot noise, LER/LWR | ✅ | ❌ | ❌ | ✅ |
 | **CD metrology** | Process window, Bossung | ✅ | ❌ | ❌ | ❌ |
 | **Optimization** | Differentiable OPC/ILT bridge | ✅ | ❌ | ❌ | ✅ |
 | **Web API** | REST + dashboard | ✅ | ❌ | ❌ | ❌ |
@@ -252,7 +252,7 @@ cd docs && make html
 | End-to-end pipeline | ✅ |
 | LPP source model | ✅ |
 | Resist chemistry (Dill ABC + PEB + Mack) | ✅ |
-| Stochastic effects (shot noise, LER/LWR) | ⚠️ Module exists, integrated in `full_chem` pipeline |
+| Stochastic effects (shot noise, LER/LWR) | ✅ Shot noise, LER/LWR, 1/√Dose scaling, Monte-Carlo |
 | CD metrology & process window | ✅ |
 | Inverse lithography (OpenILT bridge) | ✅ |
 | GPU acceleration | ✅ |
@@ -272,7 +272,7 @@ cd docs && make html
 | Area | Description | Priority |
 |------|-------------|----------|
 | **Resist `full_chem` parameters** | Expose Dill A/B/C/Q, PEB k/t/D/σ, Mack params in Config & CLI | High |
-| **Stochastics in pipeline** | Integrate photon shot noise + LER/LWR → `SimulationResult` | Medium |
+| **Stochastics in pipeline** | Integrate photon shot noise + LER/LWR → `SimulationResult` | ✅ Done |
 | **Process window visualization** | `--output-plot` (PNG heatmap) + `--output-csv` for `euv process-window` | Medium |
 | **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | Low |
 | **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
