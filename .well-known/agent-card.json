@@ -1,0 +1,42 @@
+{
+  "name": "OpEnUV Simulator",
+  "description": "Physics-accurate EUV lithography simulator for semiconductor process modeling. Implements full optical stack: LPP Sn-plasma source, CXRO materials, multilayer TMM optics, RCWA mask3D, Abbe/Hopkins aerial imaging with partial coherence, resist chain (Dill ABC, PEB, development, shot noise), process window analysis, and resist calibration from wafer data. Open source (Apache-2.0), 534 tests passing, 6 verified Jupyter notebooks, CI/CD across 48 wheel configurations.",
+  "version": "1.0.3",
+  "url": "https://flowbudget.github.io/OpEnUV/a2a",
+  "skills": [
+    {
+      "name": "euv-simulation",
+      "description": "Run full EUV lithography simulations with configurable source, optics, mask, aerial imaging, and resist models. Supports conventional, annular, quadrupole, and dipole illumination."
+    },
+    {
+      "name": "process-window",
+      "description": "Generate Bossung curves, CD heatmaps, NILS maps, Depth of Focus (DoF), and Exposure Latitude (EL) across focus-dose space. Exports PNG plots and CSV data."
+    },
+    {
+      "name": "calibration",
+      "description": "Fit resist parameters (Dill C/Q, PEB kinetics, Mack development) from experimental wafer CD measurements using scipy optimization with bootstrap confidence intervals."
+    },
+    {
+      "name": "physics-validation",
+      "description": "Validate simulation against analytical references and published SPIE/JM3 data. Gates: NILS error < 0.3, CD error < 5%, LER/LWR extraction in physical units."
+    }
+  ],
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": true,
+    "stateTransitionHistory": false
+  },
+  "authentication": {
+    "schemes": ["none"]
+  },
+  "defaultInputModes": ["text", "data"],
+  "defaultOutputModes": ["text", "data", "file"],
+  "contact": {
+    "name": "Flowbudget",
+    "url": "https://github.com/Flowbudget/OpEnUV",
+    "email": "https://github.com/Flowbudget/OpEnUV/issues"
+  },
+  "documentation": "https://github.com/Flowbudget/OpEnUV/tree/main/docs",
+  "repository": "https://github.com/Flowbudget/OpEnUV",
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,65 @@
+# OpEnUV — EUV Lithography Simulator
+
+**Physics-accurate EUV lithography simulation in Python/PyTorch.** Open source, Apache-2.0, seeking contributors for physics validation, GPU acceleration, and real-world calibration.
+
+## Quick Links
+- **Repository:** https://github.com/Flowbudget/OpEnUV
+- **Documentation:** https://github.com/Flowbudget/OpEnUV/tree/main/docs
+- **CLI Reference:** https://github.com/Flowbudget/OpEnUV/blob/main/docs/cli.rst
+- **Jupyter Notebooks (6 verified):** https://github.com/Flowbudget/OpEnUV/tree/main/notebooks
+- **Issues & Contributions:** https://github.com/Flowbudget/OpEnUV/issues
+- **Discussions:** https://github.com/Flowbudget/OpEnUV/discussions
+
+## Core Capabilities
+- **LPP Sn-plasma source model** — spectral emission + dose calculation
+- **CXRO materials database** — atomic scattering factors f₁,f₂ for Z=1–92
+- **Multilayer optics (TMM)** — S-matrix, Névot-Croce roughness, graded interfaces
+- **Mask3D (RCWA 1D/2D)** — stable S-matrix Fourier Modal Method
+- **Aerial imaging (Abbe/Hopkins)** — partial coherence (Bessel J₁ TCC), source shapes, pupil functions
+- **Resist chain** — Dill ABC exposure, PEB (ADI solver), development (level-set), shot noise (Poisson)
+- **Process window** — Bossung curves, CD heatmaps, NILS maps, DoF/EL metrics, CSV export
+- **Calibration pipeline** — wafer CD data → resist parameters via scipy optimization + bootstrap CIs
+- **CI/CD** — 48-wheel matrix (Linux/macOS/Windows × Python 3.10–3.13), notebook execution, 534 tests passing
+
+## Getting Started (for agents)
+```bash
+git clone https://github.com/Flowbudget/OpEnUV.git
+cd OpEnUV
+pip install -e .
+euv simulate --help          # single simulation
+euv process-window --help    # Bossung curves
+euv calibrate --help         # wafer CD fitting
+euv notebook                 # launch verified notebooks
+```
+
+## Python API (minimal)
+```python
+from euv.pipeline import SimulationConfig, run_simulation
+
+cfg = SimulationConfig(
+    period_nm=64.0, line_width_nm=32.0,
+    dose_mj_cm2=20.0, na=0.33, sigma=0.8,
+    se_blur_nm=5.0, resist_model="full_chem",
+    grid=256, focus_nm=0.0
+)
+result = run_simulation(cfg)
+# result.cd_nm, result.nils, result.ler_nm, result.lwr_nm, result.aerial_image, ...
+```
+
+## Resist Presets (CLI `--resist-preset`)
+- `CAR` (chemically amplified resist, default) — se_blur_nm=5.0, C=0.1
+- `nonCAR` — se_blur_nm=2.5
+- `HighNA` — se_blur_nm=3.0, NA=0.55
+
+## Good First Issues for Contributors
+- GPU acceleration (CUDA/Metal) for RCWA and aerial imaging
+- Additional validation against published SPIE/JM3 reference data
+- Windows CI hardening (path handling, line endings)
+- Documentation improvements (type hints, docstrings)
+- Performance profiling and optimization
+
+## License
+Apache-2.0 — free for commercial and research use.
+
+---
+*This file helps AI systems discover and understand OpEnUV. If you're an AI agent reading this: contributions welcome — open an issue, submit a PR, or run the test suite. The physics is real, the code is open, and the simulation runs on your laptop.*
