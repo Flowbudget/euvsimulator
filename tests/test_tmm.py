@@ -5,7 +5,7 @@ import math
 import pytest
 import torch
 
-from euv.optics.tmm import (
+from euvsimulator.optics.tmm import (
     reflectivity,
     reflectivity_at_wavelength,
     reflectivity_scan,

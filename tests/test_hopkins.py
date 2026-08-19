@@ -5,14 +5,14 @@ from __future__ import annotations
 import pytest
 import torch
 
-from euv.aerial.hopkins import (
+from euvsimulator.aerial.hopkins import (
     compare_hopkins_abbe,
     compute_tcc,
     hopkins_aerial,
     tcc_soc_decomposition,
 )
-from euv.aerial.pupil import circular_pupil, pupil_grid
-from euv.aerial.source import conventional, dipole_x
+from euvsimulator.aerial.pupil import circular_pupil, pupil_grid
+from euvsimulator.aerial.source import conventional, dipole_x
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

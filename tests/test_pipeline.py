@@ -1,6 +1,6 @@
 """Tests for the full simulation pipeline."""
 
-from euv.pipeline import run_simulation, simulate_line_space
+from euvsimulator.pipeline import run_simulation, simulate_line_space
 
 
 class TestPipeline:

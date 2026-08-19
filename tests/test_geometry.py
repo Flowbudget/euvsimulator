@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from euv.mask3d.geometry import (
+from euvsimulator.mask3d.geometry import (
     MaskLayer,
     build_permittivity_profile,
     standard_euv_mask,

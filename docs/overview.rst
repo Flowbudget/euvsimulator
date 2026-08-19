@@ -1,7 +1,7 @@
 Overview
 ========
 
-OpEnUV simulates EUV lithography from mask to resist profile.  The pipeline
+euvsimulator simulates EUV lithography from mask to resist profile.  The pipeline
 connects:
 
 1. **Material database** — CXRO/Henke refractive indices for 92 elements
@@ -18,7 +18,7 @@ Architecture
 
 ::
 
-  src/euv/
+  src/euvsimulator/
   ├── constants/      Physical constants
   ├── materials/      CXRO material database
   ├── optics/         TMM multilayer reflectivity

@@ -1,7 +1,7 @@
 # =============================================================================
-# OpEnUV — Docker Compose (CLI mode)
+# euvsimulator — Docker Compose (CLI mode)
 # =============================================================================
-# Runs the OpEnUV CLI interactively.  By default shows `--help`; override
+# Runs the euvsimulator CLI interactively.  By default shows `--help`; override
 # the command with `docker compose -f docker-compose.cli.yml run --rm cli ...`
 # =============================================================================
 
@@ -10,9 +10,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cli
-    container_name: openuv-cli
-    image: openuv-cli:latest
+    container_name: euvsimulator-cli
+    image: euvsimulator-cli:latest
     stdin_open: true   # -i
     tty: true          # -t
     volumes:
-      - ./src/euv/data:/app/euv/data
+      - ./src/euvsimulator/data:/app/euvsimulator/data

@@ -1,6 +1,6 @@
-# Contributing to OpEnUV
+# Contributing to euvsimulator
 
-Thank you for your interest in contributing to OpEnUV, the open-source EUV lithography simulator. We welcome contributions of all kinds — bug reports, feature requests, documentation improvements, and code changes.
+Thank you for your interest in contributing to euvsimulator, the open-source EUV lithography simulator. We welcome contributions of all kinds — bug reports, feature requests, documentation improvements, and code changes.
 
 ## Table of Contents
 
@@ -15,8 +15,8 @@ Thank you for your interest in contributing to OpEnUV, the open-source EUV litho
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/Flowbudget/OpEnUV.git
-   cd OpEnUV
+   git clone https://github.com/Flowbudget/euvsimulator.git
+   cd euvsimulator
    ```
 
 2. **Create a virtual environment:**

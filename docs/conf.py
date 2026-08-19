@@ -1,14 +1,14 @@
-# Sphinx build configuration for OpEnUV docs
+# Sphinx build configuration for euvsimulator docs
 
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath("../../src"))
 
-project = "OpEnUV"
-copyright = "2026, OpEnUV Contributors"
-author = "OpEnUV Contributors"
-release = "0.1.0"
+project = "euvsimulator"
+copyright = "2026, euvsimulator Contributors"
+author = "euvsimulator Contributors"
+release = "1.0.3"
 
 extensions = [
     "sphinx.ext.autodoc",

@@ -49,15 +49,15 @@ Python API
 
 .. code-block:: python
 
-   from euv.pipeline import SimulationConfig, run_simulation
+  from euvsimulator.pipeline import SimulationConfig, run_simulation
 
-   cfg = SimulationConfig(
-       period_nm=64.0,
-       line_width_nm=32.0,
-       dose_mj_cm2=20.0,
-       na=0.33,
-       sigma=0.8,
-   )
-   result = run_simulation(cfg)
-   print(f"CD = {result.cd_nm:.2f} nm")
-   print(f"NILS = {result.nils_value:.4f}")
+  cfg = SimulationConfig(
+      period_nm=64.0,
+      line_width_nm=32.0,
+      dose_mj_cm2=20.0,
+      na=0.33,
+      sigma=0.8,
+  )
+  result = run_simulation(cfg)
+  print(f"CD = {result.cd_nm:.2f} nm")
+  print(f"NILS = {result.nils_value:.4f}")

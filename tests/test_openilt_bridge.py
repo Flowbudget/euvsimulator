@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from euv.opc.openilt_bridge import EUVForwardModel, run_ilt
+from euvsimulator.opc.openilt_bridge import EUVForwardModel, run_ilt
 
 
 class TestEUVForwardModel:

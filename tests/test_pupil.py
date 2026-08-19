@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from euv.aerial.pupil import (
+from euvsimulator.aerial.pupil import (
     anamorphic_pupil,
     apply_aberrations,
     circular_pupil,

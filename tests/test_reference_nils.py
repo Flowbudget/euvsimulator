@@ -1,16 +1,16 @@
-"""Regression test: OpEnUV NILS vs independent reference model.
+"""Regression test: euvsimulator NILS vs independent reference model.
 
 The reference model (reference_model.py) is a pure numpy/scipy implementation
-of Hopkins imaging with correct TCC (2*J1/x) and SE blur. It uses no OpEnUV code.
+of Hopkins imaging with correct TCC (2*J1/x) and SE blur. It uses no euvsimulator code.
 
-This test ensures OpEnUV's aerial image + NILS computation stays physically correct.
+This test ensures euvsimulator's aerial image + NILS computation stays physically correct.
 """
 
 import numpy as np
 import torch
 from scipy.special import j1
 
-from euv.aerial.abbe import aerial_from_orders, nils
+from euvsimulator.aerial.abbe import aerial_from_orders, nils
 
 
 # ---- Reference implementation (copied from reference_model.py) ----
@@ -142,12 +142,12 @@ def build_orders():
     m_np, a_np = mask_amplitudes_ref(
         COMMON["period_nm"], COMMON["duty"], COMMON["r_space"], COMMON["r_abs"], COMMON["n_orders"]
     )
-    # Apply pupil cutoff (same as OpEnUV)
+    # Apply pupil cutoff (same as euvsimulator)
     max_order = int(np.floor(COMMON["na"] * COMMON["period_nm"] / COMMON["wavelength_nm"]))
     mask = np.abs(m_np) <= max_order
     m_p = m_np[mask]
     a_p = a_np[mask]
-    # Torch tensors for OpEnUV
+    # Torch tensors for euvsimulator
     orders_complex = torch.tensor(a_p, dtype=torch.complex128)
     order_indices = torch.tensor(m_p, dtype=torch.int64)
     return m_p, a_p, orders_complex, order_indices
@@ -187,7 +187,7 @@ def test_nils_blur_zero():
     n_ref = nils_from_image_ref(Iref, COMMON["period_nm"], COMMON["grid"])
 
     diff = abs(n_op - n_ref)
-    assert diff < 0.3, f"NILS mismatch: OpEnUV={n_op:.3f}, Ref={n_ref:.3f}, diff={diff:.3f}"
+    assert diff < 0.3, f"NILS mismatch: euvsimulator={n_op:.3f}, Ref={n_ref:.3f}, diff={diff:.3f}"
 
 
 def test_nils_blur_10nm():
@@ -224,7 +224,7 @@ def test_nils_blur_10nm():
     n_ref = nils_from_image_ref(Iref, COMMON["period_nm"], COMMON["grid"])
 
     diff = abs(n_op - n_ref)
-    assert diff < 0.3, f"NILS mismatch: OpEnUV={n_op:.3f}, Ref={n_ref:.3f}, diff={diff:.3f}"
+    assert diff < 0.3, f"NILS mismatch: euvsimulator={n_op:.3f}, Ref={n_ref:.3f}, diff={diff:.3f}"
 
 
 def test_nils_realistic_range():

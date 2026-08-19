@@ -2,7 +2,7 @@
 
 import torch
 
-from euv.mask3d.rcwa_torch import (
+from euvsimulator.mask3d.rcwa_torch import (
     RCWA1D,
     RCWAConfig,
     binary_grating_profile,
@@ -86,7 +86,7 @@ class TestRCWA1D:
         orders = solver.solve(profile, d, period)
 
         # Should match Fresnel for a thin glass layer
-        from euv.optics.tmm import reflectivity
+        from euvsimulator.optics.tmm import reflectivity
 
         n_layer = torch.tensor([n_glass], dtype=torch.complex128)
         R_tmm, _ = reflectivity(

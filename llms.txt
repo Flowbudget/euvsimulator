@@ -1,14 +1,14 @@
-# OpEnUV — EUV Lithography Simulator
+# euvsimulator — EUV Lithography Simulator
 
 **Physics-accurate EUV lithography simulation in Python/PyTorch.** Open source, Apache-2.0, seeking contributors for physics validation, GPU acceleration, and real-world calibration.
 
 ## Quick Links
-- **Repository:** https://github.com/Flowbudget/OpEnUV
-- **Documentation:** https://github.com/Flowbudget/OpEnUV/tree/main/docs
-- **CLI Reference:** https://github.com/Flowbudget/OpEnUV/blob/main/docs/cli.rst
-- **Jupyter Notebooks (6 verified):** https://github.com/Flowbudget/OpEnUV/tree/main/notebooks
-- **Issues & Contributions:** https://github.com/Flowbudget/OpEnUV/issues
-- **Discussions:** https://github.com/Flowbudget/OpEnUV/discussions
+- **Repository:** https://github.com/Flowbudget/euvsimulator
+- **Documentation:** https://github.com/Flowbudget/euvsimulator/tree/main/docs
+- **CLI Reference:** https://github.com/Flowbudget/euvsimulator/blob/main/docs/cli.rst
+- **Jupyter Notebooks (6 verified):** https://github.com/Flowbudget/euvsimulator/tree/main/notebooks
+- **Issues & Contributions:** https://github.com/Flowbudget/euvsimulator/issues
+- **Discussions:** https://github.com/Flowbudget/euvsimulator/discussions
 
 ## Core Capabilities
 - **LPP Sn-plasma source model** — spectral emission + dose calculation
@@ -23,8 +23,8 @@
 
 ## Getting Started (for agents)
 ```bash
-git clone https://github.com/Flowbudget/OpEnUV.git
-cd OpEnUV
+git clone https://github.com/Flowbudget/euvsimulator.git
+cd euvsimulator
 pip install -e .
 euv simulate --help          # single simulation
 euv process-window --help    # Bossung curves
@@ -34,7 +34,7 @@ euv notebook                 # launch verified notebooks
 
 ## Python API (minimal)
 ```python
-from euv.pipeline import SimulationConfig, run_simulation
+from euvsimulator.pipeline import SimulationConfig, run_simulation
 
 cfg = SimulationConfig(
     period_nm=64.0, line_width_nm=32.0,
@@ -62,4 +62,4 @@ result = run_simulation(cfg)
 Apache-2.0 — free for commercial and research use.
 
 ---
-*This file helps AI systems discover and understand OpEnUV. If you're an AI agent reading this: contributions welcome — open an issue, submit a PR, or run the test suite. The physics is real, the code is open, and the simulation runs on your laptop.*
+*This file helps AI systems discover and understand euvsimulator. If you're an AI agent reading this: contributions welcome — open an issue, submit a PR, or run the test suite. The physics is real, the code is open, and the simulation runs on your laptop.*

@@ -17,7 +17,7 @@ def nb(cells):
             for ctype, src in cells
         ],
         "metadata": {
-            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "kernelspec": {"display_name": "euvsimulator", "language": "python", "name": "euvsimulator"},
             "language_info": {"name": "python", "version": "3.13.13"},
         },
         "nbformat": 4,
@@ -53,8 +53,8 @@ This notebook explores the **process window** — the range of dose and focus se
 import numpy as np
 import matplotlib.pyplot as plt
 
-from euv.pipeline import SimulationConfig, run_simulation
-from euv.metro.process_window import dose_matrix, process_window, pw_metrics, plot_bossung"""),
+from euvsimulator.pipeline import SimulationConfig, run_simulation
+from euvsimulator.metro.process_window import dose_matrix, process_window, pw_metrics, plot_bossung"""),
     (M, """## 2. Pipeline Wrapper for the Dose-Focus Sweep
 
 `dose_matrix()` expects a callable `fn(dose_mj_cm2, focus_nm)` returning a dict with `cd_nm`."""),
@@ -362,11 +362,11 @@ This notebook explores **stochastic effects** in EUV lithography:
 import numpy as np
 import matplotlib.pyplot as plt
 
-from euv.pipeline import SimulationConfig, run_simulation
-from euv.resist.exposure import dose_to_acid
-from euv.resist.peb import reaction_diffusion_analytical
-from euv.resist.develop import threshold_development
-from euv.resist.stochastic import (
+from euvsimulator.pipeline import SimulationConfig, run_simulation
+from euvsimulator.resist.exposure import dose_to_acid
+from euvsimulator.resist.peb import reaction_diffusion_analytical
+from euvsimulator.resist.develop import threshold_development
+from euvsimulator.resist.stochastic import (
     poisson_shot_noise,
     extract_edges,
     extract_ler,
@@ -688,12 +688,12 @@ This notebook explores **Mask-3D effects** in EUV lithography using Rigorous Cou
 import numpy as np
 import matplotlib.pyplot as plt
 
-from euv.pipeline import SimulationConfig, run_simulation
-from euv.mask3d.rcwa_torch import RCWAConfig, RCWA1D, binary_grating_profile
-from euv.mask3d.geometry import standard_euv_mask, build_permittivity_profile
-from euv.materials import CXROTable
-from euv.optics.multilayer import mo_si_stack
-from euv.optics.tmm import reflectivity"""),
+from euvsimulator.pipeline import SimulationConfig, run_simulation
+from euvsimulator.mask3d.rcwa_torch import RCWAConfig, RCWA1D, binary_grating_profile
+from euvsimulator.mask3d.geometry import standard_euv_mask, build_permittivity_profile
+from euvsimulator.materials import CXROTable
+from euvsimulator.optics.multilayer import mo_si_stack
+from euvsimulator.optics.tmm import reflectivity"""),
     (M, """## 1. Reference: TMM Reflectivities (as used by the pipeline)
 
 The current pipeline computes complex reflectivities of the absorber and space regions via TMM, then builds analytic Fourier coefficients."""),

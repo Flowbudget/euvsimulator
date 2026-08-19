@@ -1,4 +1,4 @@
-"""Tests for the OpEnUV REST API (``euv.api.main``).
+"""Tests for the euvsimulator REST API (``euvsimulator.api.main``).
 
 Uses FastAPI's ``TestClient`` to exercise all four endpoints:
 - ``GET /health``
@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from euv.api.main import app
+from euvsimulator.api.main import app
 
 # ──────────────────────────────────────────────
 # Fixtures
@@ -21,7 +21,7 @@ from euv.api.main import app
 
 @pytest.fixture()
 def client() -> TestClient:
-    """FastAPI test client bound to the OpEnUV app."""
+    """FastAPI test client bound to the euvsimulator app."""
     return TestClient(app)
 
 
@@ -193,7 +193,7 @@ class TestOpenAPI:
         resp = client.get("/openapi.json")
         assert resp.status_code == 200
         schema = resp.json()
-        assert schema["info"]["title"] == "OpEnUV — Open Source EUV Lithography Simulator"
+        assert schema["info"]["title"] == "euvsimulator — Open Source EUV Lithography Simulator"
         assert "/health" in schema["paths"]
         assert "/simulate" in schema["paths"]
         assert "/materials" in schema["paths"]

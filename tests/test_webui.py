@@ -1,4 +1,4 @@
-"""Tests for the OpEnUV Web UI static files and routing."""
+"""Tests for the euvsimulator Web UI static files and routing."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-from euv.api.main import app
+from euvsimulator.api.main import app
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATIC_DIR = os.path.join(HERE, "src", "euv", "api", "static")
+STATIC_DIR = os.path.join(HERE, "src", "euvsimulator", "api", "static")
 
 
 # ──────────────────────────────────────────────
@@ -50,7 +50,7 @@ class TestStaticFileServing:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
-        assert "OpEnUV Dashboard" in resp.text
+        assert "euvsimulator Dashboard" in resp.text
         assert "/static/style.css" in resp.text
         assert "/static/app.js" in resp.text
 

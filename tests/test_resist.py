@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from euv.resist import (
+from euvsimulator.resist import (
     MackModel,
     deprotection_analytical,
     deprotection_fd,

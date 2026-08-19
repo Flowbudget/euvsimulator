@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from euv.source.plasma import LPPPlasmaSource
-from euv.source.spectrum import (
+from euvsimulator.source.plasma import LPPPlasmaSource
+from euvsimulator.source.spectrum import (
     dose_to_wafer,
     in_band_efficiency,
     photons_per_nm2,

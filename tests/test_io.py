@@ -2,8 +2,8 @@
 
 import pytest
 
-from euv.io import MaskGeometry
-from euv.io.gds import make_linespace
+from euvsimulator.io import MaskGeometry
+from euvsimulator.io.gds import make_linespace
 
 
 class TestMakeLineSpace:

@@ -1,4 +1,4 @@
-"""Benchmark tests for the OpEnUV RCWA solver.
+"""Benchmark tests for the euvsimulator RCWA solver.
 
 Verifies the solver against known physical limits and the published
 results of Moharam & Gaylord (JOSA A, 1995).
@@ -34,8 +34,8 @@ import math
 import pytest
 import torch
 
-from euv.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
-from euv.optics.tmm import reflectivity as tmm_reflectivity
+from euvsimulator.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
+from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
 
 # ── Test parameters ─────────────────────────────────────────────────
 

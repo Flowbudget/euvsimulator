@@ -1,5 +1,5 @@
 # =============================================================================
-# OpEnUV — Multi-stage Docker build
+# euvsimulator — Multi-stage Docker build
 # =============================================================================
 # Stage 1: Builder — install all dependencies (including CPU-only PyTorch)
 # Stage 2: Runtime — copy installed deps + source, serve via uvicorn
@@ -40,10 +40,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src/ ./src/
 
 # CXRO data directory (bind-mounted at runtime, but create the path)
-RUN mkdir -p /app/euv/data
+RUN mkdir -p /app/euvsimulator/data
 
 # Expose the FastAPI port
 EXPOSE 8000
 
 # Default command: serve the REST API
-CMD ["uvicorn", "euv.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "euvsimulator.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

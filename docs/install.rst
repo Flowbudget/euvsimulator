@@ -13,18 +13,18 @@ Quick install
 
 .. code-block:: bash
 
-   # Clone the repository
-   git clone https://github.com/Flowbudget/OpEnUV.git
-   cd OpEnUV
+  # Clone the repository
+  git clone https://github.com/Flowbudget/euvsimulator.git
+  cd euvsimulator
 
-   # Install in editable mode
-   pip install -e .
+  # Install in editable mode
+  pip install -e .
 
-   # Install dev dependencies (optional)
-   pip install -e ".[dev]"
+  # Install dev dependencies (optional)
+  pip install -e ".[dev]"
 
-   # Verify
-   euv info
+  # Verify
+  euv info
 
 CUDA / GPU support
 ------------------

@@ -8,13 +8,13 @@ from __future__ import annotations
 import pytest
 import torch
 
-from euv.accel.device import device_info, select_device, set_default_dtype
-from euv.accel.mixed_precision import (
+from euvsimulator.accel.device import device_info, select_device, set_default_dtype
+from euvsimulator.accel.mixed_precision import (
     autocast_complex,
     precision_policy,
     real_only,
 )
-from euv.accel.vram_budget import (
+from euvsimulator.accel.vram_budget import (
     check_oom,
     estimate_abbe_vram,
     estimate_rcma_vram,
@@ -178,9 +178,9 @@ class TestChunkedAbbe:
 
     def test_chunked_matches_full(self):
         """chunked_abbe matches abbe_image within 1e-10 on CPU."""
-        from euv.accel.chunked import chunked_abbe
-        from euv.aerial.abbe import abbe_image
-        from euv.aerial.pupil import pupil_grid
+        from euvsimulator.accel.chunked import chunked_abbe
+        from euvsimulator.aerial.abbe import abbe_image
+        from euvsimulator.aerial.pupil import pupil_grid
 
         G = 32
         na = 0.33
@@ -222,8 +222,8 @@ class TestChunkedAbbe:
 
     def test_chunked_empty_source(self):
         """chunked_abbe handles empty source gracefully."""
-        from euv.accel.chunked import chunked_abbe
-        from euv.aerial.pupil import pupil_grid
+        from euvsimulator.accel.chunked import chunked_abbe
+        from euvsimulator.aerial.pupil import pupil_grid
 
         G = 16
         na = 0.33

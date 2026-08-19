@@ -19,7 +19,7 @@ import math
 import pytest
 import torch
 
-from euv.resist.stochastic import (
+from euvsimulator.resist.stochastic import (
     extract_edges,
     extract_ler,
     extract_lwr,

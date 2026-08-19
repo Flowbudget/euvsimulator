@@ -1,11 +1,11 @@
 {
-  "name": "openuuv",
+  "name": "euvsimulator",
   "version": "1.0.3",
-  "description": "OpEnUV — Physics-accurate EUV lithography simulator. Provides tools for single simulation, process window analysis, and resist parameter calibration from wafer data.",
-  "homepage": "https://github.com/Flowbudget/OpEnUV",
+  "description": "euvsimulator — Physics-accurate EUV lithography simulator. Provides tools for single simulation, process window analysis, and resist parameter calibration from wafer data.",
+  "homepage": "https://github.com/Flowbudget/euvsimulator",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Flowbudget/OpEnUV.git"
+    "url": "https://github.com/Flowbudget/euvsimulator.git"
   },
   "license": "Apache-2.0",
   "author": {
@@ -26,7 +26,7 @@
   "mcp": {
     "version": "1.0.0",
     "server": {
-      "name": "openuuv",
+      "name": "euvsimulator",
       "version": "1.0.3",
       "description": "EUV lithography simulation tools",
       "capabilities": {
@@ -155,13 +155,13 @@
   },
   "installation": {
     "method": "pip",
-    "command": "pip install -e git+https://github.com/Flowbudget/OpEnUV.git#egg=openuuv",
+    "command": "pip install -e git+https://github.com/Flowbudget/euvsimulator.git#egg=euvsimulator",
     "editable": true,
     "dev_extras": "[dev]"
   },
   "entry_points": {
     "console_scripts": [
-      "euv = euv.io.cli:main"
+      "euv = euvsimulator.io.cli:main"
     ]
   }
 }

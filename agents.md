@@ -1,8 +1,8 @@
-# OpEnUV — Agent Integration Guide
+# euvsimulator — Agent Integration Guide
 
 **Target audience:** Autonomous AI agents, coding assistants, and agent frameworks (LangGraph, CrewAI, smolagents, AutoGen, OpenClaw, etc.)
 
-This document provides everything needed to programmatically use, extend, and contribute to OpEnUV — the open-source EUV lithography simulator.
+This document provides everything needed to programmatically use, extend, and contribute to euvsimulator — the open-source EUV lithography simulator.
 
 ---
 
@@ -10,8 +10,8 @@ This document provides everything needed to programmatically use, extend, and co
 
 ```bash
 # Clone and install in editable mode (src/ stays active for development)
-git clone https://github.com/Flowbudget/OpEnUV.git
-cd OpEnUV
+git clone https://github.com/Flowbudget/euvsimulator.git
+cd euvsimulator
 pip install -e ".[dev]"   # includes pytest, ruff, mypy, jupyter, notebook generation
 
 # Verify installation
@@ -27,8 +27,8 @@ pytest tests/ -x -q       # 534 tests should pass
 
 ### 2.1 Single Simulation
 ```python
-from euv.pipeline import SimulationConfig, run_simulation
-from euv.pipeline import RESIST_PRESETS
+from euvsimulator.pipeline import SimulationConfig, run_simulation
+from euvsimulator.pipeline import RESIST_PRESETS
 
 # Minimal config (all params have physics-based defaults)
 cfg = SimulationConfig(
@@ -56,7 +56,7 @@ print(f"Status: {result.status}")       # "success" | "failed" | "nan_slice"
 
 ### 2.2 Resist Presets (Convenience)
 ```python
-from euv.pipeline import RESIST_PRESETS, SimulationConfig
+from euvsimulator.pipeline import RESIST_PRESETS, SimulationConfig
 
 # Apply preset: overrides se_blur_nm, resist_model, and other resist params
 cfg = SimulationConfig(period_nm=64, line_width_nm=32, dose_mj_cm2=20, **RESIST_PRESETS["CAR"])
@@ -67,7 +67,7 @@ cfg = SimulationConfig(period_nm=64, line_width_nm=32, dose_mj_cm2=20, **RESIST_
 
 ### 2.3 Process Window (Bossung Curves)
 ```python
-from euv.pipeline import run_process_window
+from euvsimulator.pipeline import run_process_window
 import numpy as np
 
 cfg = SimulationConfig(period_nm=64, line_width_nm=32, dose_mj_cm2=20, na=0.33, sigma=0.8, grid=256)
@@ -91,7 +91,7 @@ pw = run_process_window(
 
 ### 2.4 Calibration (Wafer CD → Resist Parameters)
 ```python
-from euv.calibrate.wafer_fit import WaferCDData, fit_resist_params, bootstrap_fit
+from euvsimulator.calibrate.wafer_fit import WaferCDData, fit_resist_params, bootstrap_fit
 import pandas as pd
 
 # Load wafer data: CSV with columns dose_mj_cm2, focus_nm, cd_nm
@@ -167,7 +167,7 @@ Six notebooks in `notebooks/` — all generated from `scripts/gen_notebooks.py` 
 
 **Run all programmatically:**
 ```bash
-cd OpEnUV
+cd euvsimulator
 for nb in notebooks/0*.ipynb; do
   jupyter nbconvert --to notebook --execute "$nb" --output "/tmp/$(basename "$nb")"
 done
@@ -179,12 +179,12 @@ done
 
 Any PR changing physics **must** pass:
 
-1. **NILS Gate:** `|OpEnUV - Reference| < 0.3` for sinusoidal grating (run `python scripts/validate_nils.py`)
+1. **NILS Gate:** `|euvsimulator - Reference| < 0.3` for sinusoidal grating (run `python scripts/validate_nils.py`)
 2. **CD Gate:** CD values within ±5% of analytical reference for isolated/dense lines
 3. **Test Suite:** `pytest tests/ -x -q` — 534 tests passing
 4. **Notebook Execution:** All 6 notebooks execute without error
 
-Reference model: `scripts/reference_model.py` (pure NumPy/SciPy, no OpEnUV imports).
+Reference model: `scripts/reference_model.py` (pure NumPy/SciPy, no euvsimulator imports).
 
 ---
 
@@ -192,12 +192,12 @@ Reference model: `scripts/reference_model.py` (pure NumPy/SciPy, no OpEnUV impor
 
 ```bash
 # 1. Fork on GitHub (web UI) or clone your fork
-git clone https://github.com/YOUR-USER/OpEnUV.git
-cd OpEnUV
+git clone https://github.com/YOUR-USER/euvsimulator.git
+cd euvsimulator
 
 # 2. Create branch
 git checkout -b feat/your-change
-
+```
 # 3. Make changes, run validation
 pip install -e ".[dev]"
 pytest tests/ -x -q

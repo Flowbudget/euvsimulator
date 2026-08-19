@@ -2,7 +2,7 @@
 
 from math import isclose
 
-from euv.constants import (
+from euvsimulator.constants import (
     AVOGADRO,
     BOLTZMANN,
     BOLTZMANN_EV,

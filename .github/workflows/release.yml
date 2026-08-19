@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           pip install dist/*.whl
-          python -c "import euv; print(f'openuv {euv.__version__} imported successfully')"
+          python -c "import euvsimulator; print(f'euvsimulator {euvsimulator.__version__} imported successfully')"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4

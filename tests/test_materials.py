@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from euv.materials import CXROTable, Material, get_cxro_table
+from euvsimulator.materials import CXROTable, Material, get_cxro_table
 
 # ──────────────────────────────────────────────
 # Fixtures
@@ -29,7 +29,7 @@ class TestCXRODataPresence:
 
     def test_cxro_directory_exists(self):
         """data/cxro/ must exist with CSVs."""
-        from euv.materials import CXROTable
+        from euvsimulator.materials import CXROTable
 
         data_dir = CXROTable()._data_dir
         assert data_dir.is_dir(), (

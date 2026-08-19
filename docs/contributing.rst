@@ -14,8 +14,8 @@ Getting Started
 1. Fork the repository
 2. Install in editable mode: ``pip install -e ".[dev]"``
 3. Run tests: ``pytest -q``
-4. Format: ``black src/euv/ tests/``
-5. Lint: ``ruff check src/euv/ tests/``
+4. Format: ``black src/euvsimulator/ tests/``
+5. Lint: ``ruff check src/euvsimulator/ tests/``
 
 Pull Request Process
 --------------------
@@ -23,7 +23,7 @@ Pull Request Process
 - All tests must pass
 - New features include tests
 - Docstrings follow NumPy/Google style
-- Keep ``src/euv/`` 100 % Apache-2.0-compatible
+- Keep ``src/euvsimulator/`` 100 % Apache-2.0-compatible
 
 License
 -------

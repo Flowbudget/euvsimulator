@@ -51,7 +51,7 @@ Feedback loop (OPC/ILT):  Mask → RCWA → Aerial → Resist → CD → (adjust
 Module design
 -------------
 
-Each module lives under ``src/euv/`` and follows these conventions:
+Each module lives under ``src/euvsimulator/`` and follows these conventions:
 
 - Pure functions where possible, PyTorch tensors for GPU support
 - Dataclass configs with sensible defaults

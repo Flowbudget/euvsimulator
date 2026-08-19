@@ -1,13 +1,13 @@
 ---
 name: Pull Request
-description: Submit a pull request for OpEnUV
+description: Submit a pull request for euvsimulator
 title: "[PR]: "
 labels: ["triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for contributing to OpEnUV! Please fill out the following information.
+        Thanks for contributing to euvsimulator! Please fill out the following information.
   - type: checkboxes
     id: checklist
     attributes:

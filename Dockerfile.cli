@@ -1,5 +1,5 @@
 # =============================================================================
-# OpEnUV — CLI-only Docker image
+# euvsimulator — CLI-only Docker image
 # =============================================================================
 # Same base as the API image but without uvicorn, producing a smaller image.
 # Default command prints the CLI help; override with `euv <subcommand>`.
@@ -33,7 +33,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY src/ ./src/
 
-RUN mkdir -p /app/euv/data
+RUN mkdir -p /app/euvsimulator/data
 
 # Default: show CLI help
 CMD ["euv", "simulate", "--help"]

@@ -1,9 +1,9 @@
-.. OpEnUV documentation master file
+.. euvsimulator documentation master file
 
-Welcome to OpEnUV — Open Source EUV Lithography Simulator
-===========================================================
+Welcome to euvsimulator — Open Source EUV Lithography Simulator
+==========================================================
 
-OpEnUV is a GPU-accelerated, modular simulator for extreme ultraviolet (EUV)
+euvsimulator is a GPU-accelerated, modular simulator for extreme ultraviolet (EUV)
 lithography at 13.5 nm.  It is released under the Apache-2.0 license.
 
 .. toctree::

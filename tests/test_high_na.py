@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from euv.aerial.pupil import anamorphic_pupil, apply_aberrations, pupil_grid, zernike
+from euvsimulator.aerial.pupil import anamorphic_pupil, apply_aberrations, pupil_grid, zernike
 
 
 class TestAnamorphicPupil:
@@ -81,8 +81,8 @@ class TestHighNAAerialImage:
 
     def test_high_na_pupil_integration(self):
         """High-NA pupil should work with Abbe imaging."""
-        from euv.aerial.abbe import abbe_image
-        from euv.aerial.source import conventional
+        from euvsimulator.aerial.abbe import abbe_image
+        from euvsimulator.aerial.source import conventional
 
         grid = 64
         mask = torch.zeros(grid, grid, dtype=torch.complex128)
@@ -109,8 +109,8 @@ class TestHighNAAerialImage:
         The pupil acts as a frequency filter — blocking part of the pupil
         changes the resulting aerial image.
         """
-        from euv.aerial.abbe import abbe_image
-        from euv.aerial.source import conventional
+        from euvsimulator.aerial.abbe import abbe_image
+        from euvsimulator.aerial.source import conventional
 
         grid = 64
         mask = torch.zeros(grid, grid, dtype=torch.complex128)

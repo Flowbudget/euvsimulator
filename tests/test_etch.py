@@ -7,7 +7,7 @@ import math
 import pytest
 import torch
 
-from euv.etch.bias import (
+from euvsimulator.etch.bias import (
     _disk_kernel,
     _gaussian_kernel_2d,
     apply_bias_to_aerial,

@@ -1,9 +1,9 @@
 License
 =======
 
-OpEnUV — Open Source EUV Lithography Simulator
+euvsimulator — Open Source EUV Lithography Simulator
 
-Copyright 2026 OpEnUV Contributors
+Copyright 2026 euvsimulator Contributors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

@@ -1,11 +1,11 @@
-"""Tests for the OpEnUV enhancements: Névot–Croce roughness, spectral scans, and plotting."""
+"""Tests for the euvsimulator enhancements: Névot–Croce roughness, spectral scans, and plotting."""
 
 import math
 
 import pytest
 import torch
 
-from euv.optics.tmm import (
+from euvsimulator.optics.tmm import (
     reflectivity,
     reflectivity_at_wavelength,
     reflectivity_scan,
@@ -142,7 +142,7 @@ class TestNevotCroce:
 
     def test_roughness_kz_required(self, mo_si_layers):
         """Calling _interface_smatrix with sigma but without kz should raise."""
-        from euv.optics.tmm import _interface_smatrix
+        from euvsimulator.optics.tmm import _interface_smatrix
 
         eta_a = torch.tensor([1.0 + 0.0j], dtype=torch.complex128)
         eta_b = torch.tensor([0.9 + 0.01j], dtype=torch.complex128)
@@ -236,7 +236,7 @@ class TestPlotting:
 
     def test_plot_spectrum_saves_file(self, mo_si_layers, tmp_path):
         """plot_reflectivity_spectrum should save a PNG without error."""
-        from euv.optics.plot import plot_reflectivity_spectrum
+        from euvsimulator.optics.plot import plot_reflectivity_spectrum
 
         n_layers, d = mo_si_layers
         save_path = str(tmp_path / "spectrum.png")
@@ -261,7 +261,7 @@ class TestPlotting:
 
     def test_plot_angle_saves_file(self, mo_si_layers, tmp_path):
         """plot_reflectivity_angle should save a PNG without error."""
-        from euv.optics.plot import plot_reflectivity_angle
+        from euvsimulator.optics.plot import plot_reflectivity_angle
 
         n_layers, d = mo_si_layers
         save_path = str(tmp_path / "angle.png")
@@ -284,7 +284,7 @@ class TestPlotting:
 
     def test_roughness_comparison_saves_file(self, mo_si_layers, tmp_path):
         """plot_roughness_comparison should save a PNG without error."""
-        from euv.optics.plot import plot_roughness_comparison
+        from euvsimulator.optics.plot import plot_roughness_comparison
 
         n_layers, d = mo_si_layers
         save_path = str(tmp_path / "roughness_compare.png")
@@ -307,7 +307,7 @@ class TestPlotting:
 
     def test_dual_plot_saves_file(self, mo_si_layers, tmp_path):
         """plot_reflectivity (dual side-by-side) should save a PNG."""
-        from euv.optics.plot import plot_reflectivity
+        from euvsimulator.optics.plot import plot_reflectivity
 
         n_layers, d = mo_si_layers
         save_path = str(tmp_path / "dual.png")

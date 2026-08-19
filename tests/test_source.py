@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from euv.aerial.source import (
+from euvsimulator.aerial.source import (
     annular,
     conventional,
     custom,

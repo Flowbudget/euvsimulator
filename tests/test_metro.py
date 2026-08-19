@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 import torch
 
-from euv.metro.cd import (
+from euvsimulator.metro.cd import (
     compute_nils,
     extract_cd_1d,
     extract_cd_2d,
     extract_contour,
     extract_multiple_lines,
 )
-from euv.metro.process_window import dose_matrix, plot_bossung, process_window, pw_metrics
-from euv.metro.sem_render import add_edge_roughness, add_shot_noise, render_sem
+from euvsimulator.metro.process_window import dose_matrix, plot_bossung, process_window, pw_metrics
+from euvsimulator.metro.sem_render import add_edge_roughness, add_shot_noise, render_sem
 
 # ═══════════════════════════════════════════════════════════════════
 # Fixtures

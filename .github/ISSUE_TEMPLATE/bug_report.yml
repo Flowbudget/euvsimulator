@@ -39,8 +39,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: OpEnUV version
-      description: What version of OpEnUV are you using? Run `euv version` to check.
+      label: euvsimulator version
+      description: What version of euvsimulator are you using? Run `euv version` to check.
       placeholder: "1.0.3"
     validations:
       required: true

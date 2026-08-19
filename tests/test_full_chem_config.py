@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from euv.pipeline import SimulationConfig, run_simulation
+from euvsimulator.pipeline import SimulationConfig, run_simulation
 
 
 def test_full_chem_params_passed_through():
@@ -36,10 +36,10 @@ def test_full_chem_chemistry_affected_by_params():
     """Resist params affect internal chemistry (acid, inhib, dev_chem)."""
     import math
 
-    from euv.aerial.abbe import aerial_from_orders
-    from euv.resist.develop import threshold_development
-    from euv.resist.exposure import dose_to_acid
-    from euv.resist.peb import reaction_diffusion_analytical
+    from euvsimulator.aerial.abbe import aerial_from_orders
+    from euvsimulator.resist.develop import threshold_development
+    from euvsimulator.resist.exposure import dose_to_acid
+    from euvsimulator.resist.peb import reaction_diffusion_analytical
 
     # Build aerial image
     G = 128
@@ -121,7 +121,7 @@ def test_config_file_with_resist_params(tmp_path):
     config_path = tmp_path / "test_config.yaml"
     config_path.write_text(yaml.dump(config))
 
-    from euv.pipeline import SimulationConfig
+    from euvsimulator.pipeline import SimulationConfig
 
     cfg = SimulationConfig(**yaml.safe_load(config_path.read_text()))
     assert cfg.dill_C == 0.1

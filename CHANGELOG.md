@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to OpEnUV are documented in this file.
+All notable changes to euvsimulator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.0.0] — 2026-07-07

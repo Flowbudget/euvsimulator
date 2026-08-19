@@ -1,10 +1,10 @@
-# OpEnUV — Open Source Extreme Ultraviolet Lithography Simulator
+# euvsimulator — Open Source Extreme Ultraviolet Lithography Simulator
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![CI](https://github.com/Flowbudget/OpEnUV/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/OpEnUV/actions)
-[![Tests](https://img.shields.io/badge/tests-534%2F534%20passing-brightgreen)](https://github.com/Flowbudget/OpEnUV)
-[![Release](https://img.shields.io/github/v/release/Flowbudget/OpEnUV?include_prereleases&sort=semver)](https://github.com/Flowbudget/OpEnUV/releases)
+[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/euvsimulator/actions)
+[![Tests](https://img.shields.io/badge/tests-534%2F534%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
+[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?include_prereleases&sort=semver)](https://github.com/Flowbudget/euvsimulator/releases)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
 
 **From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
@@ -20,11 +20,11 @@
 
 ---
 
-## What makes OpEnUV different?
+## What makes euvsimulator different?
 
-OpEnUV is the **only open-source tool that models the complete EUV lithography pipeline from photon to CD**:
+euvsimulator is the **only open-source tool that models the complete EUV lithography pipeline from photon to CD**:
 
-| Module | Method | OpEnUV | IMD | GD-Calc | OpenLithoHub |
+| Module | Method | euvsimulator | IMD | GD-Calc | OpenLithoHub |
 |--------|--------|--------|-----|---------|--------------|
 | **Material constants** | CXRO/Henke f₁,f₂ | ✅ | ✅ | ❌ | ❌ |
 | **Multilayer mirror** | Transfer-Matrix (S-matrix) | ✅ | ✅ | ❌ | ❌ |
@@ -38,7 +38,7 @@ OpEnUV is the **only open-source tool that models the complete EUV lithography p
 | **Optimization** | Differentiable OPC/ILT bridge | ✅ | ❌ | ❌ | ✅ |
 | **Web API** | REST + dashboard | ✅ | ❌ | ❌ | ❌ |
 
-IMD is the gold standard for multilayer reflectivity. GD-Calc solves rigorous coupled-wave analysis. OpenLithoHub benchmarks OPC quality. **OpEnUV is the only tool that connects all the physics** — from plasma spectrum through mask diffraction to developed resist profile.
+IMD is the gold standard for multilayer reflectivity. GD-Calc solves rigorous coupled-wave analysis. OpenLithoHub benchmarks OPC quality. **euvsimulator is the only tool that connects all the physics** — from plasma spectrum through mask diffraction to developed resist profile.
 
 ---
 
@@ -96,11 +96,11 @@ Typical values:
 
 ```bash
 # From GitHub (latest main branch)
-pip install git+https://github.com/Flowbudget/OpEnUV.git
+pip install git+https://github.com/Flowbudget/euvsimulator.git
 
 # Or clone and install from source (for development)
-git clone https://github.com/Flowbudget/OpEnUV.git
-cd OpEnUV
+git clone https://github.com/Flowbudget/euvsimulator.git
+cd euvsimulator
 pip install -e .                       # install from local source
 pip install -e ".[dev]"                # with dev dependencies
 ```
@@ -140,7 +140,7 @@ euv info
 ### Python API
 
 ```python
-from euv.pipeline import SimulationConfig, run_simulation
+from euvsimulator.pipeline import SimulationConfig, run_simulation
 
 cfg = SimulationConfig(
     period_nm=64, line_width_nm=32,
@@ -180,7 +180,7 @@ All notebooks execute cleanly via `jupyter nbconvert --execute` (tested in CI).
 ## Architecture
 
 ```
-src/euv/
+src/euvsimulator/
 ├── source/         LPP Sn-plasma emission model (spectrum + dose)
 ├── materials/      CXRO atomic scattering factors f₁,f₂ (Z = 1–92)
 ├── optics/         Multilayer TMM (S-matrix, Névot-Croce, grading)
@@ -288,15 +288,15 @@ See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with
 `euv-lithography` `semiconductor-simulation` `computational-lithography` `rcwa` `hopkins-imaging` `resist-modeling` `dill-model` `multilayer-optics` `plasma-physics` `open-source` `python` `pytorch` `fastapi` `scientific-computing`
 
 ### For researchers
-If you use OpEnUV in your research, please cite it:
+If you use euvsimulator in your research, please cite it:
 
 ```bibtex
-@software{openeuv2026,
+@software{euvsimulator2026,
   author       = {Flowbudget},
-  title        = {OpEnUV: Open Source EUV Lithography Simulator},
+  title        = {euvsimulator: Open Source EUV Lithography Simulator},
   version      = {1.0.3},
   year         = {2026},
-  url          = {https://github.com/Flowbudget/OpEnUV},
+  url          = {https://github.com/Flowbudget/euvsimulator},
   license      = {Apache-2.0},
   doi          = {10.5281/zenodo.XXXXXXX}
 }
@@ -316,11 +316,11 @@ Apache 2.0 — see [`LICENSE`](LICENSE).
 
 We welcome contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines.
 
-- 🐛 Open an [issue](https://github.com/Flowbudget/OpEnUV/issues) for bugs
-- 💡 Start a [discussion](https://github.com/Flowbudget/OpEnUV/discussions) for features
+- 🐛 Open an [issue](https://github.com/Flowbudget/euvsimulator/issues) for bugs
+- 💡 Start a [discussion](https://github.com/Flowbudget/euvsimulator/discussions) for features
 - 🔀 Submit pull requests on the `main` branch
 - 📝 Improve documentation or add tutorials
-- 🎓 If you use OpEnUV in research, cite it! (citation coming with v1.0)
+- 🎓 If you use euvsimulator in research, cite it! (citation coming with v1.0)
 
 ---
 

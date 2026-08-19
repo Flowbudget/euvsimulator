@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from euv.pipeline import SimulationConfig, run_simulation
+from euvsimulator.pipeline import SimulationConfig, run_simulation
 
 
 def test_stochastic_disabled_by_default():

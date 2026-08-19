@@ -2,7 +2,7 @@
 
 import torch
 
-from euv.resist.peb import _laplacian_x_explicit, _laplacian_y_explicit
+from euvsimulator.resist.peb import _laplacian_x_explicit, _laplacian_y_explicit
 
 
 def test_laplacian_1d_known_solution():
@@ -82,7 +82,7 @@ def test_laplacian_gaussian_spread():
 
 def test_adi_step_conservation():
     """Test that ADI step conserves mass (integral of A)."""
-    from euv.resist.peb import reaction_diffusion_adi
+    from euvsimulator.resist.peb import reaction_diffusion_adi
 
     H, W = 33, 33
     A = torch.zeros(H, W)

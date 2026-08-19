@@ -5,13 +5,13 @@ import math
 import pytest
 import torch
 
-from euv.optics.multilayer import (
+from euvsimulator.optics.multilayer import (
     MultilayerStack,
     default_materials,
     interdiffusion_correction,
     mo_si_stack,
 )
-from euv.optics.tmm import reflectivity
+from euvsimulator.optics.tmm import reflectivity
 
 
 class TestMultilayerStack:

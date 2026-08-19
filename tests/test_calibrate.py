@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from euv.calibrate.wafer_fit import (
+from euvsimulator.calibrate.wafer_fit import (
     WaferCDData,
     bootstrap_fit,
     calibrate_on_synthetic,

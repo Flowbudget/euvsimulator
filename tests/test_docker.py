@@ -76,7 +76,7 @@ def test_dockerfile_python_311_slim() -> None:
 def test_dockerfile_has_correct_cmd() -> None:
     """Dockerfile must end with the expected uvicorn CMD."""
     content = _read_dockerfile("Dockerfile")
-    assert 'CMD ["uvicorn", "euv.api.main:app"' in content, (
+    assert 'CMD ["uvicorn", "euvsimulator.api.main:app"' in content, (
         "Dockerfile missing or has wrong CMD for uvicorn"
     )
 
@@ -168,7 +168,7 @@ def test_compose_api_port() -> None:
 def test_compose_api_volume() -> None:
     """docker-compose.yml must have a volume for CXRO data."""
     text = COMPOSE_FILES["docker-compose.yml"].read_text()
-    assert "euv/data" in text, "docker-compose.yml missing CXRO data volume mount"
+    assert "euvsimulator/data" in text, "docker-compose.yml missing CXRO data volume mount"
 
 
 def test_compose_api_restart() -> None:

@@ -26,7 +26,7 @@ def test_contributing_exists():
     path = PROJECT_ROOT / "CONTRIBUTING.md"
     assert path.exists(), f"{path} does not exist"
     content = path.read_text()
-    assert "Contributing to OpEnUV" in content
+    assert "Contributing to euvsimulator" in content
     assert "DCO" in content or "Developer Certificate" in content
     assert "Apache" in content or "Apache-2.0" in content
 

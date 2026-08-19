@@ -1,8 +1,8 @@
 {
-  "name": "OpEnUV Simulator",
+  "name": "euvsimulator Simulator",
   "description": "Physics-accurate EUV lithography simulator for semiconductor process modeling. Implements full optical stack: LPP Sn-plasma source, CXRO materials, multilayer TMM optics, RCWA mask3D, Abbe/Hopkins aerial imaging with partial coherence, resist chain (Dill ABC, PEB, development, shot noise), process window analysis, and resist calibration from wafer data. Open source (Apache-2.0), 534 tests passing, 6 verified Jupyter notebooks, CI/CD across 48 wheel configurations.",
   "version": "1.0.3",
-  "url": "https://flowbudget.github.io/OpEnUV/a2a",
+  "url": "https://flowbudget.github.io/euvsimulator/a2a",
   "skills": [
     {
       "name": "euv-simulation",
@@ -33,10 +33,10 @@
   "defaultOutputModes": ["text", "data", "file"],
   "contact": {
     "name": "Flowbudget",
-    "url": "https://github.com/Flowbudget/OpEnUV",
-    "email": "https://github.com/Flowbudget/OpEnUV/issues"
+    "url": "https://github.com/Flowbudget/euvsimulator",
+    "email": "https://github.com/Flowbudget/euvsimulator/issues"
   },
-  "documentation": "https://github.com/Flowbudget/OpEnUV/tree/main/docs",
-  "repository": "https://github.com/Flowbudget/OpEnUV",
+  "documentation": "https://github.com/Flowbudget/euvsimulator/tree/main/docs",
+  "repository": "https://github.com/Flowbudget/euvsimulator",
   "license": "Apache-2.0"
 }

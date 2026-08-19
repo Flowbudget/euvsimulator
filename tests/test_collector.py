@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from euv.optics.collector import (
+from euvsimulator.optics.collector import (
     CollectorGeometry,
     ellipsoid_intersection,
     nxe_collector,

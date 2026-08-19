@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from euv.mask3d.rcwa2d import (
+from euvsimulator.mask3d.rcwa2d import (
     RCWA2D,
     RCWA2DConfig,
     contact_hole_profile,
@@ -242,7 +242,7 @@ class TestRCWA2D1DConsistency:
         differences are expected even for Ny=1.  The order-of-magnitude
         should agree.
         """
-        from euv.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
+        from euvsimulator.mask3d.rcwa_torch import RCWA1D, RCWAConfig, binary_grating_profile
 
         period = 128e-9
         cd = 64e-9
