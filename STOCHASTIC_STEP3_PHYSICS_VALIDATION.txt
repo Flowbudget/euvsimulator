@@ -1,0 +1,313 @@
+EUVSIMULATOR — STOCHASTIC STEP 3: PHYSICS VALIDATION
+====================================================
+Datum: 2026-08-19
+Art: Reine Messung/Analyse — KEINE Produktionsänderungen
+Designgrundlage: ~/Projekte/OpEnUV/STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt
+Basis: Schritt-2-Pipeline (photon_deposition_shot_noise in _cd_via_full_chem)
+
+============================================================
+1. UNTERSUCHUNG 1 — DOSIS-SKALIERUNG (Pipeline LER/LWR)
+============================================================
+
+Messung: full stochastic pipeline, grid=256, se_blur=5 nm,
+stochastic_n_realisations=30, 3 Seeds (42/7/123), identische
+Parameter außer dose_mj_cm2.
+
+  dose    LER mean   LER min   LER max   LWR mean
+  5.0     0.0000     0.0000    0.0000     0.0000
+  10.0    0.9085     0.8897    0.9414     1.2354
+  20.0    0.1456     0.1396    0.1495     0.1995
+  40.0    0.0625     0.0572    0.0668     0.0899
+  80.0    0.0125     0.0018    0.0193     0.0169
+  160.0   0.0995     0.0979    0.1022     0.1386
+
+Log-Slopes zwischen benachbarten Dosen:
+  10 -> 20:  alpha = -2.641
+  20 -> 40:  alpha = -1.220
+  40 -> 80:  alpha = -2.326
+  80 -> 160: alpha = +2.997
+
+Gesamtfit (10-160 mJ/cm2): LER ~ dose^-0.993
+
+INTERPRETATION:
+  Die LER-Kurve ist NICHT monoton und zeigt KEINE saubere
+  Potenz-Skalierung. Sie fällt zunächst (10->80, mittlerer Slope
+  ~-2), steigt dann bei 160 wieder an (alpha +3.0). Der
+  Gesamtfit (-0.99) ist ein Artefakt der nicht-monotonen Kurve.
+  Bei dose=5 ist LER=0 (entwickelte Maske leer/keine Kanten
+  gefunden — Extraktions-Extremfall, nicht das Rauschmodell).
+
+  Diese Nicht-Monotonie ist ERWARTET für die Binarisierungs-
+  Kette: Die LER wird aus der binären Maske (acid_noisy >
+  threshold) mit ganzzahligen Pixel-Kanten extrahiert. Die
+  Threshold-Binarisierung ist eine stark nichtlineare Abbildung
+  des (korrekt skalierten) Rauschfelds; die Kantenwanderung mit
+  der Dosis und die Pixel-Quantisierung dominieren die LER-Kurve.
+
+  WICHTIG: Die LER-Kurve ist KEIN Test des Rauschmodells.
+  Der Rauschmodell-Test ist Untersuchung 3 (D_eff direkt).
+
+============================================================
+2. UNTERSUCHUNG 2 — GRID-ABHÄNGIGKEIT (Pipeline LER/LWR)
+============================================================
+
+Messung: dose=20, se_blur=5 nm, seed=42, n_realisations=10,
+grid variiert (dx = 64/grid aus Default period=64 nm).
+
+  grid   dx(nm)   LER(nm)   LWR(nm)
+  128    0.5000   0.2011    0.2938
+  256    0.2500   0.1452    0.1889
+  512    0.1250   0.1291    0.1703
+  1024   0.0625   0.1236    0.1878
+
+INTERPRETATION:
+  LER fällt von 0.201 (grid=128) auf 0.124 (grid=1024) — Faktor
+  ~1.6 über 8x feinere Auflösung. Das ist eine DEUTLICHE
+  Verbesserung gegenüber dem alten Modell (Faktor ~90, siehe
+  Audit-Abschnitt 0) und liegt im Bereich der Pixel-
+  Quantisierung der LER-Extraktion.
+  WICHTIG: Das physikalische Rauschfeld selbst ist grid-invariant
+  (Untersuchung 3B: rel_std 0.0168..0.0173, Abweichung < 3%).
+  Die verbleibende LER-Grid-Abhängigkeit ist daher der
+  LER-EXTRAKTION zuzuschreiben (integer-Pixel-Kanten), nicht dem
+  Rauschmodell — siehe Antwort auf Frage 4.
+
+============================================================
+3. UNTERSUCHUNG 3 — RAUSCHFELD DIREKT (D_eff)
+============================================================
+
+Messung: photon_deposition_shot_noise direkt, homogene Dosis,
+grid=256, dx=0.25, se_blur=5 nm, 100 Realisierungen.
+
+A) Dosis-Skalierung:
+
+  dose    mean(D_eff)  var(D_eff)   rel_std   1/sqrt(dose)
+  5.0     5.0009       0.030506     0.0346    0.4472
+  10.0    10.0020      0.059665     0.0240    0.3162
+  20.0    20.0018      0.120757     0.0171    0.2236
+  40.0    40.0120      0.238051     0.0120    0.1581
+  80.0    80.0011      0.483673     0.0086    0.1118
+  160.0   159.9882     0.963970     0.0060    0.0791
+
+  rel_std * sqrt(dose):
+    0.0346*2.236=0.0774  0.0240*3.162=0.0759  0.0171*4.472=0.0765
+    0.0120*6.325=0.0759  0.0086*8.944=0.0769  0.0060*12.65=0.0759
+
+  -> rel_std * sqrt(dose) = KONSTANT (0.076 +/- 0.001)
+  -> rel_std ~ 1/sqrt(dose) EXAKT BESTÄTIGT (Vorfaktor konstant)
+
+  Varianz: var(D_eff) ~ dose (0.0305, 0.0597, 0.1208, 0.2381,
+  0.4837, 0.9640 — linear in dose, wie erwartet).
+
+  Theorie-Vergleich: rel_std_theorie = sqrt(E_ph/(4*pi*sigma^2*D*f))
+  mit sigma in cm: fuer dose=20, sigma=5nm -> 0.0153. Gemessen
+  0.0171 (~12% hoeher, durch Kernel-Truncation truncate=3.0).
+  Skalierung und Grossenordnung stimmen.
+
+B) Grid-Invarianz MIT Blur (dose=20, se_blur=5 nm, 60 Realis.):
+
+  grid   dx(nm)    rel_std
+  128    0.5000    0.0168
+  256    0.2500    0.0170
+  512    0.1250    0.0173
+  1024   0.0625    0.0173
+
+  -> rel_std aendert sich um < 3% ueber 8x feinere Aufloesung.
+  -> GRID-INVARIANZ DES RAUSCHFELDES BESTAETIGT.
+
+C) Grid-Invarianz OHNE Blur (se_blur=0, dose=20):
+
+  grid   dx(nm)    rel_std
+  128    0.5000    0.5357
+  256    0.2500    1.0686
+  512    0.1250    2.1222
+
+  -> Ohne SE-PSF skaliert rel_std ~ 1/dx (verdoppelt sich pro
+     Grid-Schritt). Das ist PHYSIKALISCH KORREKT fuer weisses
+     Rauschen ohne Korrelationslaenge: die Varianz pro Voxel
+     haengt von der Voxelgroesse ab. Es zeigt, WARUM der
+     SE-Blur fuer Grid-Invarianz notwendig ist.
+
+============================================================
+4. UNTERSUCHUNG 4 — RÄUMLICHE KORRELATION
+============================================================
+
+Messung: homogene Dosis 20 mJ/cm2, grid=256, dx=0.25 nm,
+Autokorrelation entlang Mittelzeile, 1/e-Korrelationslaenge.
+
+  se_blur   lag1     corr_len(nm)
+  0.0      -0.0163   0.25
+  2.0       0.9827   3.00
+  5.0       0.9935   5.75
+  10.0      0.9955   12.00
+
+Autokorrelations-Kurven (ausgewaehlte Abstaende):
+
+  lag(nm)   se_blur=0   se_blur=2   se_blur=5   se_blur=10
+  0.25      -0.0163     0.9827      0.9935      0.9955
+  1.00      -0.0023     0.8717      0.9565      0.9794
+  2.00      -0.0574     0.6138      0.8699      0.9515
+  3.00      -0.0102     0.2947      0.7493      0.9163
+  5.00      -0.0013    -0.2515      0.4552      0.8257
+  8.00      -0.1000    -0.4882      0.0700      0.6455
+  12.00     -0.0221    -0.0019     -0.0742      0.3511
+  16.00     -0.0512     0.2202     -0.0256      0.0428
+  20.00     -0.0220     0.0269     -0.2144     -0.2264
+
+INTERPRETATION:
+  - se_blur=0: weisses Rauschen (lag1 ~ 0, keine Korrelation).
+  - se_blur>0: starke Korrelation; Korrelationslaenge skaliert
+    mit se_blur: 3.0 / 5.75 / 12.0 nm fuer 2 / 5 / 10 nm
+    (Verhaeltnis ~1.2x se_blur, plausibel fuer Gauß-PSF mit
+    truncate=3; die 1/e-Laenge einer unendlichen Gauß-PSF waere
+    sqrt(2)*sigma ~ 1.41*sigma, die Truncation verkuerzt sie).
+  - Die Korrelationslaenge skaliert LINEAR mit se_blur:
+    2->3.0, 5->5.75, 10->12.0 (Faktor ~5 bei 5x sigma).
+  - Autokorrelation faellt monoton mit Abstand (Gauß-artig),
+    mit Oszillationen durch die finite Kernel-Truncation bei
+    groesseren Abstaenden (Artefakt, nicht physikalisch).
+
+  -> RAEUMLICHE KORRELATION KONSISTENT MIT DER SE-PSF.
+
+============================================================
+5. ZUSAMMENFASSENDE TABELLEN
+============================================================
+
+TABELLE 1 — Dosis-Skalierung (Rauschfeld, dx=0.25, blur=5):
+
+  Dosis   LER(nm)   LWR(nm)   rel_std(D_eff)
+  5.0     0.0000    0.0000    0.0346
+  10.0    0.9085    1.2354    0.0240
+  20.0    0.1456    0.1995    0.0171
+  40.0    0.0625    0.0899    0.0120
+  80.0    0.0125    0.0169    0.0086
+  160.0   0.0995    0.1386    0.0060
+
+TABELLE 2 — Grid (dose=20, blur=5):
+
+  Grid    dx(nm)   LER(nm)   LWR(nm)   rel_std(D_eff)
+  128     0.5000   0.2011    0.2938    0.0168
+  256     0.2500   0.1452    0.1889    0.0170
+  512     0.1250   0.1291    0.1703    0.0173
+  1024    0.0625   0.1236    0.1878    0.0173
+
+TABELLE 3 — SE-Blur-Korrelation:
+
+  se_blur(nm)   lag1     corr_len(nm)
+  0.0           -0.016   0.25
+  2.0            0.983   3.00
+  5.0            0.994   5.75
+  10.0           0.996   12.00
+
+============================================================
+6. ANTWORTEN AUF DIE INTERPRETATIONSFRAGEN
+============================================================
+
+F1: Zeigt das Rauschfeld ungefaehr die erwartete 1/sqrt(Dosis)-
+    Skalierung?
+    JA — EXAKT. rel_std * sqrt(dose) = 0.076 +/- 0.001 ueber
+    5..160 mJ/cm2 (sechs Messpunkte, Abweichung < 2%).
+    var(D_eff) skaliert linear mit der Dosis. Das ist die
+    fundamentale Poisson-Eigenschaft des neuen Modells.
+
+F2: Ist die relative Rauschamplitude tatsaechlich grid-invariant?
+    JA — MIT SE-BLUR. rel_std = 0.0168..0.0173 ueber grid
+    128..1024 (Abweichung < 3%). Die Voxelflaeche kuerzt sich
+    heraus, wie im Audit (Abschnitt 4a) analytisch abgeleitet.
+    OHNE Blur ist sie bewusst NICHT invariant (weisses Rauschen,
+    rel_std ~ 1/dx) — das ist physikalisch korrekt und zeigt die
+    Notwendigkeit der SE-PSF.
+
+F3: Ist die raeumliche Korrelation konsistent mit der SE-PSF?
+    JA. Korrelationslaenge skaliert linear mit se_blur
+    (3.0/5.75/12.0 nm fuer 2/5/10 nm). lag1 > 0.98 fuer jeden
+    Blur > 0. se_blur=0 ergibt weisses Rauschen. Die 1/e-Laenge
+    ~1.2x sigma ist plausibel fuer die gaußfoermige PSF mit
+    truncate=3 (unendliche Gauß-PSF: sqrt(2)*sigma ~ 1.41*sigma).
+
+F4: Ist die beobachtete Grid-Abhaengigkeit der LER wahrscheinlich
+    ein Problem des Rauschmodells oder der LER-Extraktion?
+    DER LER-EXTRAKTION. Begruendung:
+    - Das Rauschfeld (D_eff) ist grid-invariant (< 3% ueber
+      128..1024, Tabelle 2).
+    - Die LER faellt trotzdem von 0.201 auf 0.124 (Faktor 1.6)
+      ueber denselben Grid-Bereich.
+    - Der Unterschied ist daher der integer-Pixel-Kanten-
+      extraktion zuzuschreiben (extract_ler arbeitet auf der
+      binaeren Maske mit argmax-Pixelpositionen; feinere Grids
+      quantisieren feiner, aber die Kantenlage in nm ist
+      identisch — die LER-Messung selbst hat einen Pixel-
+      Quantisierungs-Bias).
+    - Die Sub-Pixel-Kanteninterpolation (P2-004, bewusst nicht
+      in diesem Schritt) ist der vorgesehene Fix.
+
+F5: Ist der aktuelle Stochastic-Pfad auf Basis dieser Messungen
+    bereit fuer den naechsten Entwicklungsschritt?
+    BEDINGT JA.
+    - Das RAUSCHMODELL ist validiert: 1/sqrt(dose) exakt,
+      Grid-Invarianz bestaetigt, raeumliche Korrelation korrekt,
+      Erwartungstreue (mean(D_eff)=dose, Bias < 0.1%) und
+      Reproduzierbarkeit (Seed) bereits in Schritt 1/2 getestet.
+    - Die LER-EXTRAKTION ist der limitierende Faktor: Die
+      LER-Dosis-Kurve ist nicht monoton (Binarisierungs- und
+      Kantenwanderungs-Artefakte) und die LER zeigt eine kleine
+      Grid-Abhaengigkeit (Faktor 1.6), die dem Modell nicht
+      anzulasten ist.
+    - Empfehlung fuer den naechsten Schritt: Sub-Pixel-LER-
+      Interpolation (P2-004) implementieren und danach die
+      LER-Dosis-Skalierung erneut messen. Erst dann ist die
+      LER/LWR-Metrik selbst belastbar.
+
+============================================================
+7. MESSGRENZEN / EINSCHRAENKUNGEN
+============================================================
+
+1. LER-Kurve bei dose=5 ist 0: Die entwickelte Maske enthaelt
+   bei sehr niedriger Dosis keine detektierbaren Kanten (alles
+   unter dem Threshold). Das ist ein Extraktions-Extremfall,
+   kein Rauschmodell-Fehler, aber er verfaelscht Potenz-Fits
+   ueber den gesamten Dosisbereich.
+
+2. LER-Anstieg bei 160 mJ/cm2: Bei hoher Dosis wandert die Kante
+   in flache Gradientenbereiche (Saeule saettigt, acid ~ Q), die
+   Kantenlage wird instabil. Auch das ist ein Binarisierungs-
+   Artefakt, kein Rauschmodell-Fehler.
+
+3. Der Gesamtfit LER ~ dose^-0.99 ist statistisch wertlos, weil
+   die Kurve nicht monoton ist. Er wird hier nur zur
+   Vollstaendigkeit berichtet.
+
+4. Autokorrelations-Oszillationen bei grossen Abstaenden sind
+   ein Artefakt der finiten Kernel-Truncation (truncate=3.0 in
+   gaussian_se_blur), nicht physikalisch.
+
+5. Die Korrelationslaenge wurde als 1/e-Abfall der Autokorrela-
+   tion einer EINZELNEN Realisierung gemessen; fuer eine exakte
+   Korrelationslaenge waere eine Mittelung ueber viele
+   Realisierungen noetig (hier nicht kritisch, da die
+   Groessenordnung und die lineare Skalierung klar sind).
+
+============================================================
+8. FAZIT
+============================================================
+
+  Rauschmodell (photon_deposition_shot_noise):
+    + 1/sqrt(Dosis)-Skalierung EXAKT (rel_std*sqrtD = 0.076 +/- 0.001)
+    + Grid-Invarianz BESTAETIGT (< 3% ueber 128..1024)
+    + Raeumliche Korrelation KONSISTENT mit SE-PSF
+      (Korrelationslaenge ~ 1.2x se_blur, linear)
+    + Erwartungstreue und Seed-Reproduzierbarkeit (Schritt 1/2)
+
+  LER-Extraktion (bestehender Algorithmus):
+    - LER-Dosis-Kurve nicht monoton (Binarisierungs-Artefakte)
+    - Kleine Grid-Abhaengigkeit der LER (Faktor 1.6) — der
+      Extraktion zuzuschreiben, nicht dem Rauschmodell
+
+  Bewertung: Der neue Stochastic-Pfad ist PHYSIKALISCH KORREKT
+  auf Rauschfeld-Ebene. Die LER-Metrik benoetigt die Sub-Pixel-
+  Interpolation (P2-004), bevor LER/LWR als voll validiert
+  gelten koennen.
+
+============================================================
+ENDE STEP-3-VALIDIERUNGSBERICHT
+============================================================

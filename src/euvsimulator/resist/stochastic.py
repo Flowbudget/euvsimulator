@@ -65,8 +65,10 @@ def poisson_shot_noise(
     dose: torch.Tensor | None = None,
     quantum_efficiency: float = 0.04,
     photon_energy_eV: float = 91.84,
-    dose_to_energy_factor: float = 6.24e15,
-    voxel_area_cm2: float = 1e-14,
+    dose_to_energy_factor: float = 6.241509074e15,
+    voxel_area_cm2: float | None = None,
+    dx_nm: float = 1.0,
+    dy_nm: float | None = None,
     return_photon_count: bool = False,
     rng: torch.Generator | None = None,
 ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
@@ -107,14 +109,21 @@ def poisson_shot_noise(
         Average number of acid molecules generated per absorbed EUV
         photon.  Typical EUV CAR values: 0.02–0.10.  Default 0.04.
     photon_energy_eV : float
-        EUV photon energy in eV.  Default 91.84 (13.5 nm).
+        EUV photon energy in eV.  Default 91.84 eV
+        (corresponding to 13.5 nm wavelength via E = hc/λ).
+        Use the derived energy from wavelength for consistency.
     dose_to_energy_factor : float
         Conversion factor: 1 mJ/cm² corresponds to this many eV/cm².
-        Default 6.24e15 (from 1 mJ = 6.24e15 eV).
-    voxel_area_cm2 : float
-        Area of each grid voxel in cm².  Default 1e-14 (corresponds to
-        1 nm × 1 nm pixels).  This converts the areal photon flux
-        (photons/cm²) to a per-voxel count.
+        Default 6.241509074e15 (exact: 1e-3 J / 1.602176634e-19 J/eV).
+    voxel_area_cm2 : float, optional
+        Area of each grid voxel in cm².  If not provided, computed from
+        dx_nm and dy_nm as (dx_nm * dy_nm * 1e-14).
+        Default None → computed from dx_nm, dy_nm.
+    dx_nm : float
+        Pixel spacing in x direction [nm].  Default 1.0.
+    dy_nm : float, optional
+        Pixel spacing in y direction [nm].  If None, assumed equal to dx_nm.
+        Default None.
     return_photon_count : bool
         If ``True``, also return the mean photon-per-voxel tensor.
     rng : torch.Generator, optional
@@ -134,6 +143,11 @@ def poisson_shot_noise(
     a true stochastic realisation — call repeatedly to obtain different
     noise instances.
     """
+    # Compute voxel area from dx, dy if not provided
+    if voxel_area_cm2 is None:
+        dy = dy_nm if dy_nm is not None else dx_nm
+        voxel_area_cm2 = dx_nm * dy * 1e-14  # (nm * nm) * 1e-14 = cm²
+
     if dose is not None:
         # Number of EUV photons absorbed per voxel:
         #   N_ph = dose [mJ/cm²] × voxel_area [cm²] × dose_to_energy_factor
@@ -142,10 +156,8 @@ def poisson_shot_noise(
         photons_per_voxel = dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV
         lam = photons_per_voxel * quantum_efficiency
     else:
-        # Use acid directly as the Poisson rate, scaled to a useful
-        # range.  Without a separate dose field we cannot know the
-        # absolute photon count, so we scale the acid map to a
-        # reasonable mean count range.
+        # Legacy heuristic fallback (for backward compatibility only).
+        # Pipeline should always provide dose map.
         lam = acid * 100.0  # heuristic scale factor
         photons_per_voxel = None
 
@@ -159,9 +171,16 @@ def poisson_shot_noise(
 
     # Rescale back to the original concentration units.
     if dose is not None:
-        noisy_acid = noisy_count / (photons_per_voxel.clamp(min=1e-30))
-        noisy_acid = noisy_acid * quantum_efficiency
+        # photons_per_voxel already computed above
+        mean_acid_count = photons_per_voxel * quantum_efficiency
+        # Rescale Poisson count to match deterministic acid concentration.
+        # Deterministic acid concentration is in `acid` tensor.
+        # Mean acid molecule count = photons_per_voxel * QE.
+        # noisy_acid = acid * (noisy_count / mean_acid_count)
+        noisy_acid = acid * (noisy_count / mean_acid_count.clamp(min=1e-30))
     else:
+        # Legacy heuristic fallback (for backward compatibility only).
+        # Pipeline should always provide dose map.
         noisy_acid = noisy_count / 100.0
 
     if return_photon_count and photons_per_voxel is not None:
@@ -177,8 +196,10 @@ def _generate_photon_shot_noise(
     dose: torch.Tensor,
     quantum_efficiency: float = 0.04,
     photon_energy_eV: float = 91.84,
-    dose_to_energy_factor: float = 6.24e15,
-    voxel_area_cm2: float = 1e-14,
+    dose_to_energy_factor: float = 6.241509074e15,
+    voxel_area_cm2: float | None = None,
+    dx_nm: float = 1.0,
+    dy_nm: float | None = None,
     rng: torch.Generator | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Low-level Poisson sampling returning both count and rate.
@@ -197,11 +218,20 @@ def _generate_photon_shot_noise(
     quantum_efficiency : float
         Acid molecules per absorbed photon.  Default 0.04.
     photon_energy_eV : float
-        EUV photon energy [eV].  Default 91.84.
+        EUV photon energy [eV].  Default is 91.84 eV
+        (corresponding to 13.5 nm wavelength via E = hc/λ).
+        Use the derived energy from wavelength for consistency.
     dose_to_energy_factor : float
-        eV per mJ/cm².  Default 6.24e15.
-    voxel_area_cm2 : float
-        Area of each grid voxel in cm².  Default 1e-14.
+        eV per mJ/cm².  Default 6.241509074e15 (exact).
+    voxel_area_cm2 : float, optional
+        Area of each grid voxel in cm².  If not provided, computed from
+        dx_nm and dy_nm as (dx_nm * dy_nm * 1e-14).
+        Default None → computed from dx_nm, dy_nm.
+    dx_nm : float
+        Pixel spacing in x direction [nm].  Default 1.0.
+    dy_nm : float, optional
+        Pixel spacing in y direction [nm].  If None, assumed equal to dx_nm.
+        Default None.
     rng : torch.Generator, optional
         RNG for reproducibility.
 
@@ -212,6 +242,10 @@ def _generate_photon_shot_noise(
     photons_per_voxel : torch.Tensor
         Mean photon count per voxel.
     """
+    if voxel_area_cm2 is None:
+        dy = dy_nm if dy_nm is not None else dx_nm
+        voxel_area_cm2 = dx_nm * dy * 1e-14  # (nm * nm) * 1e-14 = cm²
+
     photons_per_voxel = dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV
     lam = photons_per_voxel * quantum_efficiency
     lam = torch.clamp(lam, min=0.0)
@@ -219,6 +253,111 @@ def _generate_photon_shot_noise(
     noisy_acid = noisy_count / photons_per_voxel.clamp(min=1e-30)
     noisy_acid = noisy_acid * quantum_efficiency
     return noisy_acid, photons_per_voxel
+
+
+# ──────────────────────────────────────────────
+# Event-based photon deposition with SE-PSF
+# (physically clean shot-noise model — Step 1 of
+#  STOCHASTIC_PHYSICS_DESIGN_AUDIT)
+# ──────────────────────────────────────────────
+
+
+def photon_deposition_shot_noise(
+    dose: torch.Tensor,
+    se_blur_nm: float,
+    dx_nm: float = 1.0,
+    dy_nm: float | None = None,
+    photon_energy_eV: float = 91.84014696703977,
+    dose_to_energy_factor: float = 6.241509074e15,
+    absorption: float = 1.0,
+    seed: int | None = None,
+    rng: torch.Generator | None = None,
+) -> torch.Tensor:
+    """Event-based photon shot noise with secondary-electron PSF.
+
+    This is the physically clean shot-noise model described in
+    ``STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt`` (Step 1):
+
+        1. Mean photon count per voxel:
+               N_bar(x) = dose(x) * A_voxel * f / E_photon * absorption
+        2. Discrete photon events:
+               N(x) ~ Poisson(N_bar(x))
+        3. Energy deposition via SE-PSF (Gaussian blur):
+               E_dep(x) = PSF_sigma * N(x)
+               E_bar(x) = PSF_sigma * N_bar(x)
+        4. Effective noisy dose (unbiased, spatially correlated):
+               D_eff(x) = dose(x) * E_dep(x) / E_bar(x)
+
+    The SE-PSF correlates the noise over the physical SE blur length
+    sigma = *se_blur_nm* and makes the relative noise amplitude
+    grid-invariant (the voxel area cancels in sigma_rel^2).
+
+    Parameters
+    ----------
+    dose : torch.Tensor
+        Deterministic dose map [mJ/cm²].  Shape ``(H, W)``.
+    se_blur_nm : float
+        Secondary-electron blur sigma [nm].  ``<= 0`` disables the
+        PSF (white Poisson noise, E_dep = N, E_bar = N_bar).
+    dx_nm : float
+        Grid spacing in x [nm/pixel].  Default 1.0.
+    dy_nm : float, optional
+        Grid spacing in y [nm/pixel].  If None, assumed equal to
+        *dx_nm*.  Default None.
+    photon_energy_eV : float
+        EUV photon energy [eV].  Default 91.84014696703977
+        (13.5 nm via E = hc/lambda).
+    dose_to_energy_factor : float
+        eV per (mJ/cm²).  Default 6.241509074e15 (exact).
+    absorption : float
+        Fraction of incident photons absorbed (eta_abs).  Default
+        1.0 (all photons absorbed).  Physically 0 < absorption <= 1.
+    seed : int, optional
+        RNG seed for reproducible Poisson draws.  Ignored when
+        *rng* is provided.  Default None (random).
+    rng : torch.Generator, optional
+        Explicit RNG.  Takes precedence over *seed*.  Default None.
+
+    Returns
+    -------
+    d_eff : torch.Tensor
+        Effective noisy dose [mJ/cm²].  Same shape as *dose*.
+        E[D_eff] = dose (unbiased); spatially correlated over
+        sigma = *se_blur_nm*.
+    """
+    # 1. Mean photon count per voxel
+    dy = dy_nm if dy_nm is not None else dx_nm
+    voxel_area_cm2 = dx_nm * dy * 1e-14  # (nm * nm) * 1e-14 = cm²
+    n_bar = (
+        dose
+        * voxel_area_cm2
+        * dose_to_energy_factor
+        / photon_energy_eV
+        * absorption
+    )
+    n_bar = torch.clamp(n_bar, min=0.0)  # physical: no negative counts
+
+    # 2. Discrete Poisson photon events
+    if rng is None:
+        rng = torch.Generator(device=dose.device)
+        if seed is not None:
+            rng.manual_seed(seed)
+    n_events = torch.poisson(n_bar, generator=rng)  # integer counts
+
+    # 3./4. SE-PSF energy deposition (or identity for se_blur <= 0)
+    if se_blur_nm > 0:
+        from euvsimulator.resist.exposure import gaussian_se_blur
+
+        e_dep = gaussian_se_blur(n_events.to(dose.dtype), sigma=se_blur_nm, dx=dx_nm)
+        e_bar = gaussian_se_blur(n_bar, sigma=se_blur_nm, dx=dx_nm)
+    else:
+        e_dep = n_events.to(dose.dtype)
+        e_bar = n_bar
+
+    # 5. Effective noisy dose (numerical guard against div-by-zero)
+    d_eff = dose * e_dep / e_bar.clamp(min=1e-30)
+
+    return d_eff
 
 
 # ──────────────────────────────────────────────
@@ -230,6 +369,7 @@ def extract_edges(
     developed: torch.Tensor,
     threshold: float = 0.5,
     dx: float = 1.0,
+    intensity: torch.Tensor | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Extract left and right edges from a developed binary contour.
 
@@ -240,15 +380,28 @@ def extract_edges(
     last undeveloped pixel (1 → 0 transition), measured from the
     leftmost side of the feature.
 
+    If *intensity* (a continuous field, e.g. acid concentration) is
+    provided, the edge position is refined by LINEAR INTERPOLATION of
+    the threshold crossing between the two neighbouring pixels.  This
+    removes the integer-pixel quantisation of the edge position
+    (sub-pixel resolution).  When *intensity* is None, the edge is
+    placed at the integer pixel index (legacy behaviour).
+
     Parameters
     ----------
     developed : torch.Tensor
         2D developed binary mask.  Shape ``(H, W)``.  Values should
         be 0 (undeveloped) or 1 (developed).
     threshold : float
-        Binarisation threshold.  Default 0.5.
+        Binarisation threshold.  Default 0.5.  Also the level at
+        which the *intensity* crossing is interpolated.
     dx : float
         Lateral grid spacing [nm/pixel].  Default 1.0.
+    intensity : torch.Tensor, optional
+        Continuous field with the same shape as *developed*
+        (e.g. acid concentration).  The threshold crossing of this
+        field defines the sub-pixel edge position.  Default None
+        (integer-pixel edges, legacy behaviour).
 
     Returns
     -------
@@ -261,6 +414,11 @@ def extract_edges(
     """
     if developed.ndim != 2:
         raise ValueError(f"Expected 2D tensor, got {developed.ndim}D")
+    if intensity is not None and intensity.shape != developed.shape:
+        raise ValueError(
+            f"intensity shape {tuple(intensity.shape)} does not match "
+            f"developed shape {tuple(developed.shape)}"
+        )
 
     H, W = developed.shape
 
@@ -288,9 +446,55 @@ def extract_edges(
     # Check if any undeveloped pixel exists in each row.
     has_feature = undeveloped.sum(dim=1) > 0.5  # (H,) bool
 
-    # Convert to nm
-    left_edge = left_idx.float() * dx
-    right_edge = right_idx.float() * dx
+    if intensity is not None:
+        # Sub-pixel refinement: linearly interpolate the threshold
+        # crossing of the continuous field between the two pixels
+        # bracketing each edge.
+        I = intensity
+        work_dtype = I.dtype
+
+        # --- left edge: crossing between left_idx-1 (developed,
+        #     I > threshold) and left_idx (undeveloped, I <= threshold)
+        left_pos = left_idx.to(work_dtype)
+        valid_left = has_feature & (left_idx > 0)
+        if valid_left.any():
+            rows = torch.nonzero(valid_left).flatten()
+            i = left_idx[rows]
+            a = I[rows, i - 1]  # developed neighbour
+            b = I[rows, i]      # undeveloped pixel
+            denom = b - a
+            frac = torch.where(
+                denom.abs() > 1e-12,
+                (threshold - a) / denom,
+                torch.full_like(denom, 0.5),
+            )
+            frac = frac.clamp(0.0, 1.0)
+            left_pos[rows] = (i - 1).to(work_dtype) + frac
+
+        # --- right edge: crossing between right_idx (undeveloped,
+        #     I <= threshold) and right_idx+1 (developed, I > threshold)
+        right_pos = right_idx.to(work_dtype)
+        valid_right = has_feature & (right_idx < W - 1)
+        if valid_right.any():
+            rows = torch.nonzero(valid_right).flatten()
+            i = right_idx[rows]
+            a = I[rows, i]      # undeveloped pixel
+            b = I[rows, i + 1]  # developed neighbour
+            denom = b - a
+            frac = torch.where(
+                denom.abs() > 1e-12,
+                (threshold - a) / denom,
+                torch.full_like(denom, 0.5),
+            )
+            frac = frac.clamp(0.0, 1.0)
+            right_pos[rows] = i.to(work_dtype) + frac
+
+        left_edge = left_pos * dx
+        right_edge = right_pos * dx
+    else:
+        # Legacy: integer-pixel edge positions
+        left_edge = left_idx.float() * dx
+        right_edge = right_idx.float() * dx
 
     # Set NaN for rows without a feature
     left_edge[~has_feature] = float("nan")
@@ -304,6 +508,7 @@ def extract_ler(
     threshold: float = 0.5,
     dx: float = 1.0,
     edge: str = "both",
+    intensity: torch.Tensor | None = None,
 ) -> float:
     """Extract line-edge roughness (LER) from a developed contour.
 
@@ -320,13 +525,20 @@ def extract_ler(
     developed : torch.Tensor
         2D binary developed mask.  Shape ``(H, W)``.
     threshold : float
-        Binarisation threshold.  Default 0.5.
+        Binarisation threshold.  Default 0.5.  Also the level at
+        which the *intensity* crossing is interpolated.
     dx : float
         Lateral grid spacing [nm/pixel].  Default 1.0.
     edge : str
-        Which edge to measure.  ``"left"``, ``"right"``, or
-        ``"both"`` (default).  When ``"both"``, the combined LER is
+        Which edge to measure.  "left", "right", or
+        "both" (default).  When "both", the combined LER is
         the RMS of the left and right edge deviations averaged.
+    intensity : torch.Tensor, optional
+        Continuous field with the same shape as *developed*
+        (e.g. acid concentration).  When provided, sub-pixel edge
+        positions are computed by linear interpolation of the
+        threshold crossing (removes integer-pixel quantisation).
+        Default None (legacy integer-pixel edges).
 
     Returns
     -------
@@ -338,7 +550,7 @@ def extract_ler(
     extract_edges : Low-level edge extraction used internally.
     extract_lwr : Line-width roughness extraction.
     """
-    left_edge, right_edge = extract_edges(developed, threshold, dx)
+    left_edge, right_edge = extract_edges(developed, threshold, dx, intensity)
 
     # Remove NaN rows
     finite_mask = ~(torch.isnan(left_edge) | torch.isnan(right_edge))
@@ -371,6 +583,7 @@ def extract_lwr(
     developed: torch.Tensor,
     threshold: float = 0.5,
     dx: float = 1.0,
+    intensity: torch.Tensor | None = None,
 ) -> float:
     r"""Extract line-width roughness (LWR) from a developed contour.
 
@@ -389,9 +602,16 @@ def extract_lwr(
     developed : torch.Tensor
         2D binary developed mask.  Shape ``(H, W)``.
     threshold : float
-        Binarisation threshold.  Default 0.5.
+        Binarisation threshold.  Default 0.5.  Also the level at
+        which the *intensity* crossing is interpolated.
     dx : float
         Lateral grid spacing [nm/pixel].  Default 1.0.
+    intensity : torch.Tensor, optional
+        Continuous field with the same shape as *developed*
+        (e.g. acid concentration).  When provided, sub-pixel edge
+        positions are computed by linear interpolation of the
+        threshold crossing (removes integer-pixel quantisation).
+        Default None (legacy integer-pixel edges).
 
     Returns
     -------
@@ -403,7 +623,7 @@ def extract_lwr(
     extract_edges : Low-level edge extraction.
     extract_ler : LER extraction (edge roughness).
     """
-    left_edge, right_edge = extract_edges(developed, threshold, dx)
+    left_edge, right_edge = extract_edges(developed, threshold, dx, intensity)
 
     # Line width per row
     width = right_edge - left_edge
@@ -428,8 +648,11 @@ def ler_lwr_estimate(
     dose: torch.Tensor | None = None,
     develop_threshold: float = 0.3,
     quantum_efficiency: float = 0.04,
+    photon_energy_eV: float = 91.84,
+    dose_to_energy_factor: float = 6.241509074e15,
     shot_noise_rng: torch.Generator | None = None,
-    dx: float = 1.0,
+    dx_nm: float = 1.0,
+    dy_nm: float | None = None,
     n_realisations: int = 1,
     average: bool = True,
 ) -> dict:
@@ -451,15 +674,25 @@ def ler_lwr_estimate(
     dose : torch.Tensor, optional
         EUV dose map [mJ/cm²].  Same shape as *acid*.  Needed for
         physically accurate shot-noise scaling.  When ``None``, the
-        acid map is used heuristically.
+        acid map is used heuristically (legacy fallback).
     develop_threshold : float
         Development threshold on acid concentration.  Default 0.3.
     quantum_efficiency : float
         Acid molecules per absorbed photon.  Default 0.04.
+    photon_energy_eV : float
+        EUV photon energy in eV.  Default 91.84 eV
+        (corresponding to 13.5 nm wavelength via E = hc/λ).
+        Use the derived energy from wavelength for consistency.
+    dose_to_energy_factor : float
+        Conversion factor: 1 mJ/cm² corresponds to this many eV/cm².
+        Default 6.241509074e15 (exact).
     shot_noise_rng : torch.Generator, optional
         RNG for Poisson sampling.
-    dx : float
-        Lateral grid spacing [nm/pixel].  Default 1.0.
+    dx_nm : float
+        Pixel spacing in x direction [nm].  Default 1.0.
+    dy_nm : float, optional
+        Pixel spacing in y direction [nm].  If None, assumed equal to dx_nm.
+        Default None.
     n_realisations : int
         Number of independent noise realisations.  Default 1.
     average : bool
@@ -488,6 +721,10 @@ def ler_lwr_estimate(
             acid,
             dose=dose,
             quantum_efficiency=quantum_efficiency,
+            photon_energy_eV=photon_energy_eV,
+            dose_to_energy_factor=dose_to_energy_factor,
+            dx_nm=dx_nm,
+            dy_nm=dy_nm,
             rng=shot_noise_rng,
         )
 
@@ -495,8 +732,8 @@ def ler_lwr_estimate(
         developed = (noisy > develop_threshold).float()
 
         # Extract LER/LWR
-        ler = extract_ler(developed, dx=dx)
-        lwr = extract_lwr(developed, dx=dx)
+        ler = extract_ler(developed, dx=dx_nm)
+        lwr = extract_lwr(developed, dx=dx_nm)
         ler_vals.append(ler)
         lwr_vals.append(lwr)
 
@@ -533,7 +770,10 @@ def rms_scaling_check(
     n_realisations: int = 10,
     develop_threshold: float = 0.3,
     quantum_efficiency: float = 0.04,
-    dx: float = 1.0,
+    photon_energy_eV: float = 91.84,
+    dose_to_energy_factor: float = 6.241509074e15,
+    dx_nm: float = 1.0,
+    dy_nm: float | None = None,
     seed: int = 42,
 ) -> dict:
     r"""Verify the  1 / √(dose)  LER scaling law.
@@ -594,8 +834,10 @@ def rms_scaling_check(
         ref_dose = float(dose_levels.max())
         acid_scaled = base_acid * (float(d) / ref_dose)
 
-        # Create a dose map tensor of the same shape
-        dose_map = torch.full_like(base_acid, float(d))
+        # Create a dose map tensor with the SAME spatial pattern as acid_scaled.
+        # The dose map represents local photon flux, which is proportional to acid.
+        # Peak dose = d (achieved by scaling acid_scaled to peak = d)
+        dose_map = acid_scaled / acid_scaled.max() * float(d)
 
         # Run multiple realisations
         ler_i = []
@@ -606,11 +848,15 @@ def rms_scaling_check(
                 acid_scaled,
                 dose=dose_map,
                 quantum_efficiency=quantum_efficiency,
+                photon_energy_eV=91.84,
+                dose_to_energy_factor=6.241509074e15,
+                dx_nm=dx_nm,
+                dy_nm=dy_nm,
                 rng=rng,
             )
             developed = (noisy > develop_threshold).float()
-            ler_i.append(extract_ler(developed, dx=dx))
-            lwr_i.append(extract_lwr(developed, dx=dx))
+            ler_i.append(extract_ler(developed, dx=dx_nm))
+            lwr_i.append(extract_lwr(developed, dx=dx_nm))
 
         ler_vals[i] = torch.tensor(ler_i, device=device).nanmean()
         lwr_vals[i] = torch.tensor(lwr_i, device=device).nanmean()

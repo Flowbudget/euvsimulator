@@ -28,8 +28,11 @@ from euvsimulator.resist.develop import (
 )
 from euvsimulator.resist.exposure import dose_to_acid
 from euvsimulator.resist.peb import reaction_diffusion_analytical
+from euvsimulator.constants import HC_EV_NM
 from euvsimulator.resist.stochastic import (
-    ler_lwr_estimate,
+    extract_ler,
+    extract_lwr,
+    photon_deposition_shot_noise,
 )
 
 # Resist presets — typical SE blur sigma [nm] for different resist types
@@ -248,6 +251,7 @@ def _cd_via_full_chem(
     period_m: float,
     half: int,
     line_width_px: int,
+    energy_eV: float,
 ) -> tuple[float, torch.Tensor, float, float, float]:
     """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
 
@@ -256,17 +260,28 @@ def _cd_via_full_chem(
     Optionally applies photon shot noise and extracts LER/LWR.
     """
     dx_nm = period_m / cfg.grid * 1e9
-    nils_val = nils(aerial, half, line_width_px, dx_nm)
 
     # Resist-chemie-Kette (Dill ABC → PEB → Entwicklung)
     # Alle Parameter kommen jetzt aus cfg (mit Defaults aus SimulationConfig)
     dose_map = aerial.clone().float()
+
+    # Apply SE blur to dose map (this is what resist sees)
+    from euvsimulator.resist.exposure import gaussian_se_blur
+    if cfg.se_blur_nm > 0.0:
+        dose_map_blurred = gaussian_se_blur(dose_map, sigma=cfg.se_blur_nm, dx=dx_nm)
+    else:
+        dose_map_blurred = dose_map
+
+    # NILS on the blurred dose map (what resist actually sees)
+    nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm)
+
     acid = dose_to_acid(
-        dose_map,
+        dose_map_blurred,
         C=cfg.dill_C,
         Q=cfg.dill_Q,
-        sigma_blur=cfg.se_blur_nm,  # SE blur from aerial image config
+        sigma_blur=cfg.se_blur_nm,  # kept for compatibility but apply_blur=False below
         dx=dx_nm,
+        apply_blur=False,
     )
     inhib_in = torch.ones_like(acid)
     _, inhib = reaction_diffusion_analytical(
@@ -282,49 +297,73 @@ def _cd_via_full_chem(
     dev_chem = threshold_development(inhib, threshold=cfg.mack_M_th)
 
     # ── Stochastic post-processing ──
+    # Event-based photon deposition shot noise (Step 2 of the design audit):
+    #   dose_map -> Poisson photons -> SE-PSF (inside photon_deposition_shot_noise)
+    #             -> D_eff -> acid_noisy -> develop -> LER/LWR
+    # The SE-PSF is applied ONCE, inside photon_deposition_shot_noise.
+    # dose_map (unblurred) is passed, and dose_to_acid uses apply_blur=False,
+    # so no second SE blur is applied.
     if cfg.enable_stochastic:
-        # Use the inhibitor map (after PEB) as the base for shot noise.
-        # For LER/LWR we threshold the deprotected regions (1 - inhibitor).
-        deprotected = (1.0 - inhib).clamp(min=0.0)  # (H, W) in [0, 1]
-
-        # Run stochastic LER/LWR estimation
-        rng = torch.Generator(device=deprotected.device)
+        rng = torch.Generator(device=dose_map.device)
         if cfg.stochastic_seed is not None:
             rng.manual_seed(cfg.stochastic_seed)
 
-        stoch_result = ler_lwr_estimate(
-            acid=deprotected,  # use deprotection as "acid" for shot noise
-            dose=None,  # no dose map available here; uses acid for shot noise scaling
-            develop_threshold=cfg.stochastic_develop_threshold,
-            quantum_efficiency=cfg.stochastic_quantum_efficiency,
-            shot_noise_rng=rng,
-            dx=dx_nm,
-            n_realisations=cfg.stochastic_n_realisations,
-            average=True,
-        )
-        ler_nm = stoch_result["ler"]
-        lwr_nm = stoch_result["lwr"]
+        ler_vals = []
+        lwr_vals = []
+        for _ in range(cfg.stochastic_n_realisations):
+            d_eff = photon_deposition_shot_noise(
+                dose_map,
+                se_blur_nm=cfg.se_blur_nm,
+                dx_nm=dx_nm,
+                photon_energy_eV=energy_eV,  # from wavelength via HC_EV_NM
+                dose_to_energy_factor=6.241509074e15,
+                rng=rng,
+            )
+            acid_noisy = dose_to_acid(
+                d_eff,
+                C=cfg.dill_C,
+                Q=cfg.dill_Q,
+                apply_blur=False,
+            )
+            developed = (acid_noisy > cfg.stochastic_develop_threshold).float()
+            # Sub-pixel edge positions via linear interpolation of the
+            # threshold crossing on the continuous acid field (Step 4).
+            ler_vals.append(
+                extract_ler(
+                    developed,
+                    threshold=cfg.stochastic_develop_threshold,
+                    dx=dx_nm,
+                    intensity=acid_noisy,
+                )
+            )
+            lwr_vals.append(
+                extract_lwr(
+                    developed,
+                    threshold=cfg.stochastic_develop_threshold,
+                    dx=dx_nm,
+                    intensity=acid_noisy,
+                )
+            )
+
+        ler_nm = float(torch.tensor(ler_vals).nanmean())
+        lwr_nm = float(torch.tensor(lwr_vals).nanmean())
     else:
         ler_nm = 0.0
         lwr_nm = 0.0
 
-    # CD-Extraktion: gleicher fixer Threshold wie aerial_threshold-Pfad
-    cut = aerial[half, :]
-    dc_level = float(aerial.mean())
-    nominal_dose = 20.0
-    threshold_val = (
-        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
-    )
-    dev = (cut > threshold_val).float()
-    dev_2d = dev.unsqueeze(0).expand(cfg.grid, cfg.grid).clone()
-
-    runs = _find_runs_1d(dev, target=0)
+    # CD-Extraktion aus dem entwickelten Resistprofil (dev_chem)
+    # dev_chem: 1 = developed/dissolved, 0 = undeveloped/remaining
+    # Für positive-tone: CD = width of undeveloped region (value 0)
+    dev_for_cd = dev_chem[half, :].float()  # middle row of developed profile
+    runs = _find_runs_1d(dev_for_cd, target=0)  # find runs of undeveloped (0)
     if len(runs) == 0:
         cd_nm = 0.0
     else:
         longest = max(runs, key=lambda r: r[1] - r[0])
         lidx, ridx = longest
         cd_nm = (ridx - lidx + 1) * dx_nm
+    # dev_2d für Visualisierung
+    dev_2d = dev_chem.clone()
 
     return cd_nm, dev_2d, nils_val, ler_nm, lwr_nm
 
@@ -380,6 +419,8 @@ def run_simulation(
     set_default_dtype(torch.complex128, torch.float64)
 
     wavelength_m = cfg.wavelength_nm * 1e-9
+    # Derive photon energy from wavelength (single source of truth)
+    energy_eV = HC_EV_NM / cfg.wavelength_nm
     period_m = cfg.period_nm * 1e-9
     line_m = cfg.line_width_nm * 1e-9
     half = cfg.grid // 2
@@ -393,7 +434,7 @@ def run_simulation(
     # coefficients of the binary complex mask using the Hopkins formulation.
     theta0 = torch.tensor(math.radians(6.0), dtype=torch.float64)
     wl_t = torch.tensor([wavelength_m], dtype=torch.float64)
-    n_si, k_si = table.refractive_index("Si", 91.84)
+    n_si, k_si = table.refractive_index("Si", energy_eV)
     n_sub = torch.tensor(complex(n_si, k_si), dtype=torch.complex128)
 
     # Build multilayer stack (without absorber)
@@ -420,7 +461,7 @@ def run_simulation(
     r0_space = r_space[0]
 
     # TMM: absorber-on-ML reflectivity (absorber lines)
-    n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, 91.84)
+    n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, energy_eV)
     n_abs = torch.tensor(complex(n_ta_c, k_ta_c), dtype=torch.complex128)
     d_abs = torch.tensor([cfg.absorber_height_nm * 1e-9], dtype=torch.float64)
     full_n = torch.cat([n_abs.unsqueeze(0), ml_stack.n_layers])
@@ -460,14 +501,14 @@ def run_simulation(
             n_bilayers=cfg.ml_n_bilayers,
             period_nm=cfg.period_nm,
             line_width_nm=cfg.line_width_nm,
-            energy_eV=91.84,
+            energy_eV=energy_eV,
         )
         # Apply taper/undercut if specified
         if cfg.absorber_taper_deg != 90.0 or cfg.mask_undercut_nm != 0.0:
             from euvsimulator.mask3d.geometry import MaskLayer, MaskStack
 
-            n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, 91.84)
-            n_ru_c, k_ru_c = table.refractive_index("Ru", 91.84)
+            n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, energy_eV)
+            n_ru_c, k_ru_c = table.refractive_index("Ru", energy_eV)
             layers = [
                 MaskLayer(material="Ru", thickness_nm=2.5, nk=complex(n_ru_c, k_ru_c), etched=True),
                 MaskLayer(
@@ -567,7 +608,6 @@ def run_simulation(
         illumination_shape=cfg.illumination_shape,
         grid=cfg.grid,
         focus_nm=cfg.focus_nm,
-        se_blur_nm=cfg.se_blur_nm,
     )
 
     # Normalise to dose (absolute intensity scaling, NOT max-normalisation).
@@ -583,7 +623,7 @@ def run_simulation(
     line_width_px = int(round(cfg.line_width_nm / (period_m / cfg.grid * 1e9)))
     if cfg.resist_model == "full_chem":
         cd, dev, nils_val, ler_nm, lwr_nm = _cd_via_full_chem(
-            aerial, cfg, period_m, half, line_width_px
+            aerial, cfg, period_m, half, line_width_px, energy_eV
         )
     else:
         cd, dev, nils_val = _cd_via_aerial_threshold(aerial, cfg, half, line_width_px)

@@ -1,0 +1,334 @@
+EUVSIMULATOR PHYSICS VALIDATION BLOCK 2 REPORT
+Systematic Physical Verification After Coherence Cutoff Removal
+
+============================================================
+SUMMARY
+============================================================
+
+All 10 validation tests executed on current codebase (534 tests passing).
+No physics code changes made during validation.
+Key findings documented with quantitative evidence.
+
+============================================================
+TEST 1 – TE/TM POLARIZATION AUDIT
+============================================================
+
+INPUT:
+- pitch=48 nm, CD=24 nm, λ=13.5 nm, NA=0.33, σ=0.8
+- RCWA path (use_rcwa=True) with 11 orders
+
+ERGEBNIS:
+| Polarisierung | Intensity Sum | Aerial Max | NILS |
+|---------------|---------------|------------|------|
+| TE-only       | 0.00013       | ~0         | 8.111|
+| TM-only       | 50,009        | ~10^9      | 6.330|
+| Field-avg (current) | 12,503   | ~6×10^8    | 6.330|
+| Intensity-avg (correct) | 25,005 | ~5×10^9    | 6.330|
+
+ABWEICHUNG:
+- TE intensity is ~400,000× SMALLER than TM!
+- Current field-average: (E_TE + E_TM)/2
+- Correct for unpolarized: I = (|E_TE|² + |TM|²)/2
+
+INTERPRETATION:
+- RCWA solver produces PHYSICALLY IMPLausible results:
+  - TM reflectivity > 1 (10^5-10^9 intensity!)
+  - TE reflectivity ~10^-4
+  - Energy conservation violated
+- Default pipeline uses THIN-MASK ANALYTIC path (use_rcwa=False)
+  where TE=TM (no polarization split)
+- RCWA path is BROKEN and should NOT be used
+
+BUG: JA – P0
+- RCWA TM solver produces non-physical gain
+- Field-averaging is wrong for unpolarized light
+- Default path avoids this bug by not using RCWA
+
+PRIORITÄT: P0 (falls RCWA genutzt wird) / P2 (Default-Pfad okay)
+EMPFEHLUNG: RCWA-Pfad reparieren oder deaktivieren, bis validiert
+
+============================================================
+TEST 2 – MULTILAYER REFLECTIVITY SPECTRUM
+============================================================
+
+INPUT:
+- 40 Mo/Si pairs, d_Mo=2.8, d_Si=4.1, Ru cap=2.5 nm
+- λ sweep 10–16 nm
+
+ERGEBNIS:
+| λ (nm) | Reflectivity |
+|--------|--------------|
+| 10.0   | 0.0066       |
+| 11.0   | 0.0026       |
+| 12.0   | 0.0011       |
+| 12.5   | 0.0192       |
+| 13.0   | 0.3703       |
+| 13.25  | 0.5942       |
+| 13.50  | 0.6389 (PEAK)|
+| 13.75  | 0.1095       |
+| 14.0   | 0.0948       |
+| 14.5   | 0.0349       |
+| 15.0   | 0.0445       |
+| 16.0   | 0.0256       |
+
+Peak: 13.5 nm, R = 0.639
+FWHM: ~13.0–14.0 nm (~1 nm bandwidth)
+Off-peak (10–12 nm): 10^-3 to 10^-2
+
+INTERPRETATION:
+- Wavelength sensitivity in TEST 4 ERGEBNIS (aerial max 14.7 at 13.5 nm vs 0.001 at 10 nm)
+- ist VOLLSTÄNDIG PHYSIKALISCH
+- EUV Lithography MUSS am Bragg-Peak (13.5 nm) operieren
+- Kein Bug, korrektes physikalisches Verhalten
+
+BUG: NEIN
+PRIORITÄT: —
+EMPFEHLUNG: Dokumentation ergänzen, dass Betrieb außerhalb 13.5±0.5 nm nicht sinnvoll
+
+============================================================
+TEST 3 – MULTILAYER PARAMETER SENSITIVITY
+============================================================
+
+ERGEBNISSE:
+
+A) Bilayer-Paare:
+| Paare | R @ 13.5 nm |
+|-------|-------------|
+| 20    | 0.521       |
+| 30    | 0.612       |
+| 40    | 0.639       |
+| 50    | 0.647       |
+
+Sättigung ab ~40 Paaren
+
+B) Mo-Dicke (bei 40 Paaren, Si=4.1):
+| d_Mo (nm) | R |
+|-----------|----|
+| 2.6       | 0.190 |
+| 2.7       | 0.320 |
+| 2.8       | 0.639 (OPTIMUM) |
+| 2.9       | 0.618 |
+| 3.0       | 0.535 |
+
+C) Si-Dicke (bei 40 Paaren, Mo=2.8):
+| d_Si (nm) | R |
+|-----------|----|
+| 3.9       | 0.186 |
+| 4.0       | 0.270 |
+| 4.1       | 0.639 (OPTIMUM) |
+| 4.2       | 0.616 |
+| 4.3       | 0.508 |
+
+INTERPRETATION:
+- Aktuelle Parameter (2.8/4.1 nm) sind OPTIMAL für Peak @ 13.5 nm
+- Sehr empfindlich: ±0.1 nm → 10-30% Reflectivitätsverlust
+- Fertigungstoleranzen kritisch
+
+BUG: NEIN
+PRIORITÄT: P2 (Modellvereinfachung)
+EMPFEHLUNG: Toleranz-Analyse für Prozessfenster dokumentieren
+
+============================================================
+TEST 4 – AERIAL IMAGE GEGEN ANALYTISCHES IDEALES MASKENMODELL
+============================================================
+
+ERGEBNISSE:
+| Modell | Orders | Aerial Max | Aerial Std |
+|--------|--------|------------|------------|
+| Ideal real (r_space=0.7, r_abs=0.05) | -1,0,1 | 0.382 | 0.134 |
+| Complex TMM (r0_space=0.80∠46°, r0_abs=0.11∠-135°) | -1,0,1 | 0.735 | 0.252 |
+| Full Pipeline (×dose=20) | -1,0,1 | 14.69 | 5.045 |
+
+VERGLEICH:
+- Aerial Image Engine arbeitet KORREKT
+- Der Unterschied zwischen ideal real und complex TMM kommt von:
+  - TMM liefert komplexe Reflektivitäten mit Phasen
+  - Diese Phasen verschieben die Interferenz
+- Pipeline dose-Skalierung: aerial × dose = EXAKT identisch
+
+BUG: NEIN
+PRIORITÄT: —
+EMPFEHLUNG: Aerial-Image-Engine ist validiert und korrekt
+
+============================================================
+TEST 5 – DOSE INVARIANZ VON NILS
+============================================================
+
+ERGEBNISSE:
+| Pitch | Dose | NILS | Norm. Mean | Norm. Std |
+|-------|------|------|------------|-----------|
+| 44 nm | 5–80 | 8.511 | 0.1801 | 0.2515 |
+| 48 nm | 5–80 | 8.533 | 0.1805 | 0.2523 |
+| 64 nm | 5–80 | 8.583 | 0.1813 | 0.2540 |
+
+INTERPRETATION:
+- NILS ist VOLLSTÄNDIG DOSE-INVARIANT (wie physikalisch erwartet)
+- Aerial Mean, Std, Max skalieren LINEAR mit Dosis
+- CD ändert sich im aerial_threshold Modell wegen Threshold-Skalierung
+  (kein Bug, Modellsache – full_chem nutzt Resist-Chemie)
+
+BUG: NEIN
+PRIORITÄT: —
+EMPFEHLUNG: Dose-Skalierung im Aerial-Modell ist korrekt implementiert
+
+============================================================
+TEST 6 – SIGMA / COHERENCE PHYSICS (inkl. sigma=0 Edge Case)
+============================================================
+
+ERGEBNISSE:
+| σ | Aerial Std | NILS | Status |
+|---|------------|------|--------|
+| 0.0 | ERROR (div/0) | – | BUG |
+| 0.1 | 5.125 | 8.282 | OK |
+| 0.2 | 5.121 | 8.277 | OK |
+| 0.4 | 5.106 | 8.257 | OK |
+| 0.6 | 5.080 | 8.583 | OK |
+| 0.8 | 5.045 | 8.533 | OK |
+| 1.0 | 5.000 | 8.468 | OK |
+
+BUG: JA – P1
+- sigma=0 → Division by Zero in TCC = 2*J1(x)/x bei x=0
+- Physikalisch: σ=0 = voll kohärent → TCC(dm) = 1 für ALLE dm
+- Limit x→0: 2*J1(x)/x → 1 (da J1(x) ~ x/2)
+- Aktuelle Implementierung behandelt x=0 nicht
+
+PRIORITÄT: P1
+EMPFEHLUNG: In _j1(x) oder TCC-Berechnung: if x < 1e-12: return 1.0
+
+============================================================
+TEST 7 – PUPIL BOUNDARY
+============================================================
+
+ERGEBNISSE:
+Theoretische Grenze: NA = λ/pitch = 13.5/48 = 0.28125
+
+| NA | max_order | Orders | Std | NILS |
+|----|-----------|--------|-----|------|
+| 0.2750 | 0 | [0] | 0.000 | 0.000 |
+| 0.2800 | 0 | [0] | 0.000 | 0.000 |
+| 0.2810 | 0 | [0] | 0.000 | 0.000 |
+| 0.28125| 1 | [-1,0,1] | 5.067 | 8.564 |
+| 0.2820 | 1 | [-1,0,1] | 5.067 | 8.564 |
+| 0.2900 | 1 | [-1,0,1] | 5.063 | 8.559 |
+| 0.3000 | 1 | [-1,0,1] | 5.059 | 8.553 |
+
+INTERPRETATION:
+- Harte Pupillen-Grenze bei NA = λ/pitch exakt implementiert
+- KEINE unphysikalischen Sprünge an der Grenze
+- Übergang von 0 → 1 Order bei exakt NA = 0.28125
+- Physikalisch KORREKT: 1. Order propagiert erst ab dieser NA
+
+BUG: NEIN
+PRIORITÄT: —
+EMPFEHLUNG: Pupillen-Filter ist korrekt
+
+============================================================
+TEST 8 – ENERGY / NORMALIZATION AUDIT
+============================================================
+
+ERGEBNISSE:
+- Summe |Order-Amplituden|² = 0.326
+- Reflectivität Space: |r|² = 0.647
+- Reflectivität Abs:   |r|² = 0.013
+- Summe < 1 → ENERGIEERHALTUNG OK (passive Maske)
+- Dose-Skalierung: aerial × dose = linear, exakt
+- Pipeline aerial max = 14.690568 = 0.734528 × 20 ✓
+
+INTERPRETATION:
+- Keine versteckte Über-/Unternormierung
+- Energieerhaltung im TMM und Aerial-Image OK
+- Dose ist rein lineare Skalierung der Intensität
+
+BUG: NEIN
+PRIORITÄT: —
+
+============================================================
+TEST 9 – SYMMETRY TEST
+============================================================
+
+ERGEBNISSE:
+| Pitch | Aerial Asymmetry | Order Magnitude Asymmetry |
+|-------|------------------|---------------------------|
+| 44 nm | 7.11e-15 | 0.00e+00 |
+| 48 nm | 1.24e-14 | 0.00e+00 |
+| 64 nm | 5.33e-15 | 0.00e+00 |
+
+INTERPRETATION:
+- Aerial Image perfekt symmetrisch: I(x) = I(-x) (numerisch ~10^-14)
+- |Order(+m)| = |Order(-m)| exakt
+- Phasenbeziehungen korrekt für symmetrische Maske
+
+BUG: NEIN
+PRIORITÄT: —
+
+============================================================
+TEST 10 – FULL PIPELINE BASELINE
+============================================================
+
+BASELINE DATENSATZ (unveränderter Code):
+| Parameter | Wert |
+|-----------|------|
+| Pitch | 48 nm |
+| CD (nominal) | 24 nm |
+| λ | 13.5 nm |
+| NA | 0.33 |
+| σ | 0.8 |
+| Dose | 20 mJ/cm² |
+| Resist | full_chem (CAR preset) |
+| SE Blur | 5 nm |
+| Stochastic | On (5 realisations, seed=42) |
+
+ERGEBNISSE:
+| Metrik | Wert |
+|--------|------|
+| Runtime | 0.06 s |
+| Aerial min | 0.000175 |
+| Aerial max | 14.691 |
+| Aerial mean | 3.609 |
+| Aerial std | 5.045 |
+| NILS | 4.724 |
+| CD (full_chem) | 12.00 nm |
+| LER | 0.021 nm |
+| LWR | 0.029 nm |
+| Absorber Reflectivity | 0.330 |
+
+HINWEIS:
+- NILS in full_chem (4.724) < aerial_threshold (8.533) wegen SE-Blur
+- CD in full_chem (12.00 nm) < nominal (24 nm) wegen Resist-Entwicklung
+- LER/LWR sehr klein (~0.02-0.03 nm) – realistisch?
+
+BUG: POTENTIELL – P2
+- LER/LWR wirken sehr klein für EUV (typisch 1-3 nm)
+- Aber: modeliert nur photon shot noise, keine anderen Rauschquellen
+- n_realisations=5 ist gering (Standard sollte ≥10 sein, P2-003)
+
+============================================================
+GESAMTBEWERTUNG & PRIORISIERUNG
+============================================================
+
+P0 – EINDEUTIG PHYSIKALISCH FALSCH:
+1. RCWA TM Solver produziert Gain > 1 (nur relevant bei use_rcwa=True)
+2. RCWA Field-Averaging für unpolarisiertes Licht falsch
+
+P1 – WAHRSCHEINLICH FALSCH / MUSS UNTERSUCHT WERDEN:
+3. sigma=0 Edge Case: Division by Zero in TCC
+   Fix: if x < 1e-12: tcc = 1.0
+
+P2 – MODELLVEREINFACHUNG / VERBESSERUNG:
+4. LER/LWR Default n_realisations=5 zu klein (sollte ≥10)
+5. TE/TM averaging nur im RCWA-Pfad relevant (Default nutzt analytic)
+6. ML Toleranz-Sensitivität für Prozessfenster dokumentieren
+
+P3 – ZUKÜNFTIGE ERWEITERUNG:
+7. High-NA vektorielle Pupille
+8. 2D RCWA
+9. Vollständiger Mack/Level-Set Entwicklung
+
+============================================================
+KEINE CODEÄNDERUNGEN DURCHGEFÜHRT
+============================================================
+
+Alle Tests liefen auf unverändertem Code.
+Nur Diagnose- und Analyse-Skripte ausgeführt.
+============================================================
+END OF REPORT

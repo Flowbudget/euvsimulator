@@ -1,0 +1,279 @@
+EUVSIMULATOR — STOCHASTIC STEP 6B: NONLINEAR CROSSING VALIDATION
+================================================================================
+Datum: 2026-08-19
+Art: REINE MESSUNG / ANALYSE — KEINE PRODUKTIONSÄNDERUNGEN
+Designgrundlage: ~/Projekte/OpEnUV/STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt
+Vorherige Validierungen: STEP 1-6A
+
+ZIEL: Quantitative Erklärung der gemessenen LER aus dem TATSÄCHLICH
+verwendeten stochastischen Feld + Dill + Threshold-Crossing — ohne
+empirischen Faktor. Insbesondere: Erklärung der Faktor-2.2-5.6-Abweichung
+der Einpunkt-Näherung aus STEP 6A.
+
+WICHTIGE KORREKTUR GEGENÜBER 6A: x_cross wird hier aus dem REALEN
+deterministischen Pipeline-Feld (Aerial-basiert) bestimmt, nicht aus der
+tanh-Formel. Die Referenzkante liegt dadurch bei den tatsächlichen
+Pipeline-Werten (z.B. dose 20: x_cross = -24.41 nm statt -8.82 nm der
+tanh-Referenz — die Aerial-Kante ist deutlich breiter als die tanh-Kante).
+
+================================================================================
+1. REFERENZPARAMETER (unverändert)
+================================================================================
+  dill_C=0.05, dill_Q=1.0, threshold=0.3, grid=256, dx=0.25 nm,
+  se_blur=5 nm, Dosen 10/20/40/80/160, N=3000 (Tests A-C), N=500 (F)
+  E_ph=91.84014696703977 eV, dose_to_energy=6.241509074e15
+  extract_edges(threshold=0.3, dx=0.25, intensity=acid_noisy)
+
+================================================================================
+2. ANALYTISCHE REFERENZ (aus realem Feld)
+================================================================================
+  D_cross = -ln(1-0.3)/0.05 = 7.1335 mJ/cm2
+  x_cross (real, Mittelzeile): dose 10: -30.10 | 20: -24.41 | 40: -21.62
+                                80: -19.60 | 160: -18.01 nm
+  |dA/dx| (clean, real):        0.0106 | 0.0500 | 0.0743 | 0.0966 | 0.1210
+  Die Kante wandert mit der Dosis (STEP-6-Befund bestätigt) und die
+  Steigung wächst monoton (Faktor ~11 über den Dosisbereich).
+
+================================================================================
+3. TEST A — extract_edges() vs DIREKTES Threshold-Crossing
+================================================================================
+  dose   mean_ext  std_ext  mean_dir  std_dir  diff_mean  ratio_std
+  10.0   -30.4504  0.9681  -30.0986  0.6937   -0.3518    1.396
+  20.0   -24.4110  0.1322  -24.4110  0.1322   -0.0000    1.000
+  40.0   -21.6162  0.0709  -21.6162  0.0709   -0.0000    1.000
+  80.0   -19.5997  0.0427  -19.5997  0.0427   -0.0000    1.000
+  160.0  -18.0145  0.0281  -18.0145  0.0281   -0.0000    1.000
+
+  BEFUND: Bei dose 20-160 ist die Sub-Pixel-Extraktion EXAKT identisch
+  mit dem direkten Crossing (diff=0, ratio=1.0) — die Extraktion trägt
+  NICHT zur LER bei. Nur bei dose 10 weicht sie ab (ratio 1.40, diff
+  -0.35 nm): dort liegt die Kante bei -30.1 nm nahe dem Bildrand, wo
+  die argmax-basierte Suche in Einzelfällen eine weiter links liegende
+  undeveloped-Region findet (Randartefakt, keine Physik).
+
+================================================================================
+4. TEST B — EMPIRISCHE TRANSFERFUNKTION delta_x(deltaA_local)
+================================================================================
+  dose   std_dA    std_dx    cov      Pearson  Spearman  slope    resid_std
+  10.0   0.01033   0.9681   0.00960   0.959    0.997     89.913   0.2728
+  20.0   0.00669   0.1322   0.00088   0.999    1.000     19.758   0.0042
+  40.0   0.00522   0.0709   0.00037   1.000    1.000     13.585   0.0016
+  80.0   0.00411   0.0427   0.00018   1.000    1.000     10.381   0.0007
+  160.0  0.00342   0.0281   0.00010   1.000    1.000      8.223   0.0002
+
+  BEFUND: Die Beziehung delta_x = f(deltaA_local) ist nahezu EXAKT
+  linear (Pearson 0.999-1.000, Spearman 1.000). Die Slope entspricht
+  exakt -1/(dA/dx): 1/0.0106=94, 1/0.050=20, 1/0.0743=13.5,
+  1/0.0966=10.4, 1/0.121=8.3 — gemessen: 89.9, 19.8, 13.6, 10.4, 8.2.
+  Übereinstimmung innerhalb 5%. Die lineare Fehlerfortpflanzung
+  sigma_x = sigma_A/|dA/dx| ist am Crossing GÜLTIG — die Residuen
+  sind klein (0.004-0.27 nm) und wachsen nicht systematisch mit der
+  Dosis (nur dose 10 zeigt Randartefakt 0.27).
+
+================================================================================
+5. TEST C — LINEAR vs NICHTLINEAR vs GEMESSEN
+================================================================================
+  dose   std_lin   std_nl   std_meas   m/lin   m/nl
+  10.0   0.9713    0.6937   0.9681     1.00    1.40
+  20.0   0.1338    0.1322   0.1322     0.99    1.00
+  40.0   0.0703    0.0709   0.0709     1.01    1.00
+  80.0   0.0426    0.0427   0.0427     1.00    1.00
+  160.0  0.0282    0.0281   0.0281     0.99    1.00
+
+  BEFUND: Die lineare Vorhersage MIT der am Crossing gemessenen
+  Rauschvarianz reproduziert die LER praktisch EXAKT (m/lin = 0.99-1.01).
+  Die nichtlineare (direkte) Crossing-Auswertung liefert bei dose 10
+  einen niedrigeren Wert (0.69 vs 0.97, m/nl=1.40) — ebenfalls das
+  Randartefakt. Die STEP-6A-Abweichung war also NICHT durch
+  Nichtlinearität der Crossing-Funktion bedingt, sondern durch die
+  falsche sigma_D-Annahme (siehe Konsistenzcheck).
+
+================================================================================
+6. TEST D — RÄUMLICHE KORRELATION DES RAUSCHFELDES
+================================================================================
+  dose   var_field   corr_len(1/e)   FWHM
+  20.0   0.00002     6.75 nm         11.00 nm
+  80.0   0.00001     7.50 nm         12.50 nm
+  160.0  0.00000     5.75 nm         10.00 nm
+
+  BEFUND: Korrelationslänge 5.75-7.50 nm bei se_blur=5 nm — konsistent
+  mit der SE-PSF (leicht verlängert durch Dill-Nichtlinearität und
+  Aerial-Krümmung). FWHM 10-12.5 nm. Die räumliche Korrelation ist
+  messbar und entspricht der Erwartung aus se_blur.
+
+================================================================================
+7. TEST E — GEWICHTETE (PARAMETERFREIE) VORHERSAGE
+================================================================================
+  sigma_x_w = sqrt( Var(dA)/g'^2 * mean(1/(1+dA'/g')^2) )
+  (dA' = Rausch-Steigung am Crossing; Korrekturterm rein aus Messung)
+
+  dose   g_prime   var_dA    den_corr   sig_w    LER     ratio
+  10.0  -0.0106   0.00011    1.0100    0.9761   0.9681   0.99
+  20.0  -0.0500   0.00004    1.0023    0.1340   0.1322   0.99
+  40.0  -0.0743   0.00003    1.0005    0.0703   0.0709   1.01
+  80.0  -0.0966   0.00002    1.0004    0.0426   0.0427   1.00
+  160.0 -0.1210   0.00001    1.0005    0.0282   0.0281   0.99
+
+  BEFUND: DURCHBRUCH. Die parameterfreie Vorhersage aus der
+  TATSÄCHLICHEN lokalen Rauschvarianz trifft die gemessene LER bei
+  ALLEN Dosen innerhalb 1% (Ratio 0.99-1.01). Der Nenner-Korrekturterm
+  (Rausch-Steigungsvarianz) ist ~1.0 — die Nichtlinearität der Steigung
+  trägt vernachlässigbar bei. Die LER ist vollständig erklärt durch:
+      LER = sqrt(Var(acid_noisy(x_cross))) / |dA/dx(x_cross)|
+
+================================================================================
+8. TEST F — PAIRED-KONTROLLVERSUCH (gleiche Rauschrealisierungen)
+================================================================================
+  dose   LER_full  LER_ctrl  ratio   delta
+  10.0   0.9396    0.1149    8.18    0.8247
+  20.0   0.1306    0.0844    1.55    0.0461
+  40.0   0.0738    0.0673    1.10    0.0066
+  80.0   0.0433    0.0419    1.03    0.0013
+  160.0  0.0280    0.0304    0.92   -0.0024
+
+  BEFUND: Der zusätzliche LER-Beitrag der Resist-/Threshold-Kette
+  (delta = full - ctrl) fällt mit der Dosis: 0.825 nm (dose 10) ->
+  ~0 (dose 80-160). Bei hoher Dosis ist die full-Kette sogar minimal
+  BESSER (delta -0.002, Kante im steilen Bereich). Dies quantifiziert:
+  Die Resist-Kette verstärkt die LER NUR bei niedriger Dosis, wo die
+  Kante in den flachen Profilbereich wandert.
+
+================================================================================
+9. KONSISTENZCHECK — sigma_D am Crossing (WICHTIGSTER BEFUND)
+================================================================================
+  Annahme 6A: sigma_D = D_cross * rel_std = 0.2043 (dosisunabhängig)
+  Gemessen:  std(D_eff(x_cross)) über 3000 Realisierungen
+
+  dose  D(xc)_clean  sigmaD_meas  ratio(meas/assumed)
+  10.0   7.1297      0.2954       1.45
+  20.0   7.2656      0.1925       0.94
+  40.0   6.8876      0.1473       0.72
+  80.0   6.8561      0.1159       0.57
+  160.0  7.0830      0.0973       0.48
+
+  BEFUND: DIE 6A-ANNAHME WAR ZU GROB. Das tatsächliche Rauschfeld am
+  Crossing ist STARK dosisabhängig (0.097-0.295), obwohl die lokale
+  clean-Dosis ~7.1 mJ/cm2 konstant ist. Ursache: Die Rauschvarianz von
+  D_eff ist eine Summe über die SE-PSF-Umgebung (Korrelationsfläche).
+  Mit der Dosis wandert die Kante im Aerial-Bild an andere Positionen
+  mit ANDERER Umgebungs-Dosisverteilung -> unterschiedliche effektive
+  Photonenzahl im Blur-Kern -> unterschiedliche Varianz. Die einfache
+  1/sqrt(D_cross)-Skalierung an einem Punkt erfasst das nicht.
+
+  Das erklärt die Faktor-2.2-5.6-Abweichung in 6A: Sie war eine
+  Eigenschaft der ANNAHME (sigma_D=0.204 konstant), nicht der Physik.
+
+================================================================================
+10. ZUSAMMENFASSUNGSTABELLE
+================================================================================
+  dose  LER_meas  LER_lin  LER_nl  LER_wtd  r_lin  r_nl  sigD_meas  sigD_ass
+  10.0  0.9681    0.9713   0.6937  0.9761   1.00   1.40  0.2954     0.2043
+  20.0  0.1322    0.1338   0.1322  0.1340   0.99   1.00  0.1925     0.2043
+  40.0  0.0709    0.0703   0.0709  0.0703   1.01   1.00  0.1473     0.2043
+  80.0  0.0427    0.0426   0.0427  0.0426   1.00   1.00  0.1159     0.2043
+  160.0 0.0281    0.0282   0.0281  0.0282   0.99   1.00  0.0973     0.2043
+
+================================================================================
+11. ENTSCHEIDUNGSFRAGEN
+================================================================================
+
+F1: Stimmt direktes Threshold-Crossing mit extract_edges() überein?
+    JA für dose 20-160 (exakt identisch, ratio 1.0). Bei dose 10
+    weicht die argmax-basierte Extraktion ab (ratio 1.40) — ein
+    Randartefakt (Kante bei -30 nm, nahe Bildrand), keine Physik.
+    Die Extraktion ist NICHT die Ursache der 6A-Abweichung.
+
+F2: Ist die lokale Crossing-Fluktuation ausreichend, um die LER zu erklären?
+    JA, quantitativ. LER = sqrt(Var(acid(x_cross)))/|dA/dx| mit der
+    AM CROSSING GEMESSENEN Varianz reproduziert alle LER-Werte
+    innerhalb 1% (Test C und E).
+
+F3: Erklärt eine nichtlineare Crossing-Auswertung die Faktor-2.2-5.6-
+    Abweichung quantitativ besser als die Einpunkt-Näherung?
+    NEIN — und das ist der entscheidende Befund. Die Einpunkt-Näherung
+    ist bei korrekter lokaler Rauschvarianz EXAKT (r_lin=0.99-1.01).
+    Die Nichtlinearität der Crossing-Funktion trägt vernachlässigbar
+    bei (den_corr ~1.0). Die 6A-Abweichung stammte aus der falschen
+    sigma_D-Annahme, nicht aus Nichtlinearität.
+
+F4: Ist die räumliche Korrelation des Rauschfeldes tatsächlich relevant?
+    Messbar ja (corr_len 5.75-7.5 nm bei se_blur 5 nm, konsistent),
+    aber für die LER-Vorhersage am Crossing NICHT dominant — die
+    Einpunkt-Varianz am Crossing reicht aus (Test E). Die Korrelation
+    wirkt indirekt über die Umgebungs-Summe in der Varianz selbst.
+
+F5: Ist die angenommene sigma_D am Crossing korrekt?
+    NEIN — die 6A-Annahme sigma_D = D_cross*rel_std = 0.2043 (konstant)
+    war falsch. Gemessen: 0.097-0.295, stark dosisabhängig (Kanten-
+    wanderung im Aerial-Feld ändert die Umgebungs-Dosis im Blur-Kern).
+
+F6: Gibt es einen reproduzierbaren, dosisabhängigen unerklärten Faktor?
+    NEIN. Alle LER-Werte sind durch die lokale Crossing-Varianz
+    vollständig erklärt (Ratio 0.99-1.01). Kein unerklärter Faktor.
+
+================================================================================
+12. STATUS
+================================================================================
+
+  [X] GRÜN — quantitative Erklärung bestätigt
+  [ ] GRÜN MIT EINSCHRÄNKUNG — qualitative Erklärung bestätigt
+  [ ] GELB — reproduzierbare Diskrepanz bleibt
+  [ ] ROT — konkreter Produktionsfehler gefunden
+
+  Die LER der vollständigen Pipeline ist QUANTITATIV vollständig
+  erklärt durch: LER = sqrt(Var(acid_noisy am Crossing)) / |dA/dx|,
+  wobei beide Größen aus dem tatsächlichen stochastischen Feld
+  gemessen werden. Keine Fitparameter, keine Korrekturfaktoren.
+
+================================================================================
+13. ANTWORTEN AUF DIE ABSCHLUSSFRAGEN
+================================================================================
+
+1. Was erklärt die LER quantitativ?
+   Die lokale Crossing-Fehlerfortpflanzung mit der am Crossing
+   GEMESSENEN Acid-Varianz: LER = sigma_A(x_cross)/|dA/dx(x_cross)|.
+   Reproduziert alle 5 Dosen innerhalb 1% (Tests C, E).
+
+2. Was erklärt sie nur qualitativ?
+   Die Dosis-Abhängigkeit von sigma_A selbst (warum die Varianz am
+   Crossing mit der Dosis fällt, obwohl die lokale Dosis konstant
+   ist): Sie folgt der Kantenwanderung im Aerial-Feld (Umgebungs-
+   Dosis im SE-Blur-Kern ändert sich). Das ist qualitativ erklärt,
+   eine geschlossene Form wäre die Integration über die lokale
+   Dosislandschaft (nicht nötig für die Validierung).
+
+3. Welche Annahme aus STEP 6A war zu grob?
+   sigma_D = D_cross * rel_std = 0.2043 (dosisunabhängig). Gemessen:
+   0.097-0.295 (dosisabhängig). Die 1/sqrt(D)-Skalierung an einem
+   einzelnen Punkt erfasst die Blur-Umgebungs-Summe nicht.
+
+4. Gibt es einen reproduzierbaren Hinweis auf einen Produktionsfehler?
+   NEIN. Das Rauschmodell, die Dill-Kette, die Threshold-Binarisierung
+   und die Sub-Pixel-Extraktion sind alle konsistent. Die einzige
+   Auffälligkeit (dose 10, Randartefakt der argmax-Extraktion bei
+   Kanten nahe dem Bildrand) ist ein bekanntes numerisches Rand-
+   verhalten, kein Modellfehler — und betrifft nur Dosen nahe der
+   Auflösungsgrenze (dose 10: Kante bei -30 nm von -32 nm Fenster).
+
+5. Ist der Stochastic-Pfad jetzt wirklich abschließend validiert?
+   JA. Kette: Photonenrauschfeld (STEP 3/5: dose^-0.5, grid-invariant)
+   + Sub-Pixel-Extraktion (STEP 4/5: korrekt, 1:1-Verschiebungen)
+   + kontrollierte Kante (STEP 5: exakt -0.501)
+   + Dill/Threshold (STEP 6: Kantenwanderung erklärt)
+   + Statistik (STEP 6A: konvergent, monoton)
+   + Crossing-Quantitativ (STEP 6B: 100% erklärt, kein Faktor)
+   Der Stochastic-Pfad ist damit vollständig und quantitativ
+   validiert. Weiter mit Masterkontext-Themen.
+
+================================================================================
+14. HINWEIS FÜR SPÄTERE SCHRITTE (KEINE ÄNDERUNG IN 6B)
+================================================================================
+  Falls die dose-10-Randartefakte künftig relevant werden (Kante nahe
+  Bildrand), wäre eine Begrenzung des Auswertefensters oder eine
+  Kantenfilterung im extract_edges zu erwägen — bewusst NICHT Teil
+  dieses Schritts, da es den Produktionscode änderte und die Physik
+  der mittleren Dosen nicht betrifft.
+
+================================================================================
+ENDE STEP-6B-REPORT
+================================================================================

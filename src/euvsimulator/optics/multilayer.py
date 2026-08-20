@@ -46,7 +46,9 @@ def _nk(
     symbol : str
         Chemical symbol.
     energy_eV : float
-        Photon energy in eV (default: 91.84 eV = 13.5 nm).
+        Photon energy in eV. Default is 91.84 eV
+        (corresponding to 13.5 nm wavelength via E = hc/λ).
+        Use the derived energy from wavelength for consistency.
     table : CXROTable, optional
         CXRO table instance. Uses the default singleton if omitted.
 
@@ -138,7 +140,9 @@ def mo_si_stack(
     substrate : str
         Substrate material symbol (default: "Si").
     energy_eV : float
-        Photon energy in eV (default: 91.84).
+        Photon energy in eV. Default is 91.84 eV
+        (corresponding to 13.5 nm wavelength via E = hc/λ).
+        Use the derived energy from wavelength for consistency.
     table : CXROTable, optional
         CXRO table instance.  Uses the default singleton if omitted.
     gamma : float, optional
@@ -148,7 +152,6 @@ def mo_si_stack(
     grading_linear_nm : float
         Linear period grading [nm]: each bilayer period increases by
         this amount from top to bottom.  Positive = thicker at bottom.
-        Typical: 0.0 (no grading) to 0.3 nm for High-NA.
     grading_parabolic_nm : float
         Parabolic period grading amplitude [nm].  The period at the
         centre of the stack is nominal; top and bottom periods are

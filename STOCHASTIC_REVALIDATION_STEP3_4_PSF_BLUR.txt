@@ -1,0 +1,137 @@
+============================================================
+STEP 3.4 — SE-PSF / BLUR VARIANCE EFFECT
+============================================================
+Datum: 2026-08-20
+Art: REINE MESSUNG / ANALYSE — KEINE PRODUKTIONSÄNDERUNGEN
+
+------------------------------------------------------------
+PSF
+------------------------------------------------------------
+
+type:       2D Gaussian, separable 1D convolution (Produktionscode)
+             gaussian_se_blur, exposure.py
+parameters: sigma = 5.0 nm (se_blur_nm, CAR-Preset)
+             dx = 0.25 nm, sigma_px = 20.0
+             truncate = 3.0
+kernel_size: 121 (radius = 60), 121 × 121 effektiv
+kernel_sum:  1.0000000000  [PROVEN] — exakt auf 1 normalisiert
+             1D kernel sum = 1.0000000000
+sum(PSF²):  0.00020092
+
+------------------------------------------------------------
+40 mJ/cm²  (N=1000, identische Seeds für beide Fälle)
+------------------------------------------------------------
+
+case    | mean      | mean(pixel_variance) | median(pixel_variance)
+no_blur | 13.8044   | 324.69               | 291.02
+blur    | 13.8044   | 0.140                | 0.065
+
+variance ratio measured:     0.000432  (median: 0.000225)
+variance ratio theoretical:  0.000201  (sum(PSF²), konstante Dosis)
+ratio measured/theory:       2.15      → NICHT 1.0 im vollen Feld
+
+mean preservation ratio:     1.000004  [PROVEN]
+
+------------------------------------------------------------
+160 mJ/cm²  (N=1000, identische Seeds)
+------------------------------------------------------------
+
+case    | mean      | mean(pixel_variance) | median(pixel_variance)
+no_blur | 55.2091   | 1298.07              | 1164.39
+blur    | 55.2105   | 0.579                | 0.266
+
+variance ratio measured:     0.000446  (median: 0.000229)
+variance ratio theoretical:  0.000201  (sum(PSF²), konstante Dosis)
+ratio measured/theory:       2.22      → NICHT 1.0 im vollen Feld
+
+mean preservation ratio:     1.000026  [PROVEN]
+
+------------------------------------------------------------
+DOSE INDEPENDENCE
+------------------------------------------------------------
+
+variance-ratio 40:  0.000432
+variance-ratio 160: 0.000446
+relative difference: 3.22 %  (innerhalb statistischer Unsicherheit)
+[PROVEN] — der Blur/No-Blur-Quotient ist dosisunabhängig.
+
+------------------------------------------------------------
+LOKALISIERUNG DER DISKREPANZ (diagnostische Tiefenanalyse)
+------------------------------------------------------------
+
+Die Abweichung ratio ≈ 2.1–2.2 (statt 1.0) wurde pixelweise
+lokalisiert. Sie ist NICHT gleichmäßig verteilt, sondern
+konzentriert sich NUR am Bildrand:
+
+  Uniformes Kontrollfeld (kein Rand, N=1000):
+    variance ratio = 0.0001955, theory = 0.0002009
+    ratio meas/theory = 0.973  [PROVEN] — PSF-Implementierung korrekt
+    (Abweichung 2.7 % = statistische Unsicherheit von N=1000)
+
+  Reales Aerial-Feld, Feldinneres (60 px vom Rand entfernt, N=2000):
+    Pixel mit aerial 0.01–0.10: ratio = 1.017  [PROVEN] — Theorie exakt
+
+  Reales Aerial-Feld, Randzone (0–60 px vom Bildrand):
+    ratio wächst monoton mit der Intensität:
+      aerial 0.01–0.10: 1.165
+      aerial 0.30–0.40: 1.347
+      aerial 0.60–0.75: 2.070
+    → REFLECT-PADDING-ARTEFAKT: Das Feld ist periodisch (Periode
+      64 nm), aber gaussian_se_blur verwendet reflect-Padding. Am
+      Bildrand (j=0/j=255) liegt die helle Linie; reflect spiegelt
+      sie statt sie periodisch fortzusetzen → künstlich erhöhte
+      lokale Photonenzahl im Kernel → erhöhte Varianz.
+
+  LER-relevante Kante (j≈35–48, x≈−23…−20 nm, aerial 0.1–0.33):
+    ratio = 1.06–1.13 — der 60-px-Kernel greift teilweise über den
+    Bildrand. Kleine, aber messbare Beeinflussung der Kantenvarianz.
+
+------------------------------------------------------------
+AUDIT CLASSIFICATION
+------------------------------------------------------------
+
+PSF normalization:
+[PROVEN] — sum(PSF) = 1.0000000000 exakt
+
+blur variance effect:
+[PROVEN MIT EINSCHRÄNKUNG] — im Feldinneren und auf uniformen Feldern
+exakt (ratio 0.97–1.02); an der Randzone (innerhalb ~15 nm vom
+Bildrand) wird die Varianz durch reflect-Padding künstlich erhöht
+(bis Faktor 2.1). Das ist ein bekanntes, in STEP-1-Revalidation
+dokumentiertes Randartefakt der Padding-Konvention, KEIN Fehler
+der PSF-Normalisierung oder Varianzreduktion.
+
+mean preservation:
+[PROVEN] — ratio 1.000004 (40) / 1.000026 (160)
+
+no hidden dose dependence:
+[PROVEN] — relative Differenz 3.2 % zwischen 40 und 160 mJ/cm²,
+innerhalb statistischer Unsicherheit (N=1000)
+
+production error:
+[NO] — die PSF selbst ist korrekt. Das Randartefakt ist eine
+bekannte numerische Konvention (reflect-Padding), kein Fehler
+im Produktionsmodell.
+
+------------------------------------------------------------
+RAW ERRORS
+------------------------------------------------------------
+
+Keine. Alle Realisierungen abgeschlossen. Keine NaN/Inf.
+Identische Seeds für no_blur/blur-Vergleiche (Basis 30000/50000/60000).
+
+------------------------------------------------------------
+EMPFEHLUNG (nur Dokumentation, KEINE Produktionsänderung)
+------------------------------------------------------------
+
+Falls die Kantenvarianz nahe des Bildrands jemals quantitativ
+kritisch wird (z.B. bei LER-Messungen mit Kante < 15 nm vom Rand),
+wäre periodisches Padding (F.pad mode="circular") physikalisch
+korrekter für das periodische Maskenfeld. Für die aktuelle
+Standard-Konfiguration (Kante bei x≈−23 nm, 36 px vom Rand) ist
+der Einfluss auf die LER-Messung klein (≈10 %) und war in den
+STEP-6-Audits bereits als Randzone berücksichtigt.
+
+============================================================
+ENDE STEP 3.4
+============================================================

@@ -1,0 +1,104 @@
+EUVSIMULATOR DIAGNOSTIC REPORT
+Aerial Image Loss of Spatial Structure
+
+1. PROBLEM CONFIRMED
+
+Two API test cases produce constant aerial profiles:
+- pitch=40 nm, CD=18 nm: all pixels = 1.3566141903830156
+- pitch=48 nm, CD=18 nm: all pixels = 2.9391578641152427
+
+Expected: Spatial modulation from line/space mask.
+
+2. ROOT CAUSE ANALYSIS
+
+File: src/euvsimulator/aerial/abbe.py
+Function: aerial_from_orders
+Lines: 198-201
+
+Code:
+    # Check coherence: orders must be close enough in frequency
+    dm = abs(mi - mj)
+    if dm > coherence_orders + 1e-12:
+        continue  # outside coherence area
+
+Physics parameters for failing case:
+- period = 48 nm
+- NA = 0.33
+- wavelength = 13.5 nm
+- sigma = 0.8
+
+Calculated:
+- max_order = floor(NA * period / wavelength) = floor(0.33 * 48 / 13.5) = 1
+- coherence_orders = sigma * NA * period / wavelength = 0.8 * 0.33 * 48 / 13.5 = 0.9387
+
+Available orders: [-1, 0, 1] (pass pupil filter max_order=1)
+Order pairs:
+- (0,0): dm=0 <= 0.9387 → ALLOWED
+- (1,0): dm=1 > 0.9387 → BLOCKED by hard cutoff
+- (-1,0): dm=1 > 0.9387 → BLOCKED by hard cutoff
+- (1,1), (-1,-1): dm=0 → ALLOWED
+- (1,-1): dm=2 > 0.9387 → BLOCKED
+
+Result: Only self-interference (dm=0) survives → constant intensity
+The Bessel J1 TCC formula at line 218 would naturally damp but never completely block:
+x = pi * sigma * NA * dm * wavelength / period
+For dm=1: x = pi * 0.8 * 0.33 * 1 * 13.5 / 48 = 2.33
+TCC = 2*J1(2.33)/2.33 ≈ 0.31 (NOT zero!)
+
+3. AFFECTED COMPONENTS
+
+A) File: src/euvsimulator/aerial/abbe.py
+   Function: aerial_from_orders
+   Lines: 198-201 (hard coherence cutoff)
+
+B) File: src/euvsimulator/aerial/abbe.py
+   Function: aerial_from_orders
+   Lines: 214-218 (Bessel J1 TCC - correctly implements gradual damping)
+
+The hard cutoff at line 200 contradicts the physics at line 218.
+
+4. WHY REFERENCE CASE (period=64) WORKS
+
+For period=64 nm:
+- coherence_orders = 0.8 * 0.33 * 64 / 13.5 = 1.25
+- dm=1 <= 1.25 → 1st order interference ALLOWED
+- Spatial modulation preserved
+
+5. DIAGNOSTIC TEST RESULTS
+
+| period | NA | sigma | coherence_orders | dm(0,1) | Interference | Result |
+|--------|-----|-------|------------------|---------|--------------|--------|
+| 64 | 0.33 | 0.8 | 1.25 | 1 | ALLOWED | Modulated ✓ |
+| 48 | 0.33 | 0.8 | 0.94 | 1 | BLOCKED | Constant ✗ |
+| 48 | 0.33 | 1.0 | 1.17 | 1 | ALLOWED | Modulated ✓ |
+| 48 | 0.55 | 0.8 | 1.56 | 1 | ALLOWED | Modulated ✓ |
+
+6. PHYSICAL INTERPRETATION
+
+The hard cutoff implements a "coherence area" as a sharp boundary, but the Hopkins TCC (2*J1(x)/x) provides gradual damping without a hard cutoff. For partially coherent illumination, the mutual coherence between orders never goes exactly to zero - it decays as 1/x^1.5 asymptotically.
+
+The comment at line 212-213 explicitly states: "The TCC damps order interference *gradually* — there is no hard cutoff."
+
+Yet the code implements a hard cutoff at line 200.
+
+7. RESIST PROFILE ALL 1s
+
+Secondary effect: With constant aerial image, the threshold development produces uniform result. For positive-tone resist with threshold, the entire resist either develops or doesn't, leading to all-1 or all-0 resist profile.
+
+8. MINIMAL FIX
+
+Remove lines 200-201 (the hard coherence cutoff). The TCC formula naturally handles coherence filtering.
+
+Keep the pupil filter (max_order) which is physically correct - orders outside the pupil cannot propagate.
+
+9. TESTS NEEDED
+
+Test 1: Period=48, NA=0.33, sigma=0.8 should produce non-constant aerial image
+Test 2: NILS should be > 0 for resolvable pitches
+Test 3: CD should be > 0 for nominal line widths
+Test 4: Regression test for period=64 (should remain working)
+Test 5: Verify TCC behavior matches reference model
+
+10. STATUS
+
+Diagnosis complete. Awaiting approval to implement fix.

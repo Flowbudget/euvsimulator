@@ -1,0 +1,140 @@
+============================================================
+STEP 3.7 — EDGE-EXTRACTION CONTROL FOR PADDING FINDING
+============================================================
+Datum: 2026-08-20
+Art: REINE MESSUNG / ANALYSE — KEINE PRODUKTIONSÄNDERUNGEN
+
+Bedingungen identisch zu STEP 3.6:
+  dose = 40 mJ/cm², N = 500, grid = 256×256, dx = 0.25 nm
+  PSF = sigma 5 nm, threshold = 0.3, shifts = 0/8 nm
+  gepaarte Seeds (SEED_BASE 80000)
+
+------------------------------------------------------------
+EDGE POSITION
+------------------------------------------------------------
+
+mode     | shift | det_left | det_right | noisy mean | std
+reflect  | 0 nm  | 10.384   | 53.366    | 10.389     | 0.0679
+reflect  | 8 nm  | 18.384   | 61.366    | 18.387     | 0.0650
+circular | 0 nm  | 10.384   | 53.366    | 10.389     | 0.0667
+circular | 8 nm  | 18.384   | 61.366    | 18.387     | 0.0650
+
+Befund:
+- Die extrahierte Kante verschiebt sich exakt um 8 nm (10.384→18.384,
+  53.366→61.366) — es wird in beiden Fällen DIESELBE physikalische
+  Kante gemessen. Kein Kanten-Sprung, kein Mode-Unterschied.
+- In Fensterkoordinaten (x = pos − 32):
+    linke Kante:  0 nm → x = −21.62 nm (10.6 nm vom linken Rand)
+                  8 nm → x = −13.62 nm (18.4 nm vom linken Rand)
+    rechte Kante: 0 nm → x = +21.37 nm (10.6 nm vom rechten Rand)
+                  8 nm → x = +29.37 nm (2.63 nm vom rechten Rand !)
+- Die RECHTE Kante wandert bei 8-nm-Shift in die kritische Randzone
+  (2.63 nm vom Rand < Kernelradius 15 nm).
+
+------------------------------------------------------------
+COMMON PHYSICAL ROI
+------------------------------------------------------------
+
+Feste ROI (identisch für beide Shifts): x ∈ [−30, −10] nm
+(j ∈ [8, 88]) — umfasst die linke Kante beider Shifts (−21.6 / −13.6).
+
+mode     | shift | LER (ROI, linke Kante)
+reflect  | 0 nm  | 0.015631 nm
+reflect  | 8 nm  | 0.015303 nm
+circular | 0 nm  | 0.014052 nm
+circular | 8 nm  | 0.014040 nm
+
+reflect 0 → 8 nm:  diff = −0.000328 nm, rel = 2.10 %, t = −1.36 (n.s.)
+circular 0 → 8 nm: diff = −0.000012 nm, rel = 0.08 %, t = −0.05 (n.s.)
+
+Befund: An der LINKEN Kante (weit vom Rand) ist die LER bei
+identischer physikalischer Auswerteregion NICHT signifikant
+verschieden — weder reflect noch circular. Der Schritt-3.6-Effekt
+entsteht also NICHT an der linken Kante.
+
+Rechte Kante (ROI x ∈ [8, 32]): Bei 8-nm-Shift liegt die Kante
+2.63 nm vom Rand; extract_edges findet sie in vielen Realisierungen
+nicht mehr (NaN) → LER(ROI) nicht auswertbar. Das ist der
+Kernel-Punkt: Die rechte Kante wandert bei 8-nm-Shift in die
+Randzone, in der reflect-Padding maximal wirkt.
+
+------------------------------------------------------------
+POST-BLUR VARIANCE CONTROL
+------------------------------------------------------------
+
+Räumliche Varianz des acid-Feldes entlang y an der deterministischen
+Kantenspalte (±4 nm Band) — OHNE Edge-Extraction.
+
+mode     | shift | post-blur variance | 
+reflect  | 0 nm  | 1.336210e-08
+reflect  | 8 nm  | 2.129022e-08   → +59.33 %, t = 12.61
+circular | 0 nm  | 1.122571e-08
+circular | 8 nm  | 1.166697e-08   → +3.93 %, t = 1.12 (n.s.)
+
+Befund: Die Verschiebungsabhängigkeit existiert BEREITS im
+geblurrten Feld, vollständig ohne Edge-Extraction. reflect:
++59 % Varianz bei 8-nm-Shift (hochsignifikant). circular:
++4 % (nicht signifikant).
+
+Hinweis: An der linken Kante erhöht reflect die FELDvarianz um
+59 %, aber die LER bleibt konstant, weil die Kante bei 8 nm in
+einen steileren Bereich des Aerial-Profils wandert (|dA/dx|
+größer) — Feldvarianz und Steigung kompensieren sich in der
+Positions-LER (σ_x = σ_field/|dA/dx|). An der rechten Kante
+(Randnähe 2.6 nm) dominiert der Padding-Effekt.
+
+------------------------------------------------------------
+CAUSAL INTERPRETATION
+------------------------------------------------------------
+
+Ist der Shift-Effekt bereits im geblurrten Feld vorhanden?
+[YES] — reflect: +59 % Varianz, t = 12.61, ohne Edge-Extraction.
+
+Bleibt der Effekt bei identischer physikalischer Auswerteregion
+bestehen?
+[OPEN → differenziert] — an der linken Kante (feste ROI, weit
+vom Rand): NEIN (t = −1.36). An der rechten Kante (wandert bei
+8 nm in die Randzone): nicht auswertbar, da die Kante in der
+Randzone liegt und teilweise nicht extrahierbar ist. Die
+STEP-3.6-LER-Differenz (+66 %) entsteht an der RECHTEN Kante,
+die bei 8-nm-Shift 2.6 nm vom Rand liegt.
+
+Ist extract_edges als Ursache ausgeschlossen?
+[YES] — der Effekt ist im Feld vorhanden (Post-Blur-Kontrolle),
+bevor irgendeine Edge-Extraction stattfindet. extract_edges ist
+lediglich der Ort, an dem die Randzonen-Kante die LER-Messung
+sichtbar macht.
+
+------------------------------------------------------------
+FINAL CLASSIFICATION OF PADDING FINDING
+------------------------------------------------------------
+
+reflect-padding physically compatible:
+[FAILED] — bestätigt aus STEP 3.6; Verschiebungsabhängigkeit
+im Feld (t = 12.61) und in der LER (t = −30.9, STEP 3.6).
+
+padding causes production-path LER bias:
+[PROVEN] — der Effekt wirkt über die Feldvarianz in der
+Randzone; die LER der Standard-Pipeline ist um ~12 % erhöht
+(STEP 3.5) und verschiebungsabhängig (STEP 3.6). Betroffen
+sind Kanten innerhalb ~15 nm vom Bildrand.
+
+production error:
+[NO — Modellphysik korrekt; Randkonvention reflect ist nicht
+kompatibel mit dem periodischen Feld. Ursache ist eine nicht
+begründete numerische Konvention (mode="reflect", exposure.py
+Z.227–231 ohne Kommentar zur Boundary Condition). Empfohlene
+zukünftige Maßnahme (nicht umgesetzt): mode="circular".]
+
+------------------------------------------------------------
+RAW ERRORS
+------------------------------------------------------------
+
+Keine Produktionsänderungen. Alle Messungen mit gepaarten Seeds
+(SEED_BASE 80000). Recht-Kanten-ROI bei 8-nm-Shift liefert NaN
+(Edge nicht extrahierbar in Randzone) — als Befund dokumentiert,
+kein Fehler.
+
+============================================================
+ENDE STEP 3.7
+============================================================

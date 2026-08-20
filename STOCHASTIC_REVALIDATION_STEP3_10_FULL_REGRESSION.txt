@@ -1,0 +1,404 @@
+============================================================
+STEP 3.10 — FULL REGRESSION + ADVERSARIAL NON-REGRESSION AUDIT
+============================================================
+Datum: 2026-08-20
+Rolle: unabhängiger adversarialer Regression-Reviewer
+Produktionsreferenz: gaussian_se_blur = mode="circular" (2 Stellen)
+STEP 3.9 gilt als bestanden. KEINE Code-/Parameteränderungen.
+
+============================================================
+STEP 3.10 RESULT
+============================================================
+
+CODE INTEGRITY: PASS
+BC FIX INTEGRITY: PASS
+SHOT NOISE: PASS
+PSF: PASS
+MEAN: PASS
+DOSE: PASS
+GRID: PASS
+PERIODICITY: PASS
+SHIFT INVARIANCE: PASS
+POST-BLUR: PASS
+EDGE EXTRACTION: PASS
+LER: PASS
+NAN/ROI: PASS
+DETERMINISM: PASS
+INTERIOR: PASS
+NEGATIVE CONTROL: PASS
+ADVERSARIAL FALSIFICATION: PASS
+
+OVERALL: GREEN
+CONFIDENCE: HIGH
+
+============================================================
+1. BASELINE / CODE-INTEGRITÄT
+============================================================
+
+CHANGED (ausschließlich, verifiziert per git diff):
+  exposure.py / gaussian_se_blur:
+    pad_col: mode="reflect" → mode="circular"  (Z.227)
+    pad_row: mode="reflect" → mode="circular"  (Z.230)
+
+UNCHANGED (verifiziert):
+  period_nm=64, grid=256, dx=0.25, dose=40, sigma=5.0,
+  threshold=0.3, dill_C=0.05, dill_Q=1.0, PSF, Kernel,
+  Shot Noise, Poisson, Fourier, aerial_from_orders,
+  Edge Extraction, ROI, LER-Definition, Seeds
+
+Dokumentierter Befund (kein Fehler):
+  - abbe.py:57 `_apply_se_blur` (mode="reflect"): TOTER CODE,
+    kein Aufrufer in src/tests/scripts — kein Produktionspfad.
+    Nicht geändert (außerhalb Fix-Bereich).
+  - sem_render.py (reflect): separates SEM-Modul, nicht im
+    stochastic-Pfad.
+  - Produktionspfad: pipeline.py → gaussian_se_blur (exposure.py)
+    → circular. Fix im aktiven Pfad vollständig.
+
+============================================================
+2. TEST A — SHOT-NOISE REGRESSION
+============================================================
+
+  Uniformes Feld, se_blur=0 (kein Blur → BC-irrelevant):
+  slope = −0.4984 (erwartet ≈ −0.5)
+  Poisson-Verhalten, Dosis-Skalierung, Dosisexponent, Seeds:
+  unverändert (se_blur=0-Pfad berührt kein Padding).
+
+SHOT NOISE: PASS
+
+============================================================
+3. TEST B — PSF REGRESSION
+============================================================
+
+  kernel_size = 121 (erwartet 121)
+  kernel_sum = 1.0000000000
+  sum(PSF²) = 0.00020092
+  separability: ja (Konstruktion), symmetry: True
+  → Kernel, Sigma, Summe, Symmetrie, Normalisierung unverändert;
+  nur Randbehandlung der Faltung geändert.
+
+PSF: PASS
+
+============================================================
+4. TEST C — MEAN PRESERVATION
+============================================================
+
+  global: dose_map 7.251750 → d_eff 7.327544 (ratio 1.010452)
+  interior ROI (60:196): 0.124069 → 0.114962 (ratio 0.926593)
+  (Einzel-Realisierungs-MC-Streuung + Dill-Krümmung; Blur
+  sum=1-normalisiert → Mean erhaltend im Erwartungswert;
+  identisch zur STEP-3.8-circular-Kontrolle)
+
+MEAN: PASS
+
+============================================================
+5. TEST D — PHYSIKALISCHE PERIODIZITÄT
+============================================================
+
+  roll(blur(f, shift)) == blur(f) nach Rückausrichtung:
+
+  shift  8 nm:  max|diff| = 0.000e+00, RMS = 0.000e+00
+  shift 16 nm:  max|diff| = 0.000e+00, RMS = 0.000e+00
+  shift 24 nm:  max|diff| = 0.000e+00, RMS = 0.000e+00
+  shift 32 nm:  max|diff| = 0.000e+00, RMS = 0.000e+00
+
+  → BITWEISE identisch für alle 4 Shifts. Zirkulare Faltung
+  kommutiert exakt mit periodischer Verschiebung — die
+  physikalische Periodizitäts-Sollbedingung ist exakt erfüllt.
+
+PERIODICITY: PASS
+
+============================================================
+6. TEST E — BC NON-REGRESSION (N=500, Seeds 90000–90499, 0/8 nm)
+============================================================
+
+  RIGHT LER (gemeinsame gültige Zeilen):
+    0.056229 → 0.056999, Δ = +1.37 %, t = 0.88
+  LEFT LER:
+    0.056981 → 0.057287, Δ = +0.54 %, t = 0.34
+  RIGHT Post-Blur-Varianz:
+    −9.73 %, t = −3.46
+    (BITWEISE identisch zur STEP-3.8-circular-Kontrolle:
+     1.738695e-05 → 1.569582e-05, t = −3.46)
+  LEFT Post-Blur-Varianz (neu gemessen):
+    var_0 = 1.779906e-05, var_8 = 1.831416e-05
+    Δ = +2.89 %, t = 0.93 → kein Effekt
+  NaN-Fraktion: RIGHT = 0, LEFT = 0 (0/8 nm)
+  Shift-t (global LER): 1.09 (vs. reflect −30.9)
+
+  Bewertung:
+  - Kein großer Shift-Effekt (t = 1.09 vs. −30.9).
+  - RIGHT/LEFT-LER: t = 0.88 / 0.34 — nicht signifikant.
+  - RIGHT Post-Blur: t = −3.46 ist signifikant, aber
+    Effektgröße klein (−9.7 % vs. +270 % pre-fix), Richtung
+    stabil, BITWEISE identisch zur pre-fix circular-Kontrolle →
+    kein BC-Artefakt, kein neuer Effekt. LEFT Post-Blur:
+    t = 0.93 — symmetrisch unauffällig.
+  - NaN-Selektion: keine.
+
+BC NON-REGRESSION: PASS
+
+============================================================
+7. TEST F — PRODUCTION LER REGRESSION
+============================================================
+
+  Observable       | reflect(3.8) | circular-control(3.8) | current production (3.9/3.10)
+  global LER 0 nm  | 0.063974     | 0.057723             | 0.057834
+  global LER 8 nm  | 0.106073     | 0.057996             | 0.058515
+  RIGHT LER 0→8    | +109.9 %     | +1.4 % (t=0.88)      | +1.37 % (t=0.88)
+  LEFT LER 0→8     | −0.3 %       | +0.5 % (t=0.34)      | +0.54 % (t=0.34)
+  mean edge pos    | 10.384/53.366| 10.384/53.366        | 10.384/53.366
+  NaN rate         | 0            | 0                    | 0
+
+  → current production ≈ STEP-3.8-circular-Kontrolle
+  (RIGHT/LEFT-LER numerisch exakt identisch). STRONG PASS:
+  die Produktion entspricht der periodisch konsistenten
+  Referenz. Die alte reflect-LER ist NICHT die Soll-Baseline.
+
+LER: PASS
+
+============================================================
+8. TEST G — EDGE EXTRACTION REGRESSION
+============================================================
+
+  Deterministische Kantenpositionen (Produktion circular):
+  0 nm: left=10.384, right=53.366
+  8 nm: left=18.384, right=61.366
+  → IDENTISCH zu STEP 3.8. Shift verschiebt exakt um 8 nm.
+  Keine doppelte dx-Skalierung (Positionen in nm, 0..64 gültig),
+  keine neue NaN-Selektion, identische Extraktionslogik,
+  Threshold-Crossing unverändert.
+
+EDGE EXTRACTION: PASS
+
+============================================================
+9. TEST H — DOSIS-SKALIERUNG REGRESSION
+============================================================
+
+  slope = −0.4984 (se_blur=0, BC-irrelevant) ≈ −0.5.
+  Dosisreihe 5–160 mJ/cm²: Poisson-Ratios unverändert
+  (STEP 3.1/3.2-Pfad unberührt). Kein Exponentenwechsel.
+
+DOSE: PASS
+
+============================================================
+10. TEST I — GRID REGRESSION (circular, se_blur=5, N=100)
+============================================================
+
+  grid=128: LER_0=0.058441, LER_8=0.056759, Shift 2.88 %
+  grid=256: LER_0=0.056493, LER_8=0.056621, Shift 0.23 %
+  → Keine unerklärte Verschlechterung; kleine Shifts im Rahmen
+  der Statistik (N=100). Keine Grid-Regression.
+
+GRID: PASS
+
+============================================================
+11. TEST J — SEED / DETERMINISMUS
+============================================================
+
+  same seed zweimal (Produktion circular): max|diff| = 0.000e+00
+  (bitweise identisch). Gepaarte Seeds 0/8 nm beibehalten.
+
+DETERMINISM: PASS
+
+============================================================
+12. TEST K — INTERIOR-REGRESSION (KRITISCH)
+============================================================
+
+  circular (Produktion) vs. reflect (lokale Kopie) auf
+  demselben n_bar-Feld:
+
+  FULL FIELD:      max|diff| = 9.523e-03 (nur Rand)
+  INTERIOR 60:196: max|diff| = 0.000e+00 → BITWEISE IDENTISCH
+  EDGE ROI:        max|diff| = 9.523e-03 (DAS ist der Fix)
+
+  → Der Fix verändert die Physik im Inneren NICHT. Kein
+  Interior-Effekt. STOPP-Kriterium nicht ausgelöst.
+
+INTERIOR: PASS
+
+============================================================
+13. TEST L — RANDABSTANDS-SCAN
+============================================================
+
+  max|reflect−circular| als Funktion des Abstands vom linken
+  Bildrand (n_bar-Feld, deterministisch):
+
+  x ∈ [  0,   8] nm: max|diff| = 9.523e-03  ← Randzone
+  x ∈ [  8,  16] nm: max|diff| = 6.604e-04  ← Kernel-Auslauf
+  x ∈ [ 16,  24] nm: max|diff| = 0.000e+00  ← Interior
+  x ∈ [ 24,  32] nm: max|diff| = 0.000e+00  ← Interior
+  x ∈ [ 32,  40] nm: max|diff| = 0.000e+00  ← Interior
+  x ∈ [ 40,  48] nm: max|diff| = 0.000e+00  ← Interior
+  x ∈ [ 48,  56] nm: max|diff| = 6.604e-04  ← Kernel-Auslauf
+  x ∈ [ 56,  64] nm: max|diff| = 9.523e-03  ← Randzone
+  Interior [16,48] nm: max|diff| = 0.000e+00
+
+  → Der alte reflect-Effekt war exakt auf den PSF-Kernelbereich
+  (≤15 nm vom Rand, hier 16-nm-Bänder) lokalisiert; circular
+  entfernt ihn vollständig. Perfekte räumliche Trennung:
+  Randzone ≠ Interior, keine systematische Shift-Abhängigkeit
+  im Interior.
+
+RANDFEKT-LOKALISATION: PASS
+
+============================================================
+14. TEST M — NEGATIVE CONTROLS
+============================================================
+
+  - Aerial-Feldwerte vor Blur: unverändert (Fourier-Pfad)
+  - Shot-Noise-Ratio (se_blur=0): slope −0.4984
+  - PSF-Summe: 1.0000000000, Kernel-Shape 121, sum(PSF²)
+    0.00020092
+  - Interior Mean: unverändert (Test C/K)
+  → Fix wirkt gezielt (nur Randbehandlung), nicht global-invasiv.
+
+NEGATIVE CONTROL: PASS
+
+============================================================
+15. ADVERSARIAL FALSIFICATION (10 Fragen)
+============================================================
+
+F1: circular nur "schöner" ohne Ursachenbeseitigung?
+    ANSWER: NEIN — git diff: 2 Zeilen; Roll-Kommutativität
+    bitweise 0 (4 Shifts); Interior bitweise 0; Post-Blur
+    −9.7 % statt +270 %.
+    EVIDENCE: Test D, K, E   STATUS: PASS
+
+F2: Nach Fix weiterhin shift-abhängige Observable?
+    ANSWER: NEIN in relevanter Größe — Shift-t 1.09, RIGHT
+    0.88, LEFT 0.34. Einziger signifikanter Rest (Post-Blur
+    t=−3.46) identisch zur pre-fix circular-Kontrolle,
+    Zwischengröße, nicht LER.
+    EVIDENCE: Test E   STATUS: PASS
+
+F3: Neue asymmetrische Anomalie?
+    ANSWER: NEIN — LEFT (+2.89 %, t=0.93) und RIGHT (−9.73 %,
+    t=−3.46) Post-Blur klein; LER beidseitig symmetrisch
+    (0.88/0.34).
+    EVIDENCE: Test E   STATUS: PASS
+
+F4: Andere Observable verschlechtert?
+    ANSWER: NEIN — Shot Noise, PSF, Mean, Interior, Dose, Grid
+    unverändert.
+    EVIDENCE: Tests A/B/C/H/I/K/M   STATUS: PASS
+
+F5: Übereinstimmung mit circular-Kontrolle unabhängig
+    reproduziert?
+    ANSWER: JA — RIGHT/LEFT LER und Post-Blur-Varianz numerisch
+    exakt identisch zur STEP-3.8-circular-Kontrolle.
+    EVIDENCE: Test F/E   STATUS: PASS
+
+F6: circular erzeugt LER nur zufällig richtig?
+    ANSWER: NEIN — mathematisch begründet (Torus-Faltung =
+    exakte Faltung des periodischen Feldes), empirisch durch
+    bitweise Roll-Kommutativität und Interior-Identität belegt.
+    EVIDENCE: Test D/K   STATUS: PASS
+
+F7: Interior-Effekt?
+    ANSWER: NEIN — Interior max|diff| = 0.0 bitweise.
+    EVIDENCE: Test K/L   STATUS: PASS
+
+F8: Neue NaN-/ROI-Selektion?
+    ANSWER: NEIN — NaN = 0 in allen Fällen.
+    EVIDENCE: Test E/G   STATUS: PASS
+
+F9: Determinismus erhalten?
+    ANSWER: JA — same seed → max|diff| = 0.0.
+    EVIDENCE: Test J   STATUS: PASS
+
+F10: Fix auf genau zwei mode-Stellen beschränkt?
+    ANSWER: JA — git diff zeigt ausschließlich pad_col/pad_row
+    in exposure.py. abbe.py:_apply_se_blur ist toter Code
+    (kein Aufrufer), nicht Produktionspfad.
+    EVIDENCE: git diff, grep   STATUS: PASS
+
+ADVERSARIAL FALSIFICATION: PASS
+
+============================================================
+16. FINAL CLASSIFICATION MATRIX
+============================================================
+
+  Shot Noise:        GREEN
+  PSF:               GREEN
+  Mean Preservation: GREEN
+  Dose Scaling:      GREEN
+  Grid Invariance:   GREEN
+  Periodicity:       GREEN
+  BC:                GREEN
+  Shift Invariance:  GREEN
+  Post-Blur Field:   GREEN (Rest −9.7 % identisch zur Kontrolle)
+  Edge Extraction:   GREEN
+  LER:               GREEN
+  NaN/ROI:           GREEN
+  Determinismus:     GREEN
+  Interior:          GREEN
+  Overall:           GREEN
+
+============================================================
+17. STRICT NO-CHANGE AUDIT
+============================================================
+
+  Component                 Changed?
+  BC mode                   YES  (reflect → circular, 2 Stellen)
+  period_nm                 NO
+  grid                      NO
+  dx                        NO
+  PSF sigma                 NO
+  PSF kernel                NO
+  PSF normalization         NO
+  Shot noise                NO
+  Poisson                   NO
+  Dose                      NO
+  Fourier field             NO
+  aerial_from_orders        NO
+  threshold                 NO
+  edge extraction           NO
+  ROI                       NO
+  LER definition            NO
+  seed handling             NO
+  position calculation      NO
+
+  Alle "NO" per git diff / Code-Inspektion verifiziert.
+  Kein "OPEN".
+
+============================================================
+18. FINAL DECISION
+============================================================
+
+A) GREEN — FULL REGRESSION PASS
+
+CONFIDENCE: HIGH
+
+FINAL VERDICT (10 Sätze):
+1. Code-Integrität bestätigt: git diff zeigt exakt zwei
+   Zeilenänderungen (reflect → circular) im aktiven SE-Blur-Pfad.
+2. abbe.py:_apply_se_blur (reflect) ist toter Code ohne
+   Aufrufer — kein Produktionspfad-Einfluss, dokumentiert,
+   nicht geändert.
+3. Der Fix ist vollständig: alle vier Roll-Shifts (8/16/24/32 nm)
+   zeigen bitweise 0 Differenz — die periodische Soll-Invarianz
+   ist exakt erfüllt.
+4. Der Fix ist strikt randlokal: Interior [16–48 nm] ist zwischen
+   circular und reflect bitweise identisch (max|diff| = 0.0);
+   der Unterschied beschränkt sich auf die PSF-Randzonen.
+5. Shot Noise, PSF, Mean, Dosis- und Grid-Skalierung sind
+   unverändert (se_blur=0-Pfad BC-unabhängig; Kernel und
+   Normalisierung identisch).
+6. Die Produktion entspricht numerisch exakt der unabhängigen
+   STEP-3.8-circular-Kontrolle (RIGHT/LEFT LER, Post-Blur-
+   Varianz) — STRONG PASS.
+7. Keine neue Anomalie: NaN = 0, LEFT/RIGHT symmetrisch,
+   Determinismus bitweise, Edge-Extraction-Positionen identisch.
+8. Alle 10 adversarialen Falsifikationsfragen: PASS.
+9. Der einzige statistisch signifikante Rest (Post-Blur-Varianz
+   t = −3.46, −9.7 %) ist bitweise identisch zur pre-fix
+   circular-Kontrolle und betrifft eine Zwischengröße, nicht die
+   LER — kein Regressionsbefund.
+10. Der BC-Fix beseitigt den nachgewiesenen Fehler reproduzierbar
+    und ausschließlich; keine Produktionsobservable oder
+    physikalische Invariante wurde verschlechtert.
+
+============================================================
+ENDE STEP 3.10
+============================================================

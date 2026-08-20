@@ -498,7 +498,7 @@ def process_window(
 @app.command()
 def materials(
     element: Optional[str] = typer.Argument(None, help="Element symbol (e.g. Si, Mo, Ta)"),
-    energy: float = typer.Option(91.84, "--energy", "-e", help="Photon energy [eV]"),
+    energy: float = typer.Option(91.84, "--energy", "-e", help="Photon energy [eV]. Default is 91.84 eV (corresponding to 13.5 nm wavelength via E = hc/λ)."),
 ):
     """Query the CXRO material database.
 
@@ -524,10 +524,9 @@ def materials(
         try:
             n, k = table.refractive_index(element, energy)
             delta = 1 - n
-            from euvsimulator.constants import PLANCK_CONSTANT, SPEED_OF_LIGHT
+            from euvsimulator.constants import HC_EV_NM
 
-            ev_to_joule = 1.602176634e-19
-            wavelength_nm = (PLANCK_CONSTANT * SPEED_OF_LIGHT) / (energy * ev_to_joule) * 1e9
+            wavelength_nm = HC_EV_NM / energy
             print(f"Material:      {element}")
             print(f"Energy:        {energy:.2f} eV")
             print(f"Wavelength:    {wavelength_nm:.4f} nm")

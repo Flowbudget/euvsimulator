@@ -64,8 +64,7 @@ def aerial_image_ref(
     for i, mi in enumerate(m_orders_p):
         for j, mj in enumerate(m_orders_p):
             dm = abs(mi - mj)
-            if dm > coherence_orders + 1e-12:
-                continue
+            # No hard coherence cutoff - TCC naturally damps interference
             tc = tcc_cache[dm]
             if tc == 0.0:
                 continue
@@ -157,7 +156,7 @@ def test_nils_blur_zero():
     """NILS without SE blur should match reference (high, ~5.4)."""
     m_p, a_p, orders_complex, order_indices = build_orders()
 
-    # OpEnUV
+    # euvsimulator
     ae = aerial_from_orders(
         orders_complex,
         order_indices,
@@ -166,7 +165,6 @@ def test_nils_blur_zero():
         wavelength_m=COMMON["wavelength_nm"] * 1e-9,
         sigma=COMMON["sigma"],
         grid=COMMON["grid"],
-        se_blur_nm=0.0,
     )
     dx_nm = COMMON["period_nm"] / COMMON["grid"]
     half = COMMON["grid"] // 2
@@ -194,7 +192,7 @@ def test_nils_blur_10nm():
     """NILS with 10 nm SE blur should match reference (realistic, ~2.7)."""
     m_p, a_p, orders_complex, order_indices = build_orders()
 
-    # OpEnUV
+    # euvsimulator
     ae = aerial_from_orders(
         orders_complex,
         order_indices,
@@ -203,8 +201,11 @@ def test_nils_blur_10nm():
         wavelength_m=COMMON["wavelength_nm"] * 1e-9,
         sigma=COMMON["sigma"],
         grid=COMMON["grid"],
-        se_blur_nm=10.0,
     )
+    # Apply SE blur in the resist exposure step (as it should be)
+    from euvsimulator.resist.exposure import gaussian_se_blur
+    dx_nm = COMMON["period_nm"] / COMMON["grid"]
+    ae = gaussian_se_blur(ae, sigma=10.0, dx=dx_nm)
     dx_nm = COMMON["period_nm"] / COMMON["grid"]
     half = COMMON["grid"] // 2
     n_op = nils(ae, half, 128, dx_nm)
@@ -239,8 +240,11 @@ def test_nils_realistic_range():
         wavelength_m=COMMON["wavelength_nm"] * 1e-9,
         sigma=COMMON["sigma"],
         grid=COMMON["grid"],
-        se_blur_nm=10.0,
     )
+    # Apply SE blur in the resist exposure step (as it should be)
+    from euvsimulator.resist.exposure import gaussian_se_blur
+    dx_nm = COMMON["period_nm"] / COMMON["grid"]
+    ae = gaussian_se_blur(ae, sigma=10.0, dx=dx_nm)
     dx_nm = COMMON["period_nm"] / COMMON["grid"]
     half = COMMON["grid"] // 2
     n_op = nils(ae, half, 128, dx_nm)

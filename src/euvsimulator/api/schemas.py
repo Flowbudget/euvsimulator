@@ -158,7 +158,7 @@ class NkRequest(BaseModel):
     symbol: str = Field(
         ..., min_length=1, max_length=4, description="Chemical symbol (e.g. Mo, Si)"
     )
-    energy_eV: float = Field(91.84, gt=0, description="Photon energy [eV]")
+    energy_eV: float = Field(91.84, gt=0, description="Photon energy [eV]. Default is 91.84 eV (corresponding to 13.5 nm wavelength via E = hc/λ).")
     density_g_cm3: Optional[float] = Field(
         None, gt=0, description="Override density [g/cm³]; uses standard if omitted"
     )

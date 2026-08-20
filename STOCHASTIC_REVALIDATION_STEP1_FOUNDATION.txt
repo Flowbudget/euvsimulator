@@ -1,0 +1,405 @@
+EUVSIMULATOR — STOCHASTIC REVALIDATION STEP 1
+FOUNDATION / FIELD-IDENTITY / UNIT-CONSISTENCY AUDIT
+================================================================================
+Datum: 2026-08-19
+Art: REINE MESSUNG / ANALYSE — KEINE PRODUKTIONSÄNDERUNGEN
+Designgrundlage: ~/Projekte/OpEnUV/STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt
+
+WICHTIG: Jede quantitative Aussage bezieht sich auf [PIPELINE-DIRECT]
+Felder, sofern nicht ausdruecklich als [ANALYTICAL]/[CONTROL] markiert.
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+Die physikalische und numerische Grundlage des Stochastic-Pfades ist
+VOLLSTÄNDIG KONSISTENT:
+
+- Dosis-/Energie-/Photonenumrechnung ist korrekt (rel. Abweichung des
+  gespeicherten Faktors vom exakten Wert: 7.4e-11 = reine Abspeicher-
+  praezision, kein Einheitenfehler).
+- Das deterministische Pipeline-Feld ist BITWEISE reproduzierbar
+  (max|diff| = 0.0).
+- Die Feld-Identität ist eindeutig: stochastic-Pfad arbeitet auf
+  dose_map (UNGEBLURRT), deterministischer Pfad auf dose_map_blurred.
+- KEINE versteckte Normalisierung: Dosis-Skalierung ist multiplikativ
+  und absolut (Pipeline Z.616, Kommentar explizit).
+- Die tanh-Referenz aus STEP 6/6A ist NICHT quantitativ äquivalent zum
+  Pipeline-Aerial (max|diff|=1.0, RMS=0.497) — sie ist eine reine
+  [CONTROL]/[ANALYTICAL]-Referenz und darf nicht als quantitative
+  Pipeline-Referenz verwendet werden.
+- Bekannte Einschränkung: REFLECT-Padding in gaussian_se_blur kann
+  Kanten nahe dem Bildrand künstlich korrelieren (relevant nur für
+  dose<=10, Kante bei x~-30 nm von -32 nm Fenster).
+
+STATUS: GRÜN — vollständig konsistent (mit dokumentierter
+Rand-Einschränkung, die keinen Produktionsfehler darstellt).
+
+================================================================================
+2. PARAMETERQUELLEN (alle Werte direkt aus Code/Config)
+================================================================================
+parameter              value                 unit         source
+wavelength_nm          13.5                  nm           SimulationConfig
+EUV_WAVELENGTH_NM      13.5                  nm           constants
+HC_EV_NM               1239.841984           eV·nm        constants
+photon_energy (cfg)    91.8401469670         eV           HC_EV_NM/λ (abgeleitet)
+photon_energy (fn)     91.84014696703977     eV           stochastic.py Default
+dose_to_energy (F)     6.241509074e15        eV/(mJ/cm²)  stochastic.py Default
+dill_C                 0.05                  cm²/mJ       SimulationConfig
+dill_Q                 1.0                   (norm.)      SimulationConfig
+dev_threshold          0.3                   (acid)       SimulationConfig
+grid                   256                   px           SimulationConfig
+period_nm              64.0                  nm           SimulationConfig
+line_width_nm          32.0                  nm           SimulationConfig
+na                     0.33                  —            SimulationConfig
+sigma (coherence)      0.8                   —            SimulationConfig
+se_blur_nm             0.0 (Default) / 5.0   nm           SimulationConfig
+dose_mj_cm2            20.0                  mJ/cm²       SimulationConfig
+dx_nm                  0.250000 (grid 256)   nm/pixel     period/grid
+resist_model           aerial_threshold      —            SimulationConfig
+n_rcwa_orders          21                    —            SimulationConfig
+
+Genutzte Stufen: wavelength→E_ph (constants, pipeline); dose→dose_map
+(pipeline Z.616); F/E_ph→N_bar (photon_deposition_shot_noise);
+dill_C/Q→acid (dose_to_acid); threshold→developed (pipeline stochastic).
+
+================================================================================
+3. PIPELINE-GRAPH / FELDFLUSS
+================================================================================
+mask (rechteckig, duty=32/64)
+  → Diffraktionsamplituden r_m (Mo/Si-Multilayer + Absorber)
+  → aerial_from_orders (Hopkins/TCC, 1D → 2D-Expand)
+  → aerial_norm (float64, (G,G), x entlang Spalten/dim1)
+  → aerial = aerial_norm * dose_mj_cm2        [PIPELINE Z.616]
+  → dose_map = aerial.clone().float()         [Z.266]
+     ├→ dose_map_blurred = gaussian_se_blur(dose_map, σ=se_blur)
+     │    → NILS, acid (deterministischer Pfad)
+     └→ photon_deposition_shot_noise(dose_map)  [stochastic-Pfad]
+          → D_eff
+          → dose_to_acid(D_eff, apply_blur=False) → acid_noisy
+          → developed = acid_noisy > 0.3
+          → extract_edges(acid_noisy, threshold=0.3, intensity=acid_noisy)
+          → LER/LWR
+
+================================================================================
+4. FIELD-IDENTITY AUDIT
+================================================================================
+stage            name            meaning              units    shape  norm
+mask field       rechteck        Absorber-Muster      —        —      duty
+aerial (norm)    aerial_1d       |Σ r_i·TCC·exp|²     rel.     (G,G)  — (absolut)
+aerial (dose)    aerial_image    Intensität × dose   mJ/cm²   (G,G)  absolut
+dose_map         aerial.clone    Dosis am Resist     mJ/cm²   (G,G)  absolut
+dose_map_blurred blur(dose_map)  SE-geblurrte Dosis  mJ/cm²   (G,G)  absolut
+D_eff            shot_noise(...) verrauschte Dosis   mJ/cm²   (G,G)  E[D]=dose
+acid             dose_to_acid    determinist. Säure  (norm.)  (G,G)  Q=1.0
+acid_noisy       dose_to_acid(D_eff) verrauschte Säure (norm.) (G,G) —
+developed        acid_noisy>0.3  binäre Maske        —        (G,G)  0/1
+edge             extract_edges   Kantenposition      nm       (H,)   —
+
+NUMERISCHE BEZIEHUNGEN (gemessen):
+- aerial_image == aerial_from_orders × 20.0: max|diff| = 8.1e-7
+  → IDENTISCH (Replikation bestätigt).
+- stochastic-Pfad: dose_map (UNGEBLURRT) als Eingabe von
+  photon_deposition_shot_noise; der SE-Blur liegt INNERHALB der
+  Funktion (E_dep = PSF*N, E_bar = PSF*N_bar).
+- deterministischer Pfad: dose_map_blurred für NILS und acid.
+- Die beiden Pfade teilen sich NICHT dasselbe Feld — das ist
+  Design (STEP 2), keine Unstimmigkeit.
+
+================================================================================
+5. EINHEITEN-AUDIT (dose → Energie → Photonen → D_eff)
+================================================================================
+Grundlage:
+  1 mJ = 1e-3 J; 1 eV = 1.602176634e-19 J
+  → 1 mJ = 6.241509074460763e15 eV
+  → 1 mJ/cm² = 6.241509074460763e15 eV/cm²
+
+  gespeicherter Faktor F = 6.241509074e15 eV/(mJ/cm²)
+  rel. Abweichung = 7.4e-11  (reine Abspeicherpraezision, KEIN
+  Einheitenfehler; über 6 Dosen < 0.5%-Effekt, vernachlässigbar)
+
+  E_ph = HC_EV_NM / λ = 91.84014696703977 eV (13.5 nm)
+  Config-abgeleitet: 91.8401469670 eV → IDENTISCH (match: True)
+
+  N_bar (pro Voxel, dx=0.25 nm, A_voxel=6.25e-16 cm²):
+    dose   N_bar    E_dep/Voxel
+    5.0    0.2124   19.50 eV
+    10.0   0.4248   39.01 eV
+    20.0   0.8495   78.02 eV
+    40.0   1.6990   156.0 eV
+    80.0   3.3980   312.1 eV
+    160.0  6.7961   624.2 eV
+
+  D_eff-Rückkonstruktion (uniform dose=20, blur=5, 64×64):
+    mean(D_eff) = 20.2664 (rel. Bias +1.33%, Einzelrealisierung,
+    64×64, statistische Schwankung)
+  Mit 256×256 und mehr Dosen (Konservations-Test):
+    dose=5:  mean(D_eff)=4.9975  (-0.050%)
+    dose=20: mean(D_eff)=19.9028 (-0.486%)
+    dose=160: mean(D_eff)=159.78 (-0.138%)
+  → E[D_eff] = dose im Rahmen der Monte-Carlo-Statistik. Unverzerrt.
+
+  FAZIT F1: Umrechnung ist KORREKT. Faktor-F-Differenz 7.4e-11 ist
+  Präzision, kein Fehler.
+
+================================================================================
+6. ANALYTISCHE vs PIPELINE-REFERENZ
+================================================================================
+[ANALYTICAL] tanh-Kante F(x)=0.5·(1−tanh((x+10)/4)) gegen
+[PIPELINE-DIRECT] Aerial (dose=20, se_blur=0, beide auf max normiert):
+
+    max|diff| = 1.0000  (bei x=+32 nm, Bildrand)
+    RMS diff  = 0.4969
+
+ENTSCHEIDUNG: NICHT ÄQUIVALENT (nur qualitativ ähnliche Kantenform).
+
+KONSEQUENZ (verbindlich für STEP 2-6B): Die tanh-Referenz ist eine
+[CONTROL]/[ANALYTICAL]-Referenz. Quantitative Aussagen über die LER
+müssen auf dem [PIPELINE-DIRECT]-Feld basieren (STEP 6B hat dies
+bereits korrekt umgesetzt — x_cross aus dem echten Aerial-Feld).
+
+================================================================================
+7. GRID- UND KOORDINATEN-AUDIT
+================================================================================
+- x_pos = linspace(-period/2, +period/2, G)  →  PIXEL-CENTER-Konvention
+  grid=128: x[0]=-32.00, x[64]=+0.252, x[127]=+32.00 nm
+- dx = (x[-1]−x[0])/(G−1) = 0.503937 nm (linspace-Äquivalent)
+  vs. Pipeline dx_nm = period/grid = 0.500000 nm
+  → DIFFERENZ 0.79%: Die Feldauflösung ist period/grid, die
+    Koordinatenachse nutzt linspace mit G Punkten über die Periode.
+    Das ist die Standard-Konvention (G Pixelzentren über die Periode),
+    keine Inkonsistenz — aber die beiden dx-Definitionen sind nicht
+    identisch und dürfen nicht verwechselt werden.
+- Aerial 1D entlang Spalten (dim 1); Zeilen identisch (Replikation).
+- extract_edges: Position = Pixelindex × dx (Abstand vom linken
+  Bildrand in nm). Kein Offset; Bildrand = x[0] = -period/2.
+- Pixel-zu-nm-Konvention ist damit explizit validiert: LER in nm
+  basiert auf dx_nm = period/grid (0.25 nm bei grid 256).
+
+================================================================================
+8. NORMALISIERUNGS-AUDIT
+================================================================================
+Code-Suche nach max-/mean-/per-image-Normalisierung:
+- pipeline.py Z.613: "Normalise to dose (absolute intensity scaling,
+  NOT max-normalisation)" → aerial = aerial * dose_mj_cm2
+- pipeline.py Z.223: resist_threshold_norm * dc_level * (nominal_dose /
+  max(dose,1e-9)) → DETERMINISTISCHER aerial_threshold-Pfad, skaliert
+  mit der Dosis (keine per-image Normalisierung, keine versteckte
+  Dosisabhängigkeit: nominal_dose/dose ist eine feste Formel).
+- KEINE max-Normalisierung, KEINE mean-Normalisierung, KEINE
+  per-image-Normalisierung gefunden.
+
+FAZIT F6: Keine versteckte Normalisierung. Dosis-Skalierung ist
+multiplikativ und absolut. Verschiedene Dosen werden NICHT separat
+normalisiert.
+
+================================================================================
+9. BOUNDARY / PADDING / INTERPOLATION
+================================================================================
+- gaussian_se_blur: F.pad(mode="reflect") — REFLECT-Padding.
+  Kernel: truncierter Gauß (radius=int(3σ/dx+0.5)), auf Summe 1
+  renormalisiert; kernel_size auf max_dim geklemmt (ungerade).
+  → Spiegelung kann Kanten nahe dem Bildrand künstlich korrelieren.
+- aerial_from_orders: direkte Summation, keine Interpolation.
+- extract_edges: argmax (diskret) + lineare Interpolation (Sub-Pixel).
+- RISIKO-MARKIERUNG: Bei dose<=10 liegt die Kante bei x~-30 nm
+  (Fenster -32..+32 nm) — innerhalb von ~2 nm vom Rand. Reflect-
+  Padding und argmax-Randverhalten können dort die LER beeinflussen
+  (in STEP 6A/6B als "Randartefakt bei dose 10" beobachtet:
+  ratio 1.40 in Test A). KEINE Korrektur in STEP 1 (nur Messung).
+
+================================================================================
+10. REPRODUZIERBARKEIT (deterministisch)
+================================================================================
+Zwei identische Läufe (grid=128, dose=20, se_blur=5):
+    max|aerial1−aerial2| = 0.0
+    RMS(aerial1−aerial2) = 0.0
+    CD = 39.0000/39.0000, NILS = 8.279074/8.279074
+→ BITWEISE IDENTISCH. Deterministischer Pfad ist vollständig
+reproduzierbar (F2: JA).
+
+================================================================================
+11. NUMERISCHE BASELINE-TABELLE (grid=256, se_blur=5, [PIPELINE-DIRECT])
+================================================================================
+dose   aerial_int     Nbar_mean  Nbar_max  aerial_min  aerial_max  x_cross
+5.0     59406.336      0.0385    0.1572    0.0000      3.7001      (kein Crossing)
+10.0   118812.672      0.0770    0.3143    0.0000      7.4002      -30.263 nm
+20.0   237625.343      0.1540    0.6287    0.0001     14.8005      -24.408 nm
+40.0   475250.687      0.3080    1.2573    0.0001     29.6009      -21.615 nm
+80.0   950501.373      0.6160    2.5146    0.0002     59.2019      -19.599 nm
+160.0 1901002.746      1.2321    5.0292    0.0005    118.4037      -18.014 nm
+
+- Integral skaliert exakt linear mit der Dosis (59406→1901003,
+  Faktor 32 für dose 5→160 = Faktor 32) → keine Normalisierung.
+- x_cross (Dosis-Crossing bei D_cross=7.13 mJ/cm²) wandert monoton
+  mit der Dosis (STEP-6-Befund, hier aus dem echten Feld bestätigt).
+- dose=5: kein Crossing im Fenster (Aerial_max=3.70 < 7.13)
+  → konsistent mit LER=0 bei dose 5.
+
+================================================================================
+12. MASSEN-/ENERGIE-/PHOTONEN-KONSERVATION
+================================================================================
+Uniform-Feld (256×256, blur=5):
+  dose    mean(D_eff)   rel. Abweichung
+  5.0     4.9975        -0.050%
+  20.0    19.9028       -0.486%
+  160.0   159.7787      -0.138%
+→ Energie-/Photonen-Konservation im Erwartungswert erfüllt
+(E[D_eff]=dose). Abweichungen sind Monte-Carlo-Statistik
+(Einzelrealisierung, ~0.1-0.5%, konsistent mit 1/sqrt(N_eff)).
+
+================================================================================
+13. NUMERISCHE STABILITÄT
+================================================================================
+- dose = 0, 0.01, 5, 160, 1e6 mJ/cm²: KEINE NaNs, KEINE Infs in
+  aerial, LER endlich (0.0 … 0.0234 nm).
+- Dill-Sättigung: A(160)=0.99966, A(1e6)=1.0 (exp(-50000)→0, kein
+  Overflow, keine negative Werte).
+- Poisson-Sampling: keine NaNs/Infs (STEP-1-Audit 2026-08-19,
+  λ=0.01…1000 getestet, E[N]=λ, Var[N]=λ exakt).
+- Keine unerwarteten Clips in stochastic-Pfad (nur E_bar.clamp(min=
+  1e-30) als Div-0-Schutz, dokumentiert).
+
+================================================================================
+14. ENTSCHEIDUNGSFRAGEN
+================================================================================
+F1 (Dosis/Energie/Photonen korrekt?): JA. Kette dimensional und
+    numerisch verifiziert; Faktor-Differenz 7.4e-11 = Präzision.
+F2 (Pipeline-Feld reproduzierbar?): JA, bitweise (max|diff|=0.0).
+F3 (Grid/Koordinaten konsistent?): JA. Pixel-Center-Konvention,
+    dx=period/grid; linspace-vs-dx-Definition (0.79% Differenz) ist
+    Standard, dokumentiert.
+F4 (Felder eindeutig identifiziert?): JA. Tabelle in Abschnitt 4;
+    stochastic nutzt dose_map (unblurred), deterministisch nutzt
+    dose_map_blurred — Design, kein Fehler.
+F5 (Nicht-äquivalente analytische Referenz?): JA — tanh-Referenz
+    ist NICHT quantitativ äquivalent zum Pipeline-Aerial (max 1.0,
+    RMS 0.497). Nur [CONTROL]/[ANALYTICAL] verwenden.
+F6 (Versteckte Normalisierung?): NEIN. Nur absolute multiplikative
+    Dosis-Skalierung (Z.616). Per-image-Normalisierung: NONE FOUND.
+F7 (Rand-/Padding-/Interpolationsartefakte?): JA, dokumentiert:
+    REFLECT-Padding + argmax-Randverhalten bei Kante nahe Bildrand
+    (dose<=10, x~-30 nm). Beeinflusst nur Dosen nahe der
+    Auflösungsgrenze; in STEP 6A als Randartefakt quantifiziert
+    (ratio 1.40 bei dose 10, 1.00 für dose≥20).
+F8 (Reproduzierbarer Produktionsfehler?): NEIN. Keine Abweichung
+    gefunden, die auf einen Produktionsfehler hindeutet.
+
+================================================================================
+15. NEGATIVE EVIDENZ (potentielle Fehlerquellen explizit)
+================================================================================
+Hidden max-normalization:
+    TESTED: YES (Code-Suche + Integral-Skalierung)
+    RESULT: NONE FOUND
+    EVIDENCE: aerial integral linear in dose (Faktor 32 über 5→160);
+              Kommentar Z.613 explizit "NOT max-normalisation"
+    RESIDUAL UNCERTAINTY: niedrig
+
+Hidden per-dose normalization:
+    TESTED: YES
+    RESULT: NONE FOUND
+    EVIDENCE: N_bar und aerial_max skalieren exakt linear mit dose
+    RESIDUAL UNCERTAINTY: niedrig
+
+Einheiten-Umrechnung (cm²↔nm², mJ↔J, eV↔J):
+    TESTED: YES
+    RESULT: KORREKT (Faktor 7.4e-11 Präzision)
+    EVIDENCE: 1 mJ/cm² = 6.241509074460763e15 eV/cm², F stimmt
+    RESIDUAL UNCERTAINTY: 7.4e-11 rel. (vernachlässigbar)
+
+Rand-/Padding-Artefakte:
+    TESTED: YES
+    RESULT: VORHANDEN (nur bei Kante nahe Bildrand)
+    EVIDENCE: dose=10 LER ratio 1.40 (STEP 6A Test A); reflect-padding
+    RESIDUAL UNCERTAINTY: mittel für dose<=10, niedrig für dose≥20
+
+Analytische Referenz (tanh) als Pipeline-Ersatz:
+    TESTED: YES
+    RESULT: NICHT ÄQUIVALENT
+    EVIDENCE: max|diff|=1.0, RMS=0.497
+    RESIDUAL UNCERTAINTY: — (kategorisch ausgeschlossen für
+              quantitative Nutzung; STEP 6B hat korrekt das echte
+              Feld verwendet)
+
+dtype/Präzision:
+    TESTED: YES
+    RESULT: float64 im Aerial, float32/64 gemischt in stochastic
+    EVIDENCE: keine Abweichung in Reproduzierbarkeit
+    RESIDUAL UNCERTAINTY: niedrig
+
+================================================================================
+16. VERGLEICH MIT ALTEM STEP-1-REPORT (PHYSICS_AUDIT_STEP_1.txt)
+================================================================================
+OLD RESULT: Einheiten korrekt, Poisson-Statistik korrekt, NILS-Referenz
+            ok; STEP-1 damals auf analytischen Annahmen basiert.
+NEW RESULT: Zusätzlich [PIPELINE-DIRECT]-Verifikation: Feld-Identität
+            bewiesen (aerial==Replikation), Reproduzierbarkeit bitweise,
+            tanh-Referenz als nicht-äquivalent klassifiziert, dx-
+            Konventionen präzisiert.
+REASON FOR DIFFERENCE: Neue Revalidierung nutzt ausschließlich
+            [PIPELINE-DIRECT]-Felder und explizite Negativ-Evidenz.
+IMPACT ON STEP 2-6B: Keine Änderung der Ergebnisse von STEP 2-6B;
+            erhöht aber die methodische Belastbarkeit: Die tanh-
+            Referenz in STEP 5/6/6A war nur qualitativ, die
+            quantitativen Schlüsse (STEP 6B) basierten bereits auf
+            dem echten Feld und bleiben gültig.
+
+================================================================================
+17. AUSWIRKUNGEN AUF STEP 2-6B
+================================================================================
+- STEP 2 (Pipeline-Umbau): bestätigt — stochastic nutzt dose_map
+  unblurred, SE-PSF in photon_deposition_shot_noise. Gültig.
+- STEP 3 (Physik-Validierung): Rauschfeld 1/√dose, grid-invariant —
+  basiert auf echten Feldmessungen. Gültig.
+- STEP 4 (Sub-Pixel): Extraktion auf acid_noisy (echtes Feld). Gültig.
+- STEP 5 (kontrollierte Kante): tanh-Kante war [CONTROL] — die
+  erzielte alpha=-0.501 gilt für die kontrollierte Geometrie, nicht
+  für das Pipeline-Feld. Für Pipeline-Quantitatives ist STEP 6B
+  maßgeblich. Gültig als Modell-Validierung des Rauschpfades.
+- STEP 6/6A/6B (Resist/Threshold): x_cross in 6B bereits aus echtem
+  Feld; die quantitativen Schlüsse (LER 100% erklärt) bleiben gültig.
+- WICHTIG FÜR STEP 2 (neu): Die in diesem Report validierten
+  Konventionen (dx=period/grid, Pixel-Center, extract_edges-Offset)
+  sind verbindlich zu übernehmen; analytische Ersatzfelder sind
+  verboten für quantitative Aussagen.
+
+================================================================================
+18. ABSCHLUSS
+================================================================================
+WAS WURDE NACHGEWIESEN:
+  - Dosis/Energie/Photonen-Kette dimensional und numerisch korrekt
+  - Deterministisches Feld bitweise reproduzierbar
+  - Feld-Identität und Datenfluss eindeutig (dose_map vs blurred)
+  - Keine versteckte Normalisierung; lineare Dosis-Skalierung
+  - D_eff unverzerrt (E[D_eff]=dose), Energie im Erwartungswert
+    erhalten
+  - Keine NaNs/Infs/Overflows über 0…1e6 mJ/cm²
+
+WAS WURDE WIDERLEGT:
+  - Die Annahme, die tanh-Referenz sei quantitativ äquivalent zum
+    Pipeline-Aerial (max|diff|=1.0, RMS=0.497) — sie ist nur eine
+    qualitative Kontrolle.
+
+WAS BLEIBT OFFEN:
+  - Quantitative Wirkung des REFLECT-Paddings auf LER bei Dosen
+    nahe der Auflösungsgrenze (dose<=10). Kein Produktionsfehler,
+    aber dokumentierte Einschränkung; eine Rand-Filterung wäre ein
+    möglicher späterer Fix (NICHT in STEP 1).
+
+KONKRETE INFORMATION FÜR STEP 2:
+  1. Verwendete Felddefinitionen (Abschnitt 4) sind verbindlich.
+  2. dx_nm = period_nm/grid (0.25 nm bei grid 256); Pixel-Center-
+     Konvention; extract_edges-Position = Pixelindex × dx ab
+     linkem Bildrand.
+  3. E_ph = 91.84014696703977 eV; F = 6.241509074e15 (exakt bis
+     7.4e-11); D_cross = 7.1335 mJ/cm² für Threshold 0.3.
+  4. Analytische Referenzen nur als [CONTROL]; quantitative Aussagen
+     ausschließlich auf [PIPELINE-DIRECT]-Feldern.
+  5. Keine Produktionsänderung erforderlich.
+
+STATUS: [X] GRÜN — vollständig konsistent
+        (Einschränkung Randartefakt bei dose<=10 dokumentiert,
+         kein Produktionsfehler)
+
+================================================================================
+ENDE STEP-1-REVALIDATION
+================================================================================

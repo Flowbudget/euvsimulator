@@ -92,7 +92,6 @@ def aerial_from_orders(
     illumination_shape: str = "conventional",
     grid: int = 256,
     focus_nm: float = 0.0,
-    se_blur_nm: float = 0.0,
 ) -> torch.Tensor:
     """Compute partially coherent aerial image from discrete diffraction orders.
 
@@ -129,15 +128,6 @@ def aerial_from_orders(
     focus_nm : float
         Defocus [nm]. Positive = resist above best focus. Adds quadratic phase
         to each diffraction order: φ_m = -π * focus * m² * λ / Λ².
-    se_blur_nm : float
-        Secondary-electron blur sigma [nm].  Models the resist-point
-        spread function (acid generation PSF) — photoelectrons and
-        Auger electrons undergo a random walk before producing
-        photoacid, blurring the aerial image at the nm scale.
-        Typical EUV CAR resists: 3–6 nm.  Set 0.0 (default) for the
-        ideal optical image (NILS will then be unrealistically high,
-        reflecting only the 3-order optical contrast).  This is the
-        dominant physical cause of finite NILS in real EUV processes.
 
     Returns
     -------
@@ -203,16 +193,7 @@ def aerial_from_orders(
             if abs(rj) < 1e-15:
                 continue
             if abs(mj) > max_order:
-                continue
-
-            # Check coherence: orders must be close enough in frequency
-            dm = abs(mi - mj)
-            if dm > coherence_orders + 1e-12:
-                continue  # outside coherence area
-            # Annular: very close pairs (within inner radius) also excluded
-            # but NOT self-interference (dm=0) which is always coherent
-            if shape == "annular" and dm > 0 and dm < inner_coherence - 1e-12:
-                continue
+                continue  # outside pupil
 
             # TCC factor: Hopkins mutual coherence for a circular source.
             # For a source of partial coherence sigma, the cross-coherence
@@ -220,7 +201,8 @@ def aerial_from_orders(
             #   TCC(i,j) = 2*J1(x) / x,  x = pi * sigma * NA * (m_i-m_j) * lambda / period
             # The Bessel J1 form (not J0) is the correct degree of
             # coherence for a rotationally symmetric source.  It damps
-            # order interference *gradually* (never a hard cutoff).
+            # order interference *gradually* — there is no hard cutoff.
+            dm = abs(mi - mj)
             if dm == 0:
                 tcc = 1.0
             else:
@@ -237,11 +219,6 @@ def aerial_from_orders(
 
     # Replicate to 2D: x along columns (dim 1), y along rows (dim 0)
     aerial = aerial_1d.unsqueeze(0).expand(G, G).clone()
-
-    # Secondary-electron (resist) blur — applied to the 2D aerial image
-    # BEFORE dose scaling (the acid image is blurred, then scaled by dose).
-    if se_blur_nm > 0.0:
-        aerial = _apply_se_blur(aerial, se_blur_nm, dx=period_m / G * 1e9)
 
     return aerial
 

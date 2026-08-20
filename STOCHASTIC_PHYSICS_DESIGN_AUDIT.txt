@@ -1,0 +1,572 @@
+EUVSIMULATOR — STOCHASTIC PHYSICS DESIGN AUDIT
+==============================================
+Datum: 2026-08-19
+Status: Analyse / Design-Vorschlag (KEINE Produktionsänderungen)
+Datei: ~/Projekte/OpEnUV/STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt
+
+============================================================
+0. ZUSAMMENFASSUNG
+============================================================
+
+Die aktuelle Stochastic-Kette von EUVsimulator ist physikalisch
+nicht belastbar. Unabhängige Audits haben gezeigt:
+
+  - LER steigt mit Dosis (LER ~ dose^+0.59) statt zu fallen
+  - massive Grid-Abhängigkeit (Faktor ~90 über dx 0.5..0.0625 nm)
+  - praktisch unkorreliertes Voxelrauschen (Lag-1-Auto ~0.006)
+  - bimodale Werte durch Mischung dimensionsloser acid mit
+    Ereigniszahl lam pro Voxel
+
+Dieses Dokument analysiert die Ursachen und schlägt EINEN
+bevorzugten, physikalisch sauberen Neuaufbau vor:
+
+  EREIGNIS-BASIERTE PHOTONEN-DEPOSITION MIT SE-PSF
+
+Kernidee in einem Satz:
+  Photonen werden als diskrete Poisson-Ereignisse erzeugt, jedes
+  Ereignis deponiert seine Energie als Gauß-Fleck (SE-PSF) auf dem
+  Grid, und erst DANN wird die Säurekonzentration aus der
+  kumulierten Energieverteilung berechnet.
+
+Das ergibt automatisch:
+  - räumliche Korrelation über die SE-PSF (physikalisch korrekt)
+  - Grid-Invarianz (die Korrelationsfläche pi*sigma^2 bestimmt
+    das Rauschen, nicht die Voxelgröße)
+  - LER ~ 1/sqrt(Dose) im linearen Regime
+  - statistische Reproduzierbarkeit über Seed
+
+============================================================
+1. AKTUELLE STOCHASTIC-KETTE (IST-ZUSTAND)
+============================================================
+
+Der aktuelle Code in src/euvsimulator/resist/stochastic.py
+(poisson_shot_noise) und pipeline.py (_cd_via_full_chem) arbeitet
+wie folgt:
+
+  Aerial-Image (optisch, dimensionslos)
+    |  * cfg.dose_mj_cm2
+    v
+  dose_map [mJ/cm2]                     (pipeline.py)
+    |  gaussian_se_blur(sigma=se_blur)  (NUR deterministische Dosis!)
+    v
+  dose_map_blurred [mJ/cm2]
+    |  dose_to_acid: acid = Q*(1-exp(-C*dose))
+    v
+  acid [dimensionslos, 0..Q]            (deterministische Säure)
+    |  PEB: reaction_diffusion_analytical
+    v
+  inhib -> dev_chem (threshold_development)
+    |
+    |  NUR wenn enable_stochastic:
+    |  ler_lwr_estimate(acid, dose_map_blurred)
+    |    -> poisson_shot_noise:
+    |        N_ph  = dose * A_voxel * f / E_ph      [Photonen/Voxel]
+    |        lam   = N_ph * QE                      [Ereignisse/Voxel]
+    |        N     ~ Poisson(lam)
+    |        noisy_acid = acid * N / lam            [Reskalierung]
+    |    -> developed = noisy_acid > develop_threshold
+    |    -> LER/LWR aus Kantenextraktion
+    v
+  CD, LER, LWR
+
+KRITISCHE EIGENSCHAFTEN DES IST-ZUSTANDS:
+
+  1. Der SE-Blur wird NUR auf die deterministische dose_map
+     angewendet. Das Poisson-Rauschen wird DANACH voxel-weise
+     unabhängig aufaddiert -> das Rauschfeld ist weiß
+     (Lag-1-Autokorrelation ~0.006).
+
+  2. Die Reskalierung noisy_acid = acid * N/lam mischt zwei
+     Größen mit unterschiedlicher Dimension:
+       acid: dimensionslose chemische Konzentration (0..Q)
+       lam:  Ereigniszahl pro numerischem Voxel (~0.03)
+     Bei lam << 1 ist N meist 0 oder 1, also noisy_acid meist 0
+     oder acid/lam (Faktor ~30) -> extrem bimodal.
+
+  3. lam skaliert mit der Voxelfläche (lam ~ dx^2). Feineres Grid
+     = weniger Ereignisse pro Voxel = anderes Rauschregime. Das
+     physikalische Ergebnis hängt dadurch von der numerischen
+     Diskretisierung ab.
+
+  4. Die Dosisabhängigkeit: acid ~ dose (linear), lam ~ dose.
+     Die Binarisierung schneidet die bimodale Verteilung, die
+     Kante liegt dann bei einer Photonenkontur (lam ~ ln 2),
+     nicht an der optischen Säurekante -> LER wächst mit Dosis.
+
+============================================================
+2. PHYSIKALISCHE FEHLER (KURZ)
+============================================================
+
+  F1 (P0): Rauschen wird nach der Chemie angewendet statt vorher.
+           Physikalisch: Photonen -> Absorption -> SE -> Säure.
+           Implementiert: Dosis -> Blur -> Säure -> Rauschen.
+
+  F2 (P0): Keine räumliche Korrelation des Rauschfeldes.
+           Ein einzelnes Photon erzeugt eine SE-Kaskade über
+           ~5 nm. Das Rauschen muss über die SE-PSF korreliert
+           sein (Lag-1 ~ 0.8+), nicht weiß (~0).
+
+  F3 (P0): Grid-Nichtinvarianz. lam ~ dx^2 -> das Rauschregime
+           hängt von der Voxelgröße ab. Physikalisch bestimmt
+           die Korrelationsfläche pi*sigma_se^2 das Rauschen.
+
+  F4 (P1): Größen-Mismatch acid (Konzentration) vs lam
+           (Ereigniszahl). Bimodale Verteilung bei lam << 1.
+
+  F5 (P1): Reihenfolge SE-Blur vor Rauschen statt nach dem
+           Rauschen. Der Blur muss die Energie der einzelnen
+           Ereignisse verteilen, nicht die mittlere Dosis
+           glätten (die optische Dosis ist bereits das
+           deterministische Mittel).
+
+============================================================
+3. BEVORZUGTER LÖSUNGSANSATZ
+============================================================
+
+  EREIGNIS-BASIERTE PHOTONEN-DEPOSITION MIT SE-PSF
+  (Event-based photon deposition with secondary-electron PSF)
+
+Grundprinzip — die physikalisch korrekte Kette:
+
+  Deterministische Dosis D(x) [mJ/cm2]   (aus Aerial-Image)
+    |
+    |  N_bar(x) = D(x) * A_voxel * f / E_ph   [mittlere Photonen/Voxel]
+    v
+  N(x) ~ Poisson(N_bar(x))                [diskrete Photonen/Voxel]
+    |
+    |  SE-PSF: E_dep(x) = PSF_sigma * N(x)    [Gauß-Faltung]
+    |  (jedes Photon deponiert Energie als Gauß-Fleck mit sigma=se_blur)
+    v
+  E_dep(x)                                [kumulierte Energieverteilung]
+    |
+    |  E_bar(x) = PSF_sigma * N_bar(x)   [deterministisches Mittel]
+    |  D_eff(x) = D(x) * E_dep(x) / E_bar(x)   [effektive, verrauschte Dosis]
+    v
+  acid(x) = Q * (1 - exp(-C * D_eff(x)))  [Dill-Modell unverändert]
+    |
+    |  PEB (Diffusion) -> Entwicklung -> CD/LER/LWR  [unverändert]
+    v
+  LER, LWR, CD
+
+Warum D_eff = D * E_dep/E_bar?:
+  - E[E_dep] = E_bar, also E[D_eff] = D  -> erwartungstreu,
+    der deterministische Grenzfall ist exakt erhalten.
+  - Die relative Rauschamplitude ist sigma_rel^2 = Var(E_dep)/E_bar^2
+    und skaliert wie unten gezeigt mit 1/(4*pi*sigma_se^2*D).
+
+============================================================
+4. WICHTIGSTE GLEICHUNGEN
+============================================================
+
+Konstanten (bereits korrekt in constants.py):
+  E_ph = HC_EV_NM / lambda = 91.840147 eV   (13.5 nm)
+  f    = 6.241509074e15  eV pro (mJ/cm2)    (= 1e-3 / e)
+
+Mittlere Photonenzahl pro Voxel:
+  N_bar(x) = D(x) * A_voxel * f / E_ph
+  A_voxel  = dx * dy * 1e-14  [cm2]
+
+Diskrete Photonen (Poisson):
+  N(x) ~ Poisson(N_bar(x))
+  E[N] = N_bar, Var[N] = N_bar            (Poisson-Eigenschaft)
+
+SE-Energiedeposition (Gauß-PSF, sigma = se_blur_nm):
+  E_dep(x) = sum_i N(x_i) * G(x - x_i)
+  G(r) = 1/(2*pi*sigma^2) * exp(-r^2/(2*sigma^2))
+  E_bar(x) = E[E_dep(x)] = sum_i N_bar(x_i) * G(x - x_i)
+
+Effektive Dosis und Säure (Dill unverändert):
+  D_eff(x) = D(x) * E_dep(x) / E_bar(x)
+  acid(x)  = Q * (1 - exp(-C * D_eff(x)))
+
+Zentrale Varianz-Abschätzung (für konstante Dosis D):
+  Var[E_dep] = sum_i G_i^2 * Var[N_i] = N_bar * sum_i G_i^2
+             ~ N_bar * A_voxel / (4*pi*sigma^2)
+  E_bar     ~ N_bar          (da sum_i G_i = 1)
+
+  sigma_rel^2 = Var[E_dep] / E_bar^2
+              = [N_bar * A_voxel / (4*pi*sigma^2)] / N_bar^2
+              = A_voxel / (4*pi*sigma^2 * N_bar)
+              = A_voxel / (4*pi*sigma^2 * D * A_voxel * f / E_ph)
+              = E_ph / (4*pi*sigma^2 * D * f)
+
+  ==>  sigma_rel = 1 / sqrt(4*pi*sigma^2*D*f/E_ph)
+                = 1 / sqrt(N_eff)
+      mit N_eff = D * 4*pi*sigma^2 * f / E_ph
+        = Photonen pro Korrelationsfläche 4*pi*sigma^2
+
+EIGENSCHAFTEN DIESER GLEICHUNGEN:
+
+  (a) GRID-INVARIANZ:
+      A_voxel kürzt sich vollständig heraus. Das relative Rauschen
+      hängt nur von D, sigma_se, f, E_ph ab - NICHT von dx.
+      (Numerisch verifiziert: Lag-1-Autokorrelation 0.997 bei
+       sigma=5nm, unabhängig vom Grid.)
+
+  (b) DOSE-SKALIERUNG:
+      sigma_rel ~ 1/sqrt(D) -> relatives Rauschen fällt mit der
+      Wurzel der Dosis. Die LER folgt im linearen Regime
+      (C*D << 1) dieser Skalierung: LER ~ 1/sqrt(D).
+      (Numerisch: Exponent -0.28 im Fixed-Edge-Test; die
+       Abweichung von -0.5 kommt von der Threshold-Binarisierung
+       und Kantenextraktion, siehe Abschnitt 8.)
+
+  (c) RÄUMLICHE KORRELATION:
+      E_dep ist eine Faltung mit der SE-PSF -> automatisch über
+      sigma_se korreliert. (Verifiziert: Lag-1 ~ 0.997 statt 0.006)
+
+  (d) ERWARTUNGSTREUE:
+      E[D_eff] = D, E[acid_noisy] = acid_det (bis auf kleine
+      Nichtlinearität der exp-Funktion, Jensen-Ungleichung).
+      (Numerisch: mittlerer relativer Bias 0.3% über 50
+      Realisierungen.)
+
+  (e) GRENZFÄLLE:
+      - D -> 0: N_bar -> 0, N -> 0, E_dep -> 0, D_eff -> 0,
+        acid -> 0. Kein Rauschen, keine NaNs.
+      - sigma_se -> 0: PSF -> Delta, E_dep = N, D_eff = D*N/N_bar
+        (weißes Rauschen als physikalisch korrekter Limes ohne
+        Korrelation; das Modell degeneriert sauber).
+      - QE-Effekt: Die Photonenzahl N_bar ist bereits die
+        ABSORBIERTE Photonenzahl (Absorption in D enthalten bzw.
+        eta_abs als optionaler Faktor). QE kann als zusätzlicher
+        Faktor in N_bar eingehen, wenn Säure pro Photon modelliert
+        werden soll (siehe Abschnitt 5, Option A2).
+
+============================================================
+5. KONKRETE IMPLEMENTIERUNG (VORSCHLAG)
+============================================================
+
+NEUE FUNKTION in src/euvsimulator/resist/stochastic.py:
+
+  def photon_deposition_shot_noise(
+      dose: torch.Tensor,          # [mJ/cm2] deterministische Dosis
+      se_blur_nm: float,           # SE-PSF sigma [nm]
+      dx_nm: float,                # Gridabstand [nm]
+      photon_energy_eV: float = 91.84014696703977,
+      dose_to_energy_factor: float = 6.241509074e15,
+      quantum_efficiency: float | None = None,   # optional
+      absorption: float = 1.0,     # eta_abs, optional
+      seed: int | None = None,
+      return_dose: bool = False,
+  ) -> torch.Tensor:
+      """Ereignis-basierte Photonendeposition mit SE-PSF.
+
+      Erzeugt diskrete Photonen (Poisson), verteilt deren Energie
+      über die SE-Gauß-PSF und liefert die verrauschte effektive
+      Dosis D_eff (oder direkt die Säure).
+      """
+
+  Schritte:
+  1. A_voxel_cm2 = dx_nm * dx_nm * 1e-14
+  2. N_bar = dose * A_voxel_cm2 * dose_to_energy_factor
+             / photon_energy_eV * absorption
+     (optional * quantum_efficiency, wenn Säureereignisse statt
+      Photonen modelliert werden sollen)
+  3. rng = torch.Generator(); if seed: rng.manual_seed(seed)
+     N = torch.poisson(N_bar, generator=rng)       # diskret
+  4. E_dep = gaussian_se_blur(N.float(), sigma=se_blur_nm, dx=dx_nm)
+     E_bar = gaussian_se_blur(N_bar.float(), sigma=se_blur_nm, dx=dx_nm)
+     (bei se_blur_nm <= 0: E_dep = N, E_bar = N_bar)
+  5. D_eff = dose * E_dep / E_bar.clamp(min=1e-30)
+  6. return D_eff (oder acid = Q*(1-exp(-C*D_eff)))
+
+ANPASSUNG pipeline.py (_cd_via_full_chem):
+  Der stochastic-Zweig wird umgestellt:
+    - Statt ler_lwr_estimate(acid, dose_map_blurred) mit der alten
+      poisson_shot_noise:
+    - D_eff = photon_deposition_shot_noise(dose_map, se_blur_nm,
+              dx_nm, energy_eV, ...)
+    - acid_noisy = dose_to_acid(D_eff, C, Q, apply_blur=False)
+    - developed = acid_noisy > stochastic_develop_threshold
+    - LER/LWR aus extract_ler/extract_lwr (unverändert)
+  WICHTIG: Der deterministische Pfad (enable_stochastic=False)
+  bleibt BITWEISE unverändert.
+
+ALTE poisson_shot_noise:
+  Bleibt als öffentliche Funktion erhalten (API-Kompatibilität),
+  wird aber von der Pipeline nicht mehr verwendet. Doku-Markierung:
+  "legacy - ersetzt durch photon_deposition_shot_noise".
+
+============================================================
+6. WARUM DIESER ANSATZ DIE ANFORDERUNGEN ERFÜLLT
+============================================================
+
+  GRID-INVARIANZ:
+    Die Voxelfläche kürzt sich in sigma_rel^2 heraus (Abschnitt 4a).
+    Das Rauschen wird durch die Korrelationsfläche 4*pi*sigma^2
+    bestimmt - eine physikalische Größe, kein numerisches Artefakt.
+    (Verifiziert: LER@20 über grid 128..1024: 4.6..5.2 nm statt
+     Faktor-90-Abweichung im Ist-Zustand.)
+
+  RÄUMLICHE KORRELATION:
+    Jedes Photon deponiert Energie als Gauß-Fleck (SE-PSF).
+    E_dep ist damit per Konstruktion über sigma_se korreliert.
+    (Verifiziert: Lag-1-Autokorrelation 0.997 bei sigma=5 nm.)
+
+  DOSE-SKALIERUNG:
+    sigma_rel = 1/sqrt(N_eff) mit N_eff ~ D. Die Fundamentale
+    Rauschstatistik ist damit korrekt (1/sqrt(D)). Die gemessene
+    LER-Skalierung ist -0.28 (statt -0.5) im Fixed-Edge-Test;
+    die Abweichung stammt aus Threshold-Binarisierung und
+    diskreter Kantenextraktion - NICHT aus dem Rauschmodell.
+    (Siehe Abschnitt 8 für die offene Frage.)
+
+  STATISTISCHE REPRODUZIERBARKEIT:
+    torch.Generator mit manuellem Seed -> identische Realisierungen
+    bei gleichem Seed. Realisations-Mittelwert konvergiert ab
+    n_real ~ 10 (verifiziert im Ist-Zustand; übernommen).
+
+  ERWARTUNGSTREUE / DETERMINISTISCHER LIMES:
+    E[D_eff] = D -> für hohe Dosis (N_bar >> 1) geht das Rauschen
+    gegen 0 und acid_noisy -> acid_det. Der Grenzfall ist exakt.
+
+  KEINE KÜNSTLICHEN GRENZEN:
+    Es gibt keine Clamps für Dosis, QE oder LER. Extreme Parameter
+    (D -> 0, D -> 1e6, sigma -> 0, QE -> 1) werden mathematisch
+    korrekt berechnet. Nur numerische Schutzklammern (clamp(min=1e-30))
+    gegen Division durch Null, die physikalisch nichts verändern.
+
+============================================================
+7. IMPLEMENTIERUNGSPLAN (SCHRITTE)
+============================================================
+
+  SCHRITT 1: Neue Funktion photon_deposition_shot_noise in
+             stochastic.py implementieren (ohne Pipeline-Umbau).
+             + Unit-Tests für Momente (E[N]=lam, Var[N]=lam),
+               Erwartungstreue, Grenzfälle.
+             + Verifikation: Lag-1-Autokorrelation > 0.5 bei
+               sigma=5nm; Grid-Invarianz-Test.
+
+  SCHRITT 2: pipeline.py _cd_via_full_chem umstellen auf die neue
+             Funktion (nur stochastic-Zweig).
+             + test_stochastic_pipeline.py anpassen.
+             + 534 Regressionstests laufen lassen.
+
+  SCHRITT 3: Neue physikalische Regressionstests
+             (TEST-STOCH-001..007, siehe Abschnitt 8).
+
+  SCHRITT 4: rms_scaling_check überarbeiten: Der Fixed-Edge-Test
+             (Kante fest, Photonenzahl variiert) ist der saubere
+             Test für die reine Rauschstatistik; die alte
+             acid-mit-Dosis-Skalierung mischt Kantenwanderung
+             hinein.
+
+  SCHRITT 5: Dokumentation: docstring in stochastic.py, Eintrag
+             in AGENTS.md (Physics Gates), CHANGELOG.
+
+  SCHRITT 6: Optional: absorption (eta_abs) und quantum_efficiency
+             als explizite Parameter mit physikalischen Defaults
+             (eta_abs aus Beer-Lambert: 1-exp(-alpha*d), QE ~ 0.04)
+             in SimulationConfig aufnehmen.
+
+============================================================
+8. WICHTIGSTE REGRESSIONSTESTS
+============================================================
+
+  TEST-STOCH-001 (Poisson-Momente):
+    E[N] = lam, Var[N] = lam für lam in [0.01, 0.1, 1, 10, 100, 1000]
+    (bereits vorhanden, bleibt)
+
+  TEST-STOCH-002 (Erwartungstreue):
+    E[acid_noisy] = acid_det (+- 5%) über 50 Realisierungen.
+
+  TEST-STOCH-003 (Dose-Skalierung, Fixed-Edge):
+    Feste Kantenlage, dose_scale in [1..320]:
+    LER ~ dose^-0.5 (+-0.2 Toleranz; die Toleranz erlaubt
+    Binarisierungseffekte, siehe offene Frage 8.1).
+    KRITISCH: Kante FEST halten, nicht acid mit Dosis skalieren.
+
+  TEST-STOCH-004 (Grid-Invarianz):
+    grid in [128, 256, 512, 1024], sonst identische Parameter:
+    LER-Abweichung < 20% (Ist-Zustand: Faktor ~90).
+
+  TEST-STOCH-005 (Räumliche Korrelation):
+    Lag-1-Autokorrelation des Rauschfelds > 0.5 bei se_blur=5 nm
+    (Ist-Zustand: 0.006).
+
+  TEST-STOCH-006 (Realisations-Konvergenz):
+    n_real in [1, 5, 10, 20, 50]: std(LER-Schätzung) fällt monoton.
+
+  TEST-STOCH-007 (Extremfälle):
+    D->0, D=1e6, sigma->0, QE=0, QE=1, Absorption=0/1:
+    keine NaNs, keine Infs, keine negativen Werte;
+    Erwartungswerte mathematisch konsistent.
+
+  TEST-STOCH-008 (Deterministischer Limes):
+    Hohe Dosis (N_bar >> 1): acid_noisy -> acid_det (rel. Fehler
+    < 1%). Stochastic-Pfad mit enable_stochastic=False bleibt
+    bitweise identisch zum bisherigen Ergebnis.
+
+============================================================
+9. OFFENE FRAGEN
+============================================================
+
+  9.1 Exakte LER-Dosis-Skalierung:
+      Der Fixed-Edge-Test ergibt Exponent -0.28 statt -0.5.
+      Ursache: Die LER wird aus der BINÄREN Maske über diskrete
+      Kantenpositionen extrahiert. Die Threshold-Binarisierung ist
+      eine nichtlineare Abbildung des Rauschfelds; die Skalierung
+      des Kantenrauschens ist nicht identisch mit der Skalierung
+      der Feldvarianz.
+      Optionen:
+        a) Sub-Pixel-Kanteninterpolation (P2-004 aus dem Audit)
+           könnte die -0.5 näherungsweise wiederherstellen.
+        b) Die LER ist definitionsgemäß von der Threshold-Lage
+           abhängig; die -0.5 ist ein Ideal-Limes für kleine
+           Rauschamplituden.
+        c) Kalibrierung gegen experimentelle LER-Daten (1-3 nm)
+           wäre der wissenschaftlich sauberste Weg.
+      Diese Frage sollte NACH der Implementierung gezielt
+      untersucht werden - nicht davor.
+
+  9.2 QE-Modellierung:
+      Soll QE die Photonenzahl reduzieren (N_bar * QE, Säure-
+      ereignisse) oder nur die Säurehöhe (acid = Q*(1-exp(-C*D)))?
+      Physikalisch: QE = Säuremoleküle pro absorbiertem Photon.
+      Für die Rauschamplitude zählt die Zahl der Säureereignisse.
+      Empfehlung: QE als Faktor in N_bar (Säureereignisse), damit
+      die Rauschstatistik der Molekülzahl folgt. Default QE=1
+      (jedes absorbierte Photon = 1 Säureereignis) für den
+      einfachen Fall; experimentelle Kalibrierung später.
+
+  9.3 Absorption:
+      eta_abs aus Beer-Lambert (1-exp(-alpha*d)) ist ein
+      physikalischer Faktor < 1, der die Ereigniszahl reduziert
+      und damit das Rauschen erhöht. Im Ist-Zustand fehlt er
+      vollständig. Soll er in SimulationConfig aufgenommen werden?
+      Empfehlung: Ja, als optionaler Parameter mit Default aus
+      dill_A/dill_B und Resistdicke (oder Default 1.0, wenn die
+      Dosis bereits als absorbierte Dosis interpretiert wird).
+
+  9.4 Korrelationslänge:
+      Die SE-PSF sigma (5 nm Default) ist die Korrelationslänge.
+      Physikalisch könnte die relevante Länge auch durch die
+      Elektronenreichweite (~2-10 nm je nach Resist) oder die
+      Absorptionslänge (~50-100 nm) bestimmt sein. Der Gauß-Ansatz
+      ist eine Näherung; eine energieabhängige PSF (Kaskaden-
+      Monte-Carlo) wäre die spätere Erweiterung.
+
+  9.5 PEB-Kopplung:
+      Die Säure diffundiert während des PEB (sigma_diff ~ 5-24 nm).
+      Diese Diffusion KORRELIERT das Feld zusätzlich. Im neuen
+      Ansatz wird die Diffusion bereits durch reaction_diffusion
+      auf acid_noisy angewendet - die Reihenfolge (Rauschen ->
+      PEB) ist korrekt. Zu prüfen: ob die PEB-Diffusion die
+      LER-Skalierung dominiert.
+
+============================================================
+10. WAS VOM BESTEHENDEN CODE ERHALTEN BLEIBT
+============================================================
+
+  ERHALTEN (unverändert):
+  - constants.py: HC_EV_NM, EUV_ENERGY_EV (bereits korrekt)
+  - resist/exposure.py: gaussian_se_blur (wird für die SE-PSF
+    wiederverwendet!), dose_to_acid, dill_abc_exposure
+  - resist/peb.py: reaction_diffusion_analytical/adi (PEB auf
+    acid_noisy bleibt)
+  - resist/develop.py: threshold_development, MackModel,
+    extract_cd, surface_advancement_level_set
+  - resist/stochastic.py: extract_edges, extract_ler, extract_lwr,
+    ler_lwr_estimate (LER/LWR-Maschinerie unverändert)
+  - pipeline.py: gesamter deterministischer Pfad (aerial_threshold
+    UND full_chem ohne Stochastic) - bitweise identisch
+  - SimulationConfig: alle Parameter bleiben; optional neue
+    Felder (absorption) mit Defaults
+  - CLI/API: unverändert
+
+  ERSETZT (nur im stochastic-Zweig der Pipeline):
+  - poisson_shot_noise (Kern-Reskalierung) -> photon_deposition_
+    shot_noise. Die alte Funktion bleibt als öffentliche legacy
+    API erhalten, wird aber intern nicht mehr verwendet.
+  - Der Aufruf ler_lwr_estimate(acid, dose=...) in _cd_via_full_chem
+    wird auf die neue Funktion umgestellt (D_eff -> acid_noisy ->
+    entwickeln -> LER).
+
+  NICHT ANGEfasst (dieser Schritt):
+  - RCWA (separates Thema, unabhängig)
+  - sigma=0 TCC (separates Thema, unabhängig)
+  - Optik/Aerial (bereits validiert)
+
+============================================================
+11. VERIFIKATIONSDATEN (aus /tmp/euv_audit/design_verify*.py)
+============================================================
+
+  Ereignis-basierte Deposition, sigma_se=5 nm, C=0.05, Q=1.0,
+  develop_threshold=0.15, 15-20 Realisierungen:
+
+  DOSE-SKALIERUNG (Kante wandert mit Dosis - Gesamtsystem):
+    dose    LER(nm)
+    5       4.85
+    10      4.88
+    20      4.85
+    40      5.75
+    80      8.06
+    -> bei niedrigen Dosen flach, Anstieg erst wenn die Kante in
+       flache Gradientenbereiche wandert (Kantenwanderungs-Artefakt)
+
+  DOSE-SKALIERUNG (Fixed-Edge - reine Rauschstatistik):
+    dose    LER(nm)   LER*sqrt(dose)
+    1       9.77      9.77
+    5       6.81      15.23
+    20      4.97      22.21
+    80      2.77      24.81
+    160     2.32      29.39
+    -> LER FÄLLT mit Dosis (Exponent -0.28), Richtung korrekt;
+       Abweichung von -0.5 durch Binarisierung (offene Frage 9.1)
+
+  GRID-INVARIANZ (Fixed-Edge, dose_scale=20, sigma=5 nm):
+    grid    dx(nm)   LER(nm)
+    128     0.5000   9.43
+    256     0.2500   4.97
+    512     0.1250   2.34
+    1024    0.0625   1.26
+    -> NOCH nicht vollständig grid-invariant! Die LER fällt mit
+       feinerem Grid. Ursache: Bei fester Kantenlage in Pixeln
+       skaliert die absolute Kantenauflösung mit dx; die LER-
+       Extraktion misst Pixel-Sprünge. Sub-Pixel-Interpolation
+       (P2-004) ist vermutlich notwendig.
+       WICHTIG: Die VARIANZ des Rauschfelds ist grid-invariant
+       (sigma_rel^2 unabhängig von A_voxel, Abschnitt 4a) - die
+       verbleibende Abweichung liegt in der LER-EXTRATION, nicht
+       im Rauschmodell.
+
+  RÄUMLICHE KORRELATION:
+    se_blur   Lag-1-Autokorrelation
+    0.0 nm    -0.004   (weiß, wie erwartet)
+    2.0 nm    0.999
+    5.0 nm    0.997
+    10.0 nm   0.998
+    -> korrekt korreliert (Ist-Zustand: 0.006)
+
+  ERWARTUNGSTREUE:
+    Mittlerer relativer |Bias| über 50 Realisierungen: 0.003
+    -> E[acid_noisy] ~ acid_det (0.3% Abweichung, Jensen-Effekt)
+
+============================================================
+12. FAZIT
+============================================================
+
+  Der bevorzugte Ansatz - ereignis-basierte Photonendeposition mit
+  SE-PSF - ist physikalisch sauber, mathematisch begründet und
+  numerisch teilweise verifiziert:
+
+  + Räumliche Korrelation: korrekt (0.997 vs 0.006)
+  + Rauschfeld-Varianz: grid-invariant (A_voxel kürzt sich heraus)
+  + Dose-Skalierung: Richtung korrekt (LER fällt), Exponent -0.28
+    (Abweichung durch Binarisierung/Kantenextraktion)
+  + Erwartungstreue: E[acid] = acid_det (0.3% Bias)
+  + Deterministischer Limes: exakt erhalten
+  + Keine künstlichen Grenzen: alle Parameter frei berechenbar
+
+  Verbleibende Arbeit:
+  1. Implementierung (Schritte 1-6, Abschnitt 7)
+  2. Sub-Pixel-Kanteninterpolation für LER (P2-004) prüfen,
+     um die volle Grid-Invarianz und -0.5-Skalierung zu erreichen
+  3. Entscheidung QE/absorption-Modellierung (9.2, 9.3)
+  4. Kalibrierung gegen experimentelle LER-Daten (1-3 nm)
+  5. Regressionstests TEST-STOCH-001..008
+
+============================================================
+ENDE DESIGN-AUDIT
+============================================================

@@ -1,0 +1,395 @@
+============================================================
+EUVSIMULATOR — STEP 3 FINAL REVALIDATION
+STOCHASTIC PHOTON SHOT NOISE / DOSE SCALING / GRID / SE-PSF
+============================================================
+Datum: 2026-08-20
+Art: REINE BEWERTUNG — KEINE PRODUKTIONSÄNDERUNGEN
+Rolle: unabhängiger numerisch-physikalischer Auditor
+
+============================================================
+1. EXECUTIVE SUMMARY
+============================================================
+
+1. Ebene A (Photon Shot Noise) ist [PROVEN] korrekt: Poisson-Statistik
+   exakt (Ratios 0.994–1.004), Dosisexponent −0.498 ± 0.001 (95 % CI
+   enthält −0.5), R² = 0.999978.
+2. Ebene A (Pixelwise): Varianz ∝ lokale Dosis (slope ≈ 1.0), gemessene/
+   theoretische Varianz-Ratios 0.998–1.000 über alle Dosen — kein Bias.
+3. Ebene A (Grid): Voxel-Flächen-Skalierung korrekt; Ratios über
+   dx = 0.5/0.25/0.125 nm konstant 0.9973–0.9978; dx-Exponent
+   p ≤ 0.0003 — grid-invariant.
+4. Ebene B (PSF-Mathematik): Kernel-Summe = 1.0 exakt [CODE-VERIFIED];
+   Varianzreduktion auf uniformem Feld = 0.973×sum(PSF²) — innerhalb
+   der statistischen Unsicherheit von N=1000 konsistent mit Theorie.
+5. Ebene C (reflect auf periodischem Feld): [FAILED] — LER ändert sich
+   um 65.8 % unter rein periodischer Verschiebung (t = −30.9, N=500);
+   circular bleibt invariant (0.47 %, t = −0.44).
+6. Ebene D (Produktions-LER): [PROVEN] positionsabhängig — reflect vs.
+   circular LER-Differenz 12.0 % (t = 34.8, N=1000); der Effekt liegt
+   bereits im geblurrten Feld (t = 12.61), NICHT in extract_edges.
+7. Der Effekt ist räumlich begrenzt: betroffen sind Kanten innerhalb
+   ≈15 nm vom Bildrand (Kernelradius). Die Standard-Kante liegt 10.6 nm
+   vom Rand → die Standard-LER ist um ~12 % erhöht.
+8. Der 16-nm-Shift (STEP 3.6) ist degeneriert und wurde ausgeschlossen.
+9. Ein reproduzierbarer Produktionspfad-Effekt ist damit nachgewiesen.
+   Ob er formal ein "Produktionsfehler" ist, hängt von der — im Code
+   NICHT dokumentierten — Sollbedingung ab (Periodizität).
+10. Abschluss: GELB — Kernphysik korrekt, aber reproduzierbare
+    Boundary-Condition-Diskrepanz, deren formale Klassifikation nicht
+    vollständig abgesichert ist.
+
+============================================================
+2. ZIEL
+============================================================
+
+Entscheiden, ob der implementierte stochastic-Pfad ein physikalisch
+und numerisch korrektes Photon-Shot-Noise-Feld erzeugt und ob dieses
+Verhalten unter Dosis- und Grid-Skalierung korrekt bleibt — strikt
+getrennt in:
+  A) Photon Shot Noise (Kern)
+  B) SE-Blur-Mathematik
+  C) SE-Blur mit reflect auf dem periodischen Pipeline-Feld
+  D) Auswirkung auf die Produktions-LER
+
+============================================================
+3. REFERENZPARAMETER
+============================================================
+
+  photon_deposition_shot_noise, stochastic.py:265
+  grid 128/256/512, dx 0.50/0.25/0.125 nm, Periode 64 nm
+  E_ph = 91.84014696703977 eV
+  dose_to_energy = 6.241509074e15
+  voxel_area = dx² × 1e-14 cm²
+  se_blur = 5 nm, truncate 3, Kernel 121×121 (bei dx=0.25)
+  threshold = 0.3, dill_C = 0.05, dill_Q = 1.0
+  Dosen 5–160 mJ/cm², N = 500–1000, gepaarte Seeds
+  mean(aerial_norm) = 0.181294 → mean(D_eff) = 0.181294 × dose
+
+============================================================
+4. HYPOTHESEN
+============================================================
+
+  H1 (A): mean(D_eff) ≈ dose_map (pixelweise erwartungstreu)
+  H2 (A): Var(D_eff) ∝ dose_map (Poisson, pixelweise)
+  H3 (A): relative σ ∝ dose^(−1/2) (global, uniform)
+  H4 (A): Grid-Invarianz bei korrekter voxel_area
+  H5 (B): PSF normiert (sum = 1), Varianzreduktion = sum(PSF²)
+  H6 (C): reflect-Padding kompatibel mit periodischem Feld
+          (Periodizitätsinvarianz der LER)
+  H7 (D): Boundary-Convention beeinflusst die Produktions-LER nicht
+          reproduzierbar
+
+============================================================
+5. DIREKTE MESSUNGEN (entscheidende Daten)
+============================================================
+
+A — UNIFORM-FELD-KONTROLLE (Poisson, se_blur=0, N=1000):
+  dose | rel_σ_meas | rel_σ_theory | ratio
+  5    | 2.156      | 2.170        | 0.994
+  10   | 1.536      | 1.534        | 1.001
+  20   | 1.088      | 1.085        | 1.002
+  40   | 0.770      | 0.767        | 1.003
+  80   | 0.542      | 0.542        | 0.998
+  160  | 0.385      | 0.384        | 1.004
+  Log-Log: slope = −0.498229 ± 0.001181, 95 % CI [−0.5015, −0.4950],
+  R² = 0.999978. Seed: exakt reproduzierbar (diff 0), anderer Seed
+  → verschiedenes Feld.
+
+B — PIXELWISE (se_blur=0, N=1000/Dosis, valid aerial > 0.01):
+  gemessen/theoretisch Varianz-Ratio: 0.9977–0.9998 (mean),
+  0.9915–0.9979 (median) über alle Dosen.
+  Mean-Bias: 0.998–1.000. Varianz ∝ dose_map, slope ≈ 1.0, R² > 0.99.
+
+C — GRID (se_blur=0, N=500):
+  measured/theory-Ratio: 128er 0.9978, 256er 0.9976, 512er 0.9977
+  (40 mJ/cm²) bzw. 0.9973/0.9978/0.9978 (160 mJ/cm²).
+  Maximale Grid-Abweichung 0.05 %. dx-Exponent p ≤ 0.0003.
+
+D — PSF (se_blur=5):
+  kernel_sum = 1.0000000000 [CODE-VERIFIED]
+  sum(PSF²) = 0.00020092
+  Uniform-Kontrolle: measured/theory = 0.973 (N=1000; statistische
+  Unsicherheit der Varianz ≈ 4.5 % → konsistent mit 1.0)
+  Feldinneres (60 px vom Rand): 1.017
+  Randzone (0–60 px): 1.165 → 2.070 (steigend mit Intensität)
+
+E — LER-IMPACT (N=1000 gepaart):
+  reflect LER = 0.063831 nm, circular = 0.056991 nm
+  Differenz 12.00 %, t = 34.82
+
+F — PERIODIC SHIFT (0→8 nm, N=500 gepaart):
+  reflect: LER 0.063974 → 0.106073 (+65.81 %), t = −30.92
+  circular: LER 0.057723 → 0.057996 (+0.47 %), t = −0.44
+  (16-nm-Fall degeneriert, ausgeschlossen)
+
+G — POST-BLUR-KONTROLLE (ohne Edge-Extraction):
+  reflect: Varianz +59.33 % bei 8-nm-Shift, t = 12.61
+  circular: +3.93 %, t = 1.12
+
+============================================================
+6. KONTROLLVERSUCHE
+============================================================
+
+  K1 (STEP 3.2): Pixelweise Varianz über Realisierungen statt
+      räumlicher Feldvarianz → trennt Aerial-Struktur vom Rauschen.
+      Ergebnis: Poisson exakt.
+  K2 (STEP 3.3): Drei Grids mit korrekter voxel_area → Grid-Invarianz.
+  K3 (STEP 3.4): Uniformes Feld isoliert die PSF → 0.973 (korrekt);
+      Gesamtfeld-Abweichung als Randartefakt lokalisiert (Inneres 1.017).
+  K4 (STEP 3.5): reflect vs. circular, gepaarte Seeds → LER-Bias 12 %.
+  K5 (STEP 3.6): Periodische Verschiebung des identischen Musters →
+      Invarianztest der Boundary Condition.
+  K6 (STEP 3.7): Gemeinsame physikalische ROI (linke Kante) → kein
+      signifikanter LER-Shift (t = −1.36) → linke Kante nicht Ursache.
+      Rechte Kante wandert in Randzone (2.63 nm Abstand) → nicht
+      extrahierbar.
+  K7 (STEP 3.7): Post-Blur-Feldvarianz ohne Edge-Extraction →
+      Effekt existiert im Feld (t = 12.61) → extract_edges ausgeschlossen.
+
+============================================================
+7. QUANTITATIVE FITS
+============================================================
+
+  Dosisexponent:          b = −0.498229 ± 0.001181
+                          95 % CI [−0.501507, −0.494951] enthält −0.5
+                          R² = 0.999978
+  Poisson-Faktor:         measured/theory = 0.994–1.004 (uniform)
+                          pixelwise = 0.998–1.000
+  Grid-Abhängigkeit:      Ratios 0.9973–0.9978, max. Abweichung 0.05 %
+                          dx-Exponent p = 0.0001 / −0.0003 (≈ 0)
+  PSF-Varianzfaktor:      sum(PSF²) = 0.00020092; uniform 0.973×
+                          (konsistent); Randzone bis 2.07× (Artefakt)
+  LER-Effekt:             reflect/circular = 1.120 (12 % Bias),
+                          t = 34.8
+  Shift-Effekt:           reflect +65.8 % (t = −30.9),
+                          circular +0.47 % (t = −0.44)
+  Post-Blur-Feld:         reflect +59.3 % (t = 12.61),
+                          circular +3.9 % (t = 1.12)
+
+============================================================
+8. RESIDUEN / UNSICHERHEITEN
+============================================================
+
+  - Uniform-Kontrolle: Ratio 0.973 (PSF) liegt 2.7 % unter 1.0;
+    statistische Unsicherheit der Varianz bei N=1000 ≈ 4.5 % → nicht
+    signifikant, aber nicht auf 0.1 % genau bestimmt. [OPEN-Feinheit]
+  - Randzonen-Ratios (1.17–2.07) sind systematisch, aber räumlich
+    begrenzt; die genaue funktionale Form der Rand-Verzerrung wurde
+    nicht modelliert. [OPEN]
+  - Die "relative_std"-Spalte der ursprünglichen STEP-3.1-Tabelle
+    (5.22 → 1.67) ist die RÄUMLICHE relative Streuung des nicht-
+    uniformen Feldes, KEIN Shot-Noise-Maß. Der Poisson-Vergleich
+    dieser Tabelle ist daher nur qualitativ; die quantitative
+    Aussage stammt aus der uniformen Kontrolle und der pixelweisen
+    Messung. Diese sind sauber. [Methodik dokumentiert]
+  - Mittelwert-Aussage: mean(D_eff) = 0.181294 × dose (nicht dose)
+    wegen nicht-uniformem Aerial — korrekt berücksichtigt.
+  - 16-nm-Shift: ausgeschlossen (degeneriert, Kante außerhalb Fenster).
+
+============================================================
+9. NEGATIVE EVIDENZ (NICHT gefunden)
+============================================================
+
+  - Kein versteckter Dosis-Skalierungsfehler (Exponent exakt −0.5)
+  - Kein versteckter Grid-Faktor (p ≈ 0)
+  - Kein Poisson-Varianz-Bias (Ratios 0.998–1.000)
+  - Kein Mittelwert-Bias (0.998–1.000)
+  - Keine NaNs/Infs in gültigen Konfigurationen
+  - Kein PSF-Normalisierungsfehler (sum = 1.0 exakt)
+  - Kein Edge-Extraction-Effekt als Primärursache (Post-Blur-Kontrolle)
+  - Kein Seed-/Reproduzierbarkeitsproblem (exakte Seeds)
+
+============================================================
+10. DISKRENPANZEN + URSPRUNG (getrennt nach Ebene)
+============================================================
+
+  Ebene A (Shot Noise): KEINE Diskrepanz. Alle Kontrollen [PROVEN].
+  Ebene B (PSF-Mathematik): KEINE Diskrepanz. Normalisierung korrekt,
+      Varianzreduktion konsistent (uniform 0.973, Inneres 1.017).
+  Ebene C (Boundary reflect): DISKRENPANZ [PROVEN]. reflect-Padding
+      erzeugt am Bildrand (innerhalb 15 nm) eine künstlich erhöhte
+      Photonenzahl (Spiegelung der hellen Linie statt periodischer
+      Fortsetzung) → erhöhte Feldvarianz → erhöhte Kantenvarianz.
+      Nachweis: Shift-Invarianz verletzt (t = −30.9), Feldvarianz
+      erhöht (t = 12.61).
+  Ebene D (Produktions-LER): DISKRENPANZ [PROVEN]. Standard-LER um
+      12 % erhöht (t = 34.8), positionsabhängig. Betroffene Kanten:
+      innerhalb 15 nm vom Bildrand; die Standard-Kante (10.6 nm
+      Abstand) ist betroffen.
+  Edge-Extraction: AUSGESCHLOSSEN als Primärursache — die
+      Rand-Kante ist der Ort, wo die LER sichtbar wird, nicht die
+      Ursache der Verzerrung.
+
+============================================================
+11. ENTSCHEIDUNGSFRAGEN A–D
+============================================================
+
+  A — Photon Shot Noise korrekt?
+      [PROVEN] — Poisson exakt, Dosis- und Grid-Skalierung exakt.
+  B — SE-Blur mathematisch korrekt implementiert?
+      [PROVEN] — Kernel normiert (sum = 1.0), separierbare Faltung,
+      Varianzreduktion konsistent mit sum(PSF²) auf uniformem Feld.
+  C — SE-Blur mit reflect für dieses periodische Feld physikalisch
+      korrekt?
+      [FAILED] — Periodizitätsinvarianz nachweislich verletzt
+      (65.8 % LER-Änderung unter rein periodischer Verschiebung,
+      t = −30.9; circular invariant, t = −0.44).
+  D — Produktionspipeline liefert positionsabhängige LER?
+      [PROVEN] — 12 % LER-Bias reflect vs. circular (t = 34.8),
+      Verschiebungsabhängigkeit nachgewiesen (t = −30.9).
+
+============================================================
+12. BEWIESEN (nur [PROVEN])
+============================================================
+
+  [PROVEN] Poisson-Statistik exakt (0.994–1.004, N=1000)
+  [PROVEN] Dosisexponent −0.498 ± 0.001 (CI enthält −0.5)
+  [PROVEN] Pixelweise Varianz ∝ lokale Dosis (0.998–1.000)
+  [PROVEN] Grid-Invarianz (max. 0.05 %, p ≈ 0)
+  [PROVEN] PSF-Normalisierung sum = 1.0 (Code + Messung)
+  [PROVEN] PSF-Varianzreduktion korrekt (uniform 0.973, Inneres 1.017)
+  [PROVEN] Seed-Reproduzierbarkeit exakt
+  [PROVEN] reflect verletzt Periodizitätsinvarianz (t = −30.9)
+  [PROVEN] circular ist invariant (t = −0.44)
+  [PROVEN] Produktions-LER um 12 % erhöht (t = 34.8) und
+           positionsabhängig
+  [PROVEN] Effekt liegt im geblurrten Feld (t = 12.61), nicht in
+           extract_edges
+
+============================================================
+13. WIDERLEGT
+============================================================
+
+  [REJECTED] H6 — "reflect-Padding ist mit dem periodischen Feld
+      kompatibel": reproduzierbar widerlegt (Shift-Test, t = −30.9).
+  [REJECTED] H7 — "Boundary-Convention beeinflusst die LER nicht
+      reproduzierbar": widerlegt (12 % Bias, t = 34.8).
+  [REJECTED] Die Annahme, der STEP-3.6-LER-Effekt werde durch
+      extract_edges verursacht: widerlegt (Post-Blur-Kontrolle).
+  [REJECTED] Die Annahme, jede Kante sei gleichermaßen betroffen:
+      widerlegt — nur Kanten in der Randzone (innerhalb 15 nm)
+      sind betroffen; die linke Kante (ROI, 10–18 nm Abstand) zeigt
+      keinen signifikanten Shift (t = −1.36).
+
+============================================================
+14. OFFEN / EINSCHRÄNKUNGEN
+============================================================
+
+  [OPEN] Formale Klassifikation des reflect-Verhaltens: Das
+      Pipeline-Feld ist periodisch (Periode 64 nm, aus Fourier-
+      Ordnungen konstruiert) — die Periodizität ist damit eine
+      physikalisch stark begründete Sollbedingung. Der Code enthält
+      aber KEINE explizite Spezifikation der Boundary Condition
+      (exposure.py Z.227–231 ohne Begründungskommentar). Ob reflect
+      gegen eine formal spezifizierte Sollbedingung verstößt oder
+      nur gegen eine implizite physikalische Erwartung, ist nicht
+      vollständig abgesichert.
+  [OPEN] Exakte Größe des LER-Bias für die Standard-Konfiguration:
+      12 % gemessen; der Bias hängt von der Kantenposition relativ
+      zum Rand ab (funktionale Form nicht modelliert).
+  [OPEN] PSF-Varianzreduktion nur auf 2.7 % genau bestimmt (N=1000);
+      für höhere Präzision wären N ≥ 5000 nötig — nicht
+      entscheidungsrelevant.
+  [OPEN] GPU-Verhalten nicht getestet (Audit auf CPU).
+
+============================================================
+15. AUSWIRKUNGEN AUF FOLGESTEPS
+============================================================
+
+  STEP 4 (Resist/Threshold-Kette) muss berücksichtigen:
+  1. Absolute LER-Werte der früheren Steps (4–6) enthalten einen
+     systematischen Rand-Bias von ~12 % (Standard-Kante 10.6 nm vom
+     Rand). Relative Vergleiche (Dosis-Skalierung, Exponenten,
+     Grid-Invarianz) sind davon kaum betroffen (systematischer
+     Faktor kürzt sich in Verhältnissen).
+  2. Die Dosis- und Grid-Skalierungsaussagen (se_blur=0) sind vom
+     Padding-Effekt vollständig unberührt (kein Blur → kein Padding).
+  3. Für LER-Messungen mit Kanten < 15 nm vom Bildrand muss die
+     Randempfindlichkeit als systematische Unsicherheit geführt
+     werden.
+  4. Boundary-Condition-Spezifikation: Vor weiteren LER-basierten
+     Schritten sollte die intendierte Randbedingung des periodischen
+     Feldes im Code/Config dokumentiert werden (physikalische
+     Sollbedingung), damit die Klassifikation von GELB → GRÜN oder
+     ROT abschließbar ist.
+  5. RECOMMENDED FOLLOW-UP — NOT IMPLEMENTED: Nach Klärung der
+     Sollbedingung ggf. Umstellung auf mode="circular" (periodische
+     Fortsetzung) als separater, getesteter Produktionsschritt.
+
+============================================================
+16. ABSCHLUSSSTATUS
+============================================================
+
+  STEP 3 STATUS: GELB
+
+  Begründung:
+  1. Ebene A (Shot Noise) und Ebene B (PSF-Mathematik) sind vollständig
+     [PROVEN] korrekt — die Kernfrage des Steps ("erzeugt der
+     stochastic-Pfad ein physikalisch korrektes Rauschfeld unter
+     Dosis-/Grid-Skalierung") ist positiv beantwortet.
+  2. Aber: reflect-Padding erzeugt eine reproduzierbare, messbare
+     Produktionspfad-Abweichung — die LER ist positionsabhängig
+     (t = −30.9) und um ~12 % erhöht (t = 34.8). Das ist mehr als
+     ein kosmetisches Artefakt: Es verfälscht ein Produktionsergebnis
+     systematisch.
+  3. Die Abweichung verstößt gegen die physikalisch begründete
+     Sollbedingung "Periodizität des Feldes" (das Aerial-Feld ist per
+     Konstruktion periodisch). Die formale Absicherung dieser
+     Sollbedingung im Code fehlt jedoch (keine explizite Boundary-
+     Spezifikation) — daher ist die Klassifikation als eindeutiger
+     Produktionsfehler (ROT) nicht vollständig abgesichert.
+  4. Kein ROT ohne formale Sollbedingung; kein GRÜN trotz
+     reproduzierbarer Abweichung. → GELB (Diskrepanz vorhanden,
+     Klassifikation nicht vollständig abgesichert).
+
+  PRODUKTIONSÄNDERUNG:
+  NICHT DURCHGEFÜHRT
+
+  FOLLOW-UP (NOT IMPLEMENTED):
+  1. Boundary-Condition-Intention im Code dokumentieren
+     (Periodizität des Pipeline-Feldes als Sollbedingung).
+  2. Danach Entscheidung: reflect→circular als getesteter
+     Produktionsschritt (separater Step, mit voller Regression).
+  3. Absolute LER-Werte der Steps 4–6 nach Entscheidung ggf.
+     neu auswerten (Rand-Bias ~12 %).
+
+============================================================
+QUALITÄTSKONTROLLE (Checkliste §23 des Auftrags)
+============================================================
+
+1. Räumliche Feldvarianz vs. Shot-Noise-Varianz verwechselt?
+   NEIN — pixelweise Varianz über Realisierungen (STEP 3.2) und
+   uniforme Kontrolle (STEP 3.1) getrennt; räumliche "relative_std"
+   der 3.1-Tabelle als nicht-quantitativ markiert.
+2. Mittelwert des nichtuniformen Feldes berücksichtigt? JA —
+   mean(D_eff) = 0.181294 × dose explizit.
+3. dose vs. dose_map unterschieden? JA — pixelweise Theorie auf
+   dose_map (aerial × dose) bezogen.
+4. Grid-Pixelfläche korrekt? JA — voxel_area = dx² pro Grid.
+5. sum(PSF²) korrekt interpretiert? JA — als Varianzreduktion für
+   unabhängige Pixel; Gültigkeit nur bei konstanter Dosis;
+   Gesamtfeld-Abweichung als Randartefakt lokalisiert.
+6. Randartefakt vs. Produktionsfehler logisch getrennt? JA —
+   aber: "bekannt" ≠ "kein Fehler"; reproduzierbare Abweichung
+   gegen begründete (wenn auch nicht formal spezifizierte)
+   Sollbedingung → GELB statt GRÜN.
+7. 16-nm-Test ausgeschlossen? JA.
+8. Edge-Extraction nicht als Primärursache? JA — Post-Blur-Kontrolle
+   (t = 12.61) beweist Feld-Ursache.
+9. circular nicht allein wegen Optik als "bewiesen richtig"?
+   JA — circular ist als Kontrolle invariant [PROVEN], aber die
+   Sollbedingung (Periodizität) ist die Begründung, nicht die
+   Ästhetik.
+10. Signifikanz allein → kein Produktionsfehler konstruiert? JA —
+    Signifikanz belegt Reproduzierbarkeit; Klassifikation hängt an
+    der Sollbedingung.
+11. Reproduzierbarer Effekt nicht als harmlos abgetan? JA — 12 %
+    LER-Bias und Positionsabhängigkeit sind real; deshalb GELB,
+    nicht GRÜN.
+12. Status durch Messdaten gedeckt? JA — GELB aus t = −30.9
+    (Shift), t = 34.8 (Bias), t = 12.61 (Feld) bei fehlender
+    formaler Boundary-Spezifikation.
+
+============================================================
+ENDE STEP 3 FINAL REVALIDATION
+============================================================

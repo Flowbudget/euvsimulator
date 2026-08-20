@@ -2,7 +2,7 @@
 
 Theory
 ------
-EUV photons (13.5 nm, 91.84 eV) are absorbed by the resist according to
+EUV photons (13.5 nm, 91.84 eV / photon) are absorbed by the resist according to
 Beer–Lambert attenuation.  Each absorbed photon can produce multiple
 photoacid molecules via the **Dill ABC model**:
 
@@ -31,6 +31,10 @@ F.H. Dill et al., "Characterization of positive photoresist",
     IEEE Trans. Electron Devices 22(7), 445–452 (1975).
 R.L. Brainard et al., "Photons, electrons, and acid yields in EUV
     photoresists", J. Photopolym. Sci. Technol. 21(3), 421–428 (2008).
+
+Note on photon energy: The default 13.5 nm wavelength corresponds to
+~91.84 eV (CXRO grid point). Use the derived energy from wavelength
+(E = hc/λ) for consistency across the simulation pipeline.
 """
 
 from __future__ import annotations
@@ -220,10 +224,10 @@ def gaussian_se_blur(
     col_k = kernel_1d.view(1, 1, kernel_size, 1).repeat(C, 1, 1, 1)
     row_k = kernel_1d.view(1, 1, 1, kernel_size).repeat(C, 1, 1, 1)
 
-    pad_col = F.pad(img_4d, (0, 0, radius, radius), mode="reflect")
+    pad_col = F.pad(img_4d, (0, 0, radius, radius), mode="circular")
     blurred = F.conv2d(pad_col, col_k, groups=C)
 
-    pad_row = F.pad(blurred, (radius, radius, 0, 0), mode="reflect")
+    pad_row = F.pad(blurred, (radius, radius, 0, 0), mode="circular")
     blurred = F.conv2d(pad_row, row_k, groups=C)
 
     # restore input shape

@@ -1,0 +1,184 @@
+EUVSIMULATOR PHYSICS CHANGE
+Step 5
+Topic: CD extraction from developed resist instead of aerial image
+
+1. SUMMARY
+
+Fixed P0-005: In the full_chem resist path, the critical dimension (CD) was being extracted from the aerial image instead of the actual developed resist profile. The full_chem pipeline now correctly computes CD from the developed resist profile (dev_chem) produced by the threshold_development function.
+
+2. PROBLEM FOUND
+
+In src/euvsimulator/pipeline.py, function _cd_via_full_chem (lines 328-344):
+- The code computed a binary development mask from the aerial image using a fixed threshold
+- It ignored the dev_chem profile that was already computed from the full resist chemistry chain (dose → acid → PEB → threshold_development)
+- The CD was extracted from this aerial-derived binary mask, not from the physical resist development
+
+This meant the "full_chem" CD was identical to the "aerial_threshold" CD by construction, defeating the purpose of the full chemistry model.
+
+3. FILES CHANGED
+
+src/euvsimulator/pipeline.py
+tests/test_full_chem_config.py
+
+4. EXACT CODE CHANGES
+
+File: src/euvsimulator/pipeline.py
+Function: _cd_via_full_chem (lines 328-344)
+
+BEFORE:
+    # CD-Extraktion: gleicher fixer Threshold wie aerial_threshold-Pfad
+    cut = aerial[half, :]
+    dc_level = float(aerial.mean())
+    nominal_dose = 20.0
+    threshold_val = (
+        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    )
+    dev = (cut > threshold_val).float()
+    dev_2d = dev.unsqueeze(0).expand(cfg.grid, cfg.grid).clone()
+
+    runs = _find_runs_1d(dev, target=0)
+    if len(runs) == 0:
+        cd_nm = 0.0
+    else:
+        longest = max(runs, key=lambda r: r[1] - r[0])
+        lidx, ridx = longest
+        cd_nm = (ridx - lidx + 1) * dx_nm
+
+    return cd_nm, dev_2d, nils_val, ler_nm, lwr_nm
+
+AFTER:
+    # CD-Extraktion aus dem entwickelten Resistprofil (dev_chem)
+    # dev_chem: 1 = developed/dissolved, 0 = undeveloped/remaining
+    # Für positive-tone: CD = width of undeveloped region (value 0)
+    dev_for_cd = dev_chem[half, :].float()  # middle row of developed profile
+    runs = _find_runs_1d(dev_for_cd, target=0)  # find runs of undeveloped (0)
+    if len(runs) == 0:
+        cd_nm = 0.0
+    else:
+        longest = max(runs, key=lambda r: r[1] - r[0])
+        lidx, ridx = longest
+        cd_nm = (ridx - lidx + 1) * dx_nm
+    # dev_2d für Visualisierung
+    dev_2d = dev_chem.clone()
+
+    return cd_nm, dev_2d, nils_val, ler_nm, lwr_nm
+
+Key changes:
+1. Uses dev_chem (result of threshold_development) instead of aerial image
+2. dev_chem polarity: 1 = developed/dissolved, 0 = undeveloped/remaining (positive-tone)
+3. CD = width of undeveloped region → target=0 in _find_runs_1d
+4. dev_2d = dev_chem.clone() for visualization (was aerial-derived)
+
+File: tests/test_full_chem_config.py
+Function: test_both_paths_identical_cd → test_both_paths_produce_reasonable_cd
+
+Changed the test expectation: aerial_threshold and full_chem now give DIFFERENT CDs (by design), both should be reasonable (positive, in range 10-50 nm for nominal 32 nm line). NILS should still be similar since both use the dose map.
+
+5. PHYSICS JUSTIFICATION
+
+In positive-tone EUV resist:
+- Dose → acid generation (Dill ABC)
+- PEB → acid diffusion → deprotection (inhibitor reduction)
+- Development → regions where inhibitor ≤ M_th dissolve (developed = 1)
+- Remaining resist (undeveloped = 0) defines the final CD
+
+The aerial image represents the optical intensity distribution. The developed resist profile represents the physical structure after chemical processing. The CD must come from the latter.
+
+Before: CD derived from aerial intensity threshold → ignores resist chemistry
+After: CD derived from dev_chem → incorporates Dill C/Q, PEB k/t_bake/sigma_diff, Mack M_th
+
+6. TESTS ADDED/CHANGED
+
+TEST A (Artificial Profile):
+Created 1D profile with known CD (32 pixels = 32 nm at dx=1 nm)
+extract_cd() returns 32.00 nm → PASS
+
+TEST B (Resist Profile Change):
+Two different developed profiles (32 nm vs 40 nm wide lines)
+Same aerial image, different resist profiles → CD changes → PASS
+Proves full_chem CD depends on resist development, not aerial image
+
+TEST C (Reference Case):
+period=64 nm, line_width=32 nm, dose=20 mJ/cm², wavelength=13.5 nm
+NA=0.33, sigma=0.8, grid=256, resist_model="full_chem"
+
+BEFORE (aerial-based):
+  aerial_threshold CD: 32.00 nm
+  full_chem CD: 32.00 nm (identical - incorrect)
+
+AFTER (developed-resist-based):
+  aerial_threshold CD: 32.00 nm
+  full_chem CD: 22.00 nm (different - correct)
+  
+  With SE blur 5 nm: full_chem CD = 17.50 nm
+  With SE blur 10 nm: full_chem CD = 0.00 nm (fully developed)
+
+The difference of 10 nm at se_blur=0 reflects the physical resist development
+threshold (Mack M_th=0.3) applied to the inhibitor profile after PEB.
+This is the expected behavior - the resist chemistry changes the CD from
+the nominal aerial threshold value.
+
+7. TEST RESULTS
+
+All 534 tests PASS.
+
+Full test suite: 534 passed, 3 warnings (bootstrap convergence, unrelated to this change)
+
+Key test changes:
+- test_full_chem_config.py::test_both_paths_produce_reasonable_cd: PASSED
+- All other full_chem tests: PASSED
+- All pipeline tests: PASSED
+- All stochastic tests: PASSED
+
+8. REFERENCE CASE BEFORE
+
+Reference case: period=64 nm, CD=32 nm, dose=20 mJ/cm², NA=0.33, sigma=0.8, grid=256
+
+| se_blur_nm | resist_model | CD (nm) | NILS |
+|------------|--------------|---------|------|
+| 0 | aerial_threshold | 32.00 | 5.482 |
+| 0 | full_chem | 32.00 | 5.482 |  ← WRONG (identical to aerial)
+| 5 | aerial_threshold | 32.00 | 4.421 |
+| 5 | full_chem | 32.00 | 4.421 |  ← WRONG
+| 10 | aerial_threshold | 32.00 | 2.699 |
+| 10 | full_chem | 32.00 | 2.699 |  ← WRONG
+
+9. REFERENCE CASE AFTER
+
+| se_blur_nm | resist_model | CD (nm) | NILS |
+|------------|--------------|---------|------|
+| 0 | aerial_threshold | 32.00 | 5.482 |
+| 0 | full_chem | 22.00 | 5.482 |  ← CORRECT (different!)
+| 5 | aerial_threshold | 32.00 | 4.421 |
+| 5 | full_chem | 17.50 | 4.421 |  ← CORRECT
+| 10 | aerial_threshold | 32.00 | 2.699 |
+| 10 | full_chem | 0.00 | 2.699 |  ← CORRECT (fully developed)
+
+With stochastic (se_blur=5, enable_stochastic=True):
+| Metric | Value |
+|--------|-------|
+| CD | 17.50 nm |
+| NILS | 4.421 |
+| LER | ~0.034 nm |
+| LWR | ~0.047 nm |
+
+10. REMAINING ISSUES
+
+- The extract_cd function in resist/develop.py and metro/cd.py use different approaches (simple runs vs sub-pixel interpolation). The pipeline uses the simple _find_runs_1d method which gives pixel-accurate CD. For higher accuracy, sub-pixel interpolation from metro/cd.py could be used.
+
+- The current CD extraction uses a simple 1D line cut at the middle row. A 2D edge detection (extract_cd_2d) with averaging across rows would be more robust for rough edges.
+
+- The Mack model parameters (R_max, R_min, n, M_th) are now properly used in threshold_development, but the surface_advancement_level_set (3D level-set development) is not yet integrated. This is P1-005 in the audit.
+
+- At se_blur=10 nm, the full_chem CD becomes 0.0 (fully developed). This is physically correct for the given parameters but indicates the test case is at the edge of the process window.
+
+- The aerial_threshold path still uses the aerial image for CD. This is by design (it's a simplified model). The full_chem path is now the physically correct one.
+
+11. GIT DIFF SUMMARY
+
+src/euvsimulator/pipeline.py           |  20 +--
+tests/test_full_chem_config.py         |  13 +-
+--------------------------------------------------
+2 files changed, 16 insertions(+), 17 deletions(-)
+
+All tests pass. CD extraction in full_chem path now uses developed resist profile.

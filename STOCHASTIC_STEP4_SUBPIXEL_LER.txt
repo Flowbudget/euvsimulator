@@ -1,0 +1,248 @@
+EUVSIMULATOR — STOCHASTIC STEP 4: SUB-PIXEL LER-INTERPOLATION
+=============================================================
+Datum: 2026-08-19
+Designgrundlage: ~/Projekte/OpEnUV/STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt
+Validierungsbasis: ~/Projekte/OpEnUV/STOCHASTIC_STEP3_PHYSICS_VALIDATION.txt
+Umfang: Sub-Pixel-Kanteninterpolation (P2-004) — nur Stochastic-Pfad
+
+============================================================
+1. ANALYSE DER INTEGER-PIXEL-QUANTISIERUNG
+============================================================
+
+Die Integer-Pixel-Quantisierung entsteht in
+src/euvsimulator/resist/stochastic.py, Funktion extract_edges:
+
+  Zeile (vorher ~418-432):
+    left_idx  = torch.argmax(undeveloped, dim=1)   # ganzzahliger Index
+    right_idx = W - 1 - torch.argmax(rev, dim=1)   # ganzzahliger Index
+    left_edge  = left_idx.float() * dx             # direkt * dx -> nm
+    right_edge = right_idx.float() * dx
+
+Problem: Die Kantenposition ist auf ganze Pixel-Indizes quantisiert.
+Bei grobem Grid (dx=0.5 nm) ist die Aufloesung 0.5 nm, bei feinem
+Grid (dx=0.0625) 0.0625 nm. Die LER (RMS der Kantenabweichung)
+enthaelt dadurch einen Quantisierungs-Bias, der mit dem Grid
+skaliert — das Rauschfeld selbst ist grid-invariant (STEP 3),
+aber die Messung nicht.
+
+============================================================
+2. IMPLEMENTIERTE ÄNDERUNGEN
+============================================================
+
+Datei A: src/euvsimulator/resist/stochastic.py
+
+  extract_edges(developed, threshold=0.5, dx=1.0,
+                intensity=None)
+    NEUER Parameter: intensity (kontinuierliches Feld, z.B. acid_noisy)
+    Wenn intensity gegeben: Sub-Pixel-Verfeinerung der Kantenposition
+    durch LINEARE INTERPOLATION des Threshold-Crossings zwischen den
+    zwei Nachbarpixeln:
+
+      linke Kante:  zwischen left_idx-1 (developed, I > thr)
+                    und left_idx (undeveloped, I <= thr):
+        frac = (thr - I[left_idx-1]) / (I[left_idx] - I[left_idx-1])
+        pos  = (left_idx - 1) + frac          [in Pixeln]
+
+      rechte Kante: zwischen right_idx (undeveloped, I <= thr)
+                    und right_idx+1 (developed, I > thr):
+        frac = (thr - I[right_idx]) / (I[right_idx+1] - I[right_idx])
+        pos  = right_idx + frac               [in Pixeln]
+
+      frac wird auf [0,1] geclampt (numerische Robustheit);
+      bei Nenner ~0 wird 0.5 verwendet (Pixelmitte).
+    Wenn intensity=None: exakt altes Verhalten (Integer-Pixel).
+
+  extract_ler(..., intensity=None) und extract_lwr(..., intensity=None)
+    reichen intensity an extract_edges durch. API bleibt erhalten.
+
+Datei B: src/euvsimulator/pipeline.py
+
+  _cd_via_full_chem (stochastic-Zweig):
+    extract_ler(developed, threshold=cfg.stochastic_develop_threshold,
+                dx=dx_nm, intensity=acid_noisy)
+    extract_lwr(developed, threshold=cfg.stochastic_develop_threshold,
+                dx=dx_nm, intensity=acid_noisy)
+    -> Die Sub-Pixel-Interpolation nutzt das kontinuierliche
+       Säurefeld acid_noisy (physikalisch: die Kante liegt dort, wo
+       die Säurekonzentration den Entwicklungsschwellwert kreuzt).
+
+KEINE weiteren Änderungen:
+  - Rauschmodell (photon_deposition_shot_noise): unverändert
+  - Deterministischer Pfad: unverändert (bitweise)
+  - poisson_shot_noise/ler_lwr_estimate (Legacy): unverändert
+  - Keine QE-/Absorptionsänderung
+  - Keine künstlichen Korrekturfaktoren
+
+============================================================
+3. NEUE TESTS (tests/test_stochastic.py, TestSubPixelInterpolation)
+============================================================
+
+  1. test_intensity_shape_mismatch_raises
+     intensity mit falscher Form -> ValueError
+  2. test_smooth_ramp_gives_fractional_edge
+     Lineare Rampe 0.8->0.2, Kreuzung bei exakt 31.5 Pixeln
+     (analytisch: (0.5-0.8)/(0.2-0.8)*64 = 31.5) -> PASS
+  3. test_step_function_no_intensity_keeps_integer
+     Ohne intensity: Integer-Pixel (Legacy) -> PASS
+  4. test_subpixel_edge_between_integer_values
+     [0.4, 0.6, 0.4] -> linke Kante 0.5, rechte Kante 1.5 -> PASS
+  5. test_perfect_step_subpixel_is_midpoint
+     Perfekter Step: Sub-Pixel-Kante bei 31.5 (Pixelgrenze) -> PASS
+  6. test_subpixel_reduces_grid_quantisation
+     Sub-Pixel-LER auf rauer Linie liefert Wert (kein NaN) -> PASS
+  7. test_legacy_path_unchanged
+     Aufruf ohne intensity == altes Verhalten (bitweise) -> PASS
+
+============================================================
+4. TESTERGEBNISSE
+============================================================
+
+  Neue Sub-Pixel-Tests:           7 passed
+  tests/test_stochastic.py:      61 passed
+  tests/test_photon_deposition.py: 19 passed
+  tests/test_stochastic_pipeline.py: 5 passed
+  VOLLE SUITE:                   560 passed, 4 warnings
+                                 (553 vorher + 7 neue)
+
+  Während der Entwicklung aufgetretener Fehler und Fix:
+  - dtype-Mismatch in extract_edges: left_pos war float32
+    (left_idx.float()), frac erbte das dtype von intensity
+    (float64 nach set_default_dtype in pipeline.py). Isoliert
+    grün (Default float32), in der vollen Suite rot. Fix:
+    left_pos/right_pos = left_idx.to(intensity.dtype).
+    Das war ein echter Implementierungsfehler, kein Testproblem.
+
+============================================================
+5. MESSUNGEN — VERGLEICH STEP 3 (integer) vs STEP 4 (sub-pixel)
+============================================================
+
+A) GRID-ABHÄNGIGKEIT (dose=20, se_blur=5, seed=42, n_real=10):
+
+  grid   dx(nm)   LER_int   LER_sub   LWR_int   LWR_sub
+  128    0.5000   0.2011    0.1201    0.2938    0.1664
+  256    0.2500   0.1452    0.1261    0.1889    0.1679
+  512    0.1250   0.1291    0.1231    0.1703    0.1602
+  1024   0.0625   0.1236    0.1225    0.1878    0.1863
+
+  Spanne (max/min):
+    LER_int:  0.2011/0.1236 = 1.63   (Faktor 1.63 ueber 8x Grid)
+    LER_sub:  0.1261/0.1201 = 1.05   (Faktor 1.05 ueber 8x Grid)
+    LWR_int:  0.2938/0.1703 = 1.73
+    LWR_sub:  0.1863/0.1602 = 1.16
+
+  -> GRID-INVARIANZ DEUTLICH VERBESSERT:
+     LER-Abweichung von Faktor 1.63 auf 1.05 reduziert.
+     Die Sub-Pixel-Interpolation entfernt den Quantisierungs-Bias,
+     der bei grobem Grid die LER kuenstlich erhoehte (0.201 bei
+     dx=0.5 vs 0.120 bei sub-pixel).
+
+B) DOSIS-ABHÄNGIGKEIT (grid=256, se_blur=5, seed=42, n_real=20):
+
+  dose    LER_int   LER_sub   LWR_int   LWR_sub
+  5.0     0.0000    0.0000    0.0000    0.0000   (keine Kanten)
+  10.0    0.9173    0.8787    1.2934    1.2339
+  20.0    0.1460    0.1259    0.1939    0.1641
+  40.0    0.0682    0.0654    0.1000    0.0928
+  80.0    0.0182    0.0387    0.0258    0.0537
+  160.0   0.1013    0.0247    0.1383    0.0322
+
+  Beobachtung:
+  - Beide Varianten zeigen keine saubere Potenz-Skalierung über den
+    gesamten Bereich (Binarisierungs- und Kantenwanderungs-Artefakte,
+    wie in STEP 3 dokumentiert).
+  - WICHTIG: Der kuenstliche LER-Anstieg bei 160 mJ/cm2, der in
+    STEP 3 (integer) sichtbar war (0.101), ist mit Sub-Pixel
+    deutlich reduziert (0.025). Der Anstieg war ein Quantisierungs-
+    Artefakt, kein physikalisches Verhalten.
+  - Die Kurve 10->20->40->80->160 ist mit Sub-Pixel
+    (0.879 -> 0.126 -> 0.065 -> 0.039 -> 0.025) grob fallend,
+    waehrend integer (0.917 -> 0.146 -> 0.068 -> 0.018 -> 0.101)
+    bei 160 wieder ansteigt.
+
+C) REPRODUZIERBARKEIT (gleicher Seed, grid=256, dose=20):
+  run1 und run2 (Sub-Pixel): LER=0.1326, LWR=0.1720 — IDENTISCH
+  (Differenz < 1e-9)
+
+D) DETERMINISTISCHER PFAD:
+  Zwei identische Läufe (stochastic=False): CD/NILS bitweise gleich,
+  LER=0.0 — unverändert.
+
+E) dose=0:
+  Keine NaNs/Infs, CD=64.0 (Grid-Kante), kein Absturz.
+
+============================================================
+6. INTERPRETATION
+============================================================
+
+1. Die Sub-Pixel-Interpolation ist PHYSIKALISCH NACHVOLLZIEHBAR:
+   Die Kante liegt dort, wo die kontinuierliche Säurekonzentration
+   (acid_noisy) den Entwicklungsschwellwert kreuzt. Lineare
+   Interpolation zwischen den zwei Nachbarpixeln ist die einfachste
+   konsistente Näherung (keine Glättung, kein Fit, kein Faktor).
+
+2. Die Grid-Abhängigkeit der LER wird von Faktor 1.63 auf 1.05
+   reduziert — das bestätigt die STEP-3-Hypothese: Die
+   Grid-Abhängigkeit war ein Problem der LER-EXTRAKTION
+   (Pixel-Quantisierung), nicht des Rauschmodells.
+
+3. Der kuenstliche LER-Anstieg bei hoher Dosis (160 mJ/cm2) wird
+   deutlich reduziert (0.101 -> 0.025) — ebenfalls ein
+   Quantisierungs-Artefakt.
+
+4. Die Dosis-Skalierung ist weiterhin KEINE saubere Potenzkurve.
+   Das liegt an der Threshold-Binarisierung (developed = acid >
+   threshold) und der Kantenwanderung mit der Dosis — bewusst
+   nicht in diesem Schritt adressiert (Audit-Abschnitt 8/9.1).
+
+5. Keine kuenstlichen Faktoren eingeführt: Die Interpolation
+   verwendet nur die tatsächlichen Feldwerte und den tatsächlichen
+   Threshold. Keine Kalibrierung, keine Glättung, keine Clamps
+   ausser numerischer Robustheit (frac in [0,1], Nenner-Schutz).
+
+============================================================
+7. STATUS-ENTSCHEIDUNG
+============================================================
+
+STATUS:
+[X] Verbesserung bestätigt
+[ ] Verbesserung teilweise bestätigt
+[ ] Keine Verbesserung
+[ ] Problem liegt an anderer Stelle
+
+BEGRÜNDUNG:
+- Grid-Invarianz: Faktor 1.63 -> 1.05 (klare Verbesserung)
+- Hohe-Dosis-Artefakt reduziert (0.101 -> 0.025)
+- LER-Sub-Pixel-Werte konvergieren gegen den feinen-Grid-Wert
+  (0.120-0.126 ueber alle Grids)
+- Deterministischer Pfad unverändert, Reproduzierbarkeit erhalten,
+  volle Suite 560 Tests grün
+
+EINSCHRAENKUNG:
+- Die Dosis-Skalierung der LER ist weiterhin nicht exakt -0.5.
+  Das ist ein separates Problem (Threshold-Binarisierung +
+  Kantenwanderung), kein Defekt der Sub-Pixel-Interpolation.
+  Fuer eine saubere LER-Dosis-Skalierung waere ein modifizierter
+  Entwicklungsschritt noetig (z.B. Mack-Modell mit variabler
+  Schwellwert-Lage) — bewusst NICHT Teil dieses Schritts.
+
+============================================================
+8. OFFENE PUNKTE FÜR NÄCHSTE SCHRITTE
+============================================================
+
+1. LER-Dosis-Skalierung: Die verbleibende Nicht-Monotonie kommt
+   aus der festen Threshold-Binarisierung. Eine Untersuchung mit
+   Mack-Entwicklung oder threshold-optimierter Kantensuche waere
+   der naechste sinnvolle Schritt (nicht Teil von Schritt 4).
+
+2. rms_scaling_check (Testwerkzeug) nutzt weiterhin die alte
+   poisson_shot_noise — bewusst unverändert, da es die Legacy-API
+   testet. Ein neues Skalierungs-Testwerkzeug auf Basis der neuen
+   Funktion kann spaeter ergaenzt werden.
+
+3. Absolute LER-Skala (0.02-0.2 nm) liegt weiterhin unter
+   experimentellen Werten (1-3 nm) — erfordert Kalibrierung,
+   nicht Gegenstand dieses Schritts.
+
+============================================================
+ENDE STEP-4-REPORT
+============================================================

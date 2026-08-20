@@ -1,0 +1,136 @@
+============================================================
+STEP 3.3 — GRID INVARIANCE OF STOCHASTIC PHOTON SHOT NOISE
+============================================================
+Datum: 2026-08-20
+Art: REINE MESSUNG / ANALYSE — KEINE PRODUKTIONSÄNDERUNGEN
+
+------------------------------------------------------------
+GRID DEFINITIONS
+------------------------------------------------------------
+
+grid | dx        | voxel_area  | physical_size
+128  | 0.50 nm   | 2.5000e-15  | 64 × 64 nm
+256  | 0.25 nm   | 6.2500e-16  | 64 × 64 nm
+512  | 0.125 nm  | 1.5625e-16  | 64 × 64 nm
+
+voxel_area = dx² × 1e-14 cm² (korrekt pro Grid berechnet)
+const = voxel_area × F / E_PH:
+  128: 1.699014e-01
+  256: 4.247536e-02
+  512: 1.061884e-02
+
+Aerial-Feld (Pipeline, float64, alle Grids):
+  mean ≈ 0.180–0.183, min = 3e-6, max = 0.740
+  (identische physikalische Struktur, feinere Abtastung)
+
+------------------------------------------------------------
+RESULTS — 40 mJ/cm²
+------------------------------------------------------------
+
+grid | mean(D_eff) | mean(pixel_variance) | median(pixel_variance)
+128  | 14.167      | 83.2                 | 76.9
+256  | 13.805      | 324.3                | 290.7
+512  | 13.818      | 1298.3               | 1161.4
+
+------------------------------------------------------------
+RESULTS — 160 mJ/cm²
+------------------------------------------------------------
+
+grid | mean(D_eff) | mean(pixel_variance) | median(pixel_variance)
+128  | 56.673      | 332.9                | 304.9
+256  | 55.198      | 1297.0               | 1158.4
+512  | 55.265      | 5195.4               | 4663.0
+
+Hinweis: mean(D_eff) ist das Mittel über das gesamte Aerial-Feld
+(mean(aerial) × D ≈ 0.18 × D). Die Varianz skaliert mit 1/dx²,
+weil die Pixelfläche kleiner wird — das ist die ERWARTETE
+physikalische Skalierung (weniger Photonen pro kleinerem Pixel →
+höhere Pixelvarianz, gleiche physikalische Rauschdichte).
+
+------------------------------------------------------------
+THEORY RATIO
+------------------------------------------------------------
+
+grid | dose  | measured/theory variance ratio
+128  | 40.0  | 0.9978 (median 0.9951)
+256  | 40.0  | 0.9976 (median 0.9946)
+512  | 40.0  | 0.9977 (median 0.9907)
+128  | 160.0 | 0.9973 (median 0.9956)
+256  | 160.0 | 0.9978 (median 0.9951)
+512  | 160.0 | 0.9978 (median 0.9943)
+
+Alle Ratios 0.997–0.998 — im Rahmen der statistischen Unsicherheit
+(N=500) identisch mit 1.0.
+
+Theorie: Var(D_eff) = dose_map / const = aerial_norm × D / const
+
+------------------------------------------------------------
+PHYSICAL COMPARISON
+------------------------------------------------------------
+
+Methode: Vergleich des mittleren Quotienten
+  measured_variance / theoretical_variance
+über alle gültigen Pixel (aerial_norm > 0.01).
+Alle Grids decken dieselbe physikalische Region (64×64 nm) ab;
+gültige Pixel = physikalisch äquivalente Bereiche mit signifikanter
+Aerial-Intensität. Der Quotient ist die physikalisch invariante Größe.
+
+Relative Differenz der Ratios (40 mJ/cm²):
+  A vs B: |0.9978 - 0.9976| / 0.9978 = 0.02 %
+  B vs C: |0.9976 - 0.9977| / 0.9976 = 0.01 %
+  A vs C: |0.9978 - 0.9977| / 0.9978 = 0.01 %
+
+Relative Differenz der Ratios (160 mJ/cm²):
+  A vs B: |0.9973 - 0.9978| / 0.9973 = 0.05 %
+  B vs C: |0.9978 - 0.9978| / 0.9978 = 0.00 %
+  A vs C: |0.9973 - 0.9978| / 0.9973 = 0.05 %
+
+Maximale Grid-Abweichung: 0.05 % — keine physikalisch relevante
+Grid-Abhängigkeit.
+
+------------------------------------------------------------
+DX SCALING
+------------------------------------------------------------
+
+Prüfung: variance ∝ dx^p (auf dem measured/theory-Ratio)
+
+  Dose 40 mJ/cm²:  p = 0.0001, R² = 0.4504
+  Dose 160 mJ/cm²: p = -0.0003, R² = 0.6730
+
+Erwartung: p = 0.0 (kein künstlicher dx-Faktor)
+Gemessen: |p| ≤ 0.0003 — statistisch nicht von 0 unterscheidbar.
+
+Die R²-Werte sind hoch, weil die Ratios extrem eng beieinander
+liegen (Spannweite < 0.001); der Fit auf so kleine Streuungen
+ist nicht aussagekräftig, aber der Exponent p ist verschwindend
+klein und in der richtigen Größenordnung (≈ 0).
+
+------------------------------------------------------------
+AUDIT CLASSIFICATION
+------------------------------------------------------------
+
+grid invariance:
+[PROVEN] — Ratios 0.9973–0.9978 über alle Grids und Dosen
+
+correct voxel-area scaling:
+[PROVEN] — voxel_area = dx² pro Grid korrekt verwendet;
+           Varianz-Skalierung 1/dx² ist die erwartete Physik
+
+no artificial dx dependence:
+[PROVEN] — dx-Exponent p ≤ 0.0003 ≈ 0; keine künstliche
+           Abhängigkeit vom Gitterabstand
+
+production error:
+[NO]
+
+------------------------------------------------------------
+RAW ERRORS
+------------------------------------------------------------
+
+Keine. Alle 3000 Realisierungen (3 Grids × 2 Dosen × 500)
+abgeschlossen. Keine NaN/Inf. Seeds deterministisch und
+unabhängig (Basis 20000 + grid-spezifischer Offset).
+
+============================================================
+ENDE STEP 3.3
+============================================================

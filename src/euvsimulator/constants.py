@@ -2,7 +2,7 @@
 
 All values are in SI units unless otherwise noted.  EUV lithography operates
 at 13.5 nm (in-band: 13.35–13.65 nm) corresponding to a photon energy of
-91.84 eV.
+91.84 eV (CXRO grid point).
 
 References
 ----------
@@ -56,14 +56,20 @@ FINE_STRUCTURE: float = 7.2973525693e-3
 # EUV lithography parameters
 # ──────────────────────────────────────────────
 
+HC_EV_NM: float = PLANCK_EV * SPEED_OF_LIGHT * 1e9
+"""h·c in [eV·nm] = 1239.841984055... eV·nm."""
+
 EUV_WAVELENGTH_NM: float = 13.5
-"""Primary EUV lithography wavelength [nm] — 91.84 eV."""
+"""Primary EUV lithography wavelength [nm] — standard EUV wavelength."""
 
 EUV_WAVELENGTH_M: float = EUV_WAVELENGTH_NM * 1e-9
 """Primary EUV wavelength in [m]."""
 
-EUV_ENERGY_EV: float = 91.84
-"""Photon energy at 13.5 nm [eV] — h·c/λ."""
+EUV_ENERGY_EV: float = HC_EV_NM / EUV_WAVELENGTH_NM
+"""Photon energy at EUV_WAVELENGTH_NM [eV] — derived from E = hc/λ.
+This is the single source of truth for photon energy.
+Value: ~91.840147 eV (CXRO grid point is 91.84 eV).
+"""
 
 EUV_BANDWIDTH_EV: float = 1.84
 """2 % in-band mirror bandwidth at 13.5 nm (90.84–92.68 eV) [eV]."""
@@ -100,9 +106,9 @@ def J_to_eV(energy_J: float) -> float:
 
 def nm_to_eV(wavelength_nm: float) -> float:
     """Convert wavelength [nm] to photon energy [eV] via E = hc/λ."""
-    return (PLANCK_EV * SPEED_OF_LIGHT) / (wavelength_nm * 1e-9)
+    return HC_EV_NM / wavelength_nm
 
 
 def eV_to_nm(energy_eV: float) -> float:
     """Convert photon energy [eV] to wavelength [nm]."""
-    return (PLANCK_EV * SPEED_OF_LIGHT) / energy_eV * 1e9
+    return HC_EV_NM / energy_eV

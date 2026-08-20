@@ -1,0 +1,494 @@
+EUVSIMULATOR UNABHÄNGIGES PHYSIKALISCHES AUDIT
+Stochastic / Photon Shot-Noise / Acid Generation
+Date: 2026-08-19
+Audit-Typ: unabhängige mathematische Prüfung (keine Produktionsänderungen)
+
+============================================================
+1. EXECUTIVE SUMMARY
+============================================================
+
+Die Fremd-Diagnose wird im ERGEBNIS BESTÄTIGT:
+  LER steigt mit der Dosis (LER ~ dose^+0.59), obwohl für Photon-Shot-Noise
+  LER ~ 1/sqrt(dose) erwartet wird.
+
+Die von den anderen Agenten genannte URSACHE ist jedoch UNVOLLSTÄNDIG
+bzw. in einem Punkt falsch:
+  - FALSCH: "die Reskalierung noisy_acid = acid*(noisy_count/lam) erzeugt
+    eine falsche Varianzskalierung Var ∝ dose"
+  - RICHTIG: die Varianz der Reskalierung ist MATHEMATISCH EXAKT korrekt:
+      Var[noisy_acid] = acid^2 / lam,  rel_noise = 1/sqrt(lam)
+    (numerisch verifiziert über 2000 Realisierungen, Abweichung < 1%)
+  - Die wahre Ursache liegt in DREI anderen Defekten:
+    (a) Binarisierung einer bei lam<<1 bimodalen Verteilung
+    (b) fehlende räumliche Korrelation (weißes Voxelrauschen)
+    (c) Voxelgröße bestimmt lam -> vollständige Grid-Nichtinvarianz
+
+Kernbefund in einem Satz:
+  Die Momente (E, Var) der Rauschformel stimmen exakt, aber die
+  VERTEILUNG ist bei realistischen Parametern (lam ~ 0.03 pro Voxel)
+  so extrem nicht-gaußsch, dass die anschließende Threshold-Binarisierung
+  eine Kante erzeugt, die durch die Photonen-Ankunftsstatistik bestimmt
+  wird - nicht durch die optische Bildform. Das Modell ist dadurch
+  grid-abhängig und zeigt die falsche Dose-Skalierung.
+
+============================================================
+2. CODE INVENTORY
+============================================================
+
+Datei: src/euvsimulator/resist/stochastic.py
+  poisson_shot_noise(acid, dose, quantum_efficiency=0.04,
+                     photon_energy_eV=91.84, dose_to_energy_factor=6.2415e15,
+                     voxel_area_cm2=None, dx_nm=1.0, dy_nm=None, ...)
+    Eingabe: acid [dimensionslos, 0..Q], dose [mJ/cm2]
+    Operation: N_ph = dose*area*f/E_ph; lam = N_ph*QE;
+               N ~ Poisson(lam); noisy = acid * N/lam
+    Ausgabe: noisy_acid [dimensionslos]
+
+  ler_lwr_estimate(acid, dose, develop_threshold=0.3, ...)
+    Eingabe: acid, dose [mJ/cm2]
+    Operation: noisy = poisson_shot_noise(...); dev = noisy > threshold;
+               LER = RMS(edge - mean_edge); LWR = std(width)
+    Ausgabe: LER/LWR [nm]
+
+  rms_scaling_check(base_acid, dose_levels, ...)
+    Skaliert base_acid proportional zur Dosis und testet LER-Skalierung.
+
+Datei: src/euvsimulator/resist/exposure.py
+  dose_to_acid(dose, C=0.1, Q=0.04, sigma_blur=5.0, dx=1.0, apply_blur=True)
+    Operation: acid = Q * (1 - exp(-C * dose))
+    Ausgabe: acid [dimensionslos, 0..Q]
+
+Datei: src/euvsimulator/pipeline.py
+  _cd_via_full_chem: dose_map = aerial * cfg.dose_mj_cm2;
+    acid = dose_to_acid(dose_map_blurred, C=cfg.dill_C, Q=cfg.dill_Q,
+                        apply_blur=False);
+    ler_lwr_estimate(acid=acid, dose=dose_map_blurred, ...)
+
+Datei: src/euvsimulator/constants.py
+  HC_EV_NM = 1239.841984055 (eV*nm); EUV_ENERGY_EV = 91.840147 eV
+
+============================================================
+3. TATSÄCHLICHE MATHEMATISCHE GLEICHUNGEN
+============================================================
+
+DETERMINISTISCHER PFAD (pipeline):
+  dose_map(x)      = aerial(x) * D            [mJ/cm2]
+  acid_det(x)      = Q * (1 - exp(-C * dose)) [dimensionslos]
+
+STOCHASTISCHER PFAD (poisson_shot_noise):
+  A_voxel          = dx_nm * dy_nm * 1e-14    [cm2]
+  N_ph(x)          = dose(x) * A_voxel * f / E_ph   [Photonen/Voxel]
+  lam(x)           = N_ph(x) * QE              [mittlere Säuremoleküle/Voxel]
+  N(x)             ~ Poisson(lam(x))           [Zufallszahl]
+  noisy_acid(x)    = acid_det(x) * N(x) / lam(x)
+
+LER/LWR:
+  dev(x)           = noisy_acid(x) > develop_threshold
+  LER              = RMS über Zeilen der Kantenabweichung
+  LWR              = std über Zeilen der Linienbreite
+
+WAS PHYSIKALISCH ERWARTET WIRD:
+  N_ph     ~ Poisson(Nbar_ph)          [Poisson bei Photonen]
+  N_abs    = eta_abs * N_ph            [Absorption]
+  N_acid   ~ Poisson(QE * N_abs)       [Säure aus Ereignissen]
+  [H+]     = N_acid / V_voxel          [Konzentration aus Molekülzahl]
+  Und das Rauschen muss über die SE-Blur-Korrelationslänge (~5 nm)
+  räumlich korreliert sein.
+
+VERGLEICH:
+  Die Form noisy_acid = acid_det * N/lam ist MOMENTEN-ÄQUIVALENT zu
+  einer korrekten Poisson-Reskalierung (E und Var stimmen), aber sie
+  erzeugt NICHT die korrekte VERTEILUNG, wenn lam << 1 ist, und sie
+  enthält KEINE räumliche Korrelation (Blur nach dem Rauschen fehlt).
+
+============================================================
+4. DIMENSIONSANALYSE
+============================================================
+
+Einheitenkette (verifiziert):
+  D [mJ/cm2] = D * 1e-3 [J/cm2]
+  E_cm2 [J/cm2] / E_ph [J] = N_cm2 [Photonen/cm2]
+  N_cm2 * A_voxel [cm2] = N_ph [Photonen/Voxel]
+  f = 6.241509074e15 [eV pro (mJ/cm2)]  = 1e-3 / e  -> KORREKT (rel. Fehler 7.4e-11)
+  E_ph = 91.840147 eV bei 13.5 nm       -> KORREKT (HC_EV_NM / lambda)
+
+Beispiel (Referenzfall):
+  dx = 0.25 nm, A_voxel = 6.25e-16 cm2, D = 20 mJ/cm2
+  N_ph = 20 * 6.25e-16 * 6.2415e15 / 91.84 = 0.85 Photonen/Voxel
+  lam  = 0.85 * 0.04 = 0.034 Säuremoleküle/Voxel
+
+INKONSISTENZEN GEFUNDEN:
+  (D1) Die 'acid' aus dose_to_acid ist eine dimensionslose KONZENTRATION
+       (0..Q), während 'lam' eine MOLEKÜLZAHL pro Voxel ist. Die
+       Multiplikation acid * N/lam mischt beide Größen. Das Ergebnis ist
+       dimensionslos konsistent, aber die Skala von lam (0.034) hat keinen
+       Bezug zur Skala von acid (0.5): der Quotient N/lam ist bei N=1
+       ein Faktor ~29 (1/0.034) - eine enorme Verstärkung.
+  (D2) Die Voxelgröße (numerisches Grid) bestimmt lam und damit das
+       gesamte Rauschregime. Physikalisch ist die relevante Skala die
+       SE-Blur-Korrelationslänge (~5 nm), nicht die Pixelgröße.
+  (D3) Es gibt kein VoxelVOLUMEN (keine Tiefe): die Konzentration ist
+       eigentlich eine Flächen-Dichte. Für LER ist das akzeptabel, aber
+       die Molekülzahl-Skala (D1) ist davon unabhängig falsch.
+
+============================================================
+5. POISSON-VALIDIERUNG
+============================================================
+
+torch.poisson RNG (200000 Samples pro lam):
+  lam    E[N]     Var[N]    Var/E   1/sqrt(lam)
+  0.01   0.0102   0.0102    1.000   10.000
+  0.10   0.0999   0.0996    0.998    3.162
+  1.00   1.0016   0.9967    0.995    1.000
+  10.0   9.9938  10.0118    1.002    0.316
+  100    99.993  100.182    1.002    0.100
+  1000  999.970 1000.320    1.000    0.032
+  -> E[N]=lam, Var[N]=lam: EXAKT ERFÜLLT. RNG ist korrekt.
+
+poisson_shot_noise (2000 Realisierungen, uniform acid):
+  dose  lam     E[noisy]  Var[noisy]  acid^2/lam  rel_noise  1/sqrt(lam)
+  1.0   0.0017  0.0492    1.413e+00   1.400e+00   24.16      24.26
+  5.0   0.0085  0.2218    5.778e+00   5.760e+00   10.84      10.85
+  20.0  0.0340  0.6338    1.178e+01   1.176e+01    5.42       5.42
+  80.0  0.1359  0.9815    7.088e+00   7.090e+00    2.71       2.71
+  320   0.5437  0.9997    1.840e+00   1.839e+00    1.36       1.36
+  -> E[noisy] = acid (unbiased), Var = acid^2/lam, rel = 1/sqrt(lam):
+     DIE RESKALIERUNGSFORMEL IST IN IHREN MOMENTEN EXAKT KORREKT.
+     (Die Fremd-Diagnose "falsche Varianzskalierung" ist widerlegt.)
+
+============================================================
+6. DOSE-SCALING (LER)
+============================================================
+
+Messung A - rms_scaling_check (dx=0.25 nm, 20 Realisierungen):
+  dose   LER(nm)  LWR(nm)  LER*sqrt(dose)
+  1.0    0.0054   0.0077   0.0054
+  2.0    0.0073   0.0103   0.0103
+  5.0    0.0134   0.0189   0.0300
+  10.0   0.0223   0.0314   0.0704
+  20.0   0.0303   0.0429   0.1355
+  40.0   0.0448   0.0645   0.2831
+  80.0   0.0670   0.0966   0.5995
+  160.0  0.1051   0.1523   1.3300
+  Power-law Exponent: +0.588  (erwartet -0.5)
+
+Messung B - FESTE acid-Kante, nur Dosis variiert (entscheidender Test):
+  dose   lam@peak  LER(nm)
+  1.0    0.0017    0.0043
+  5.0    0.0085    0.0147
+  20.0   0.0340    0.0299
+  80.0   0.1359    0.0673
+  160.0  0.2718    0.1096
+  -> LER STEIGT AUCH BEI FESTER KANTE mit der Dosis.
+     Die Implementierung selbst ist gebrochen - nicht nur die
+     acid-Skalierung der Pipeline.
+
+WARUM (mathematisch):
+  developed <=> acid*N/lam > thr  <=>  N > thr*lam/acid.
+  Mit acid = 0.5*pattern und lam = dose*pattern*K kürzt sich pattern:
+    N > thr*dose*K/0.5 =: C*dose.
+  Bei kleinen Dosen ist C*dose << 1, also praktisch N >= 1.
+  Die Kante liegt dann bei P(N>=1) = 0.5, d.h. lam = ln(2) = 0.693:
+  EINE KONSTANTE PHOTONENKONTUR, UNABHÄNGIG VON DER OPTISCHEN FORM.
+  Mit steigender Dose wandert diese Kontur in Bereiche flacheren
+  Gradienten -> die Kantenfluktuation (LER) wächst.
+  Die Optik (das acid-Profil) wird durch die Binarisierung der
+  bimodalen Verteilung praktisch bedeutungslos.
+
+============================================================
+7. GRID-SCALING (KRITISCHER BEFUND)
+============================================================
+
+Gleiche physikalische Linie (64 nm Periode), verschiedene Grids:
+
+  dx(nm)  grid   LER@20   LER@80   LER80/LER20
+  0.5000   128   0.1306   0.3691    2.83
+  0.2500   256   0.0317   0.0670    2.12
+  0.1250   512   0.0079   0.0165    2.09
+  0.0625  1024   0.0014   0.0035    2.47
+
+  -> LER ändert sich um Faktor ~90 über das Grid (0.13 -> 0.0014)!
+     Eine physikalisch korrekte Implementierung MUSS grid-invariant
+     sein: dasselbe physikalische Gebiet darf nicht andere Statistik
+     produzieren, nur weil es feiner diskretisiert wird.
+  -> Ursache: lam ~ A_voxel ~ dx^2. Feineres Grid = weniger Photonen
+     pro Voxel = höheres relatives Rauschen pro Voxel. Ohne räumliche
+     Korrelation (Blur) dominiert die Voxel-Quantisierung das Ergebnis.
+
+Vergleich mit Blur-nach-Rauschen (sigma=5 nm):
+  grid   LER@20   LER@80
+  128    9.06     6.37
+  256    9.31     6.48
+  512   10.07     6.72
+  1024   9.15     6.85
+  -> Grid-Invarianz wird mit Blur-nach-Rauschen WESENTLICH besser
+     (9.1..10.1 statt 0.001..0.13), aber die absoluten LER-Werte werden
+     unsinnig groß (9-13 nm), weil der einfache Blur-nach-Noise-Fix die
+     Punkt-Ereignis-Natur der Verteilung nicht behebt. Der richtige Fix
+     muss das Poisson-Rauschen auf der BLUR-SKALA anwenden
+     (Korrelationsvolumen statt numerischem Voxel).
+
+============================================================
+8. REALISATIONS-KONVERGENZ
+============================================================
+
+  n_real  mean_LER  std_LER   mean_LWR  std_LWR
+  1       0.0325    0.0013    0.0456    0.0018
+  5       0.0324    0.0022    0.0459    0.0027
+  10      0.0325    0.0005    0.0461    0.0005
+  20      0.0324    0.0010    0.0459    0.0013
+  50      0.0325    0.0007    0.0461    0.0010
+  100     0.0326    0.0005    0.0462    0.0009
+
+  -> Der MITTELWERT ist ab n_real=5-10 stabil (0.0324-0.0326).
+     Die Schätzung ist gut konvergiert; n_real=10-20 ist für den
+     Mittelwert ausreichend. Das Problem ist NICHT die Realisationszahl.
+
+============================================================
+9. UNABHÄNGIGES REFERENZMODELL
+============================================================
+
+Modell 1 (dose_fluctuation): N_ph ~ Poisson(Nbar);
+   acid = Q*(1-exp(-C*dose*N_ph/Nbar)); ohne Blur
+   -> Exponent +1.52 (LER wächst stark) - ebenfalls falsch ohne Blur.
+
+Modell 2 (acid_poisson): N_acid ~ Poisson(lam_acid);
+   acid = Q * N_acid/lam_acid; ohne Blur
+   -> Exponent +0.57 - gleiche Fehlersignatur wie euvsimulator.
+
+Modell 3 (korrekt): Poisson auf Photonenebene + SE-Blur NACH dem
+   Rauschen (sigma=5 nm)
+   -> Exponent -0.20 bis -0.09: die Skalierung wird NEGATIV (richtige
+      Richtung), erreicht aber nicht exakt -0.5, weil die LER über die
+      binäre Masse extrahiert wird und die Kante bei hoher Dosis wandert.
+
+SCHLUSSFOLGERUNG:
+  Die Fehlersignatur (LER ~ dose^+0.5) ist eine direkte Konsequenz der
+  fehlenden räumlichen Korrelation + Binarisierung bei lam<<1.
+  Ein Referenzmodell MIT Blur-nach-Rauschen zeigt die richtige Richtung,
+  bestätigt aber, dass der Fix auf der Blur-Korrelationsskala angesetzt
+  werden muss, nicht auf dem numerischen Voxel.
+
+============================================================
+10. EXTREME CASES
+============================================================
+
+  Fall                  acid   dose     QE    mean    NaN  Inf  Neg
+  dose=1 (linear)      0.049   1.0     0.04   0.056   nein nein nein
+  dose=20 (mid)        0.632  20.0     0.04   0.963   nein nein nein
+  dose=320 (satur.)    1.000 320.0     0.04   0.979   nein nein nein
+  zero acid            0.000  20.0     0.04   0.000   nein nein nein
+  zero dose (acid>0)   0.632   0.0     0.04   0.000   nein nein nein
+  QE=0                 0.632  20.0     0.00   0.000   nein nein nein
+  QE=1                 0.632  20.0     1.00   0.599   nein nein nein
+  huge dose 1e6        0.632 1e+06     0.04   0.632   nein nein nein
+  tiny acid+dose       0.000 1e-12     0.04   0.000   nein nein nein
+
+  -> Keine NaNs/Infs/negative Werte. Grenzfälle numerisch sauber.
+  ABER: "zero dose (acid>0)" erzeugt mean=0 obwohl acid=0.632 -
+  das Rauschen löscht die gesamte Säure bei Dosis=0. Physikalisch
+  korrekt (ohne Photonen keine Säure), aber es zeigt: die Rauschstärke
+  ist vollständig durch die Dosis bestimmt, nicht durch die acid-Form.
+
+============================================================
+11. GEFUNDENE BUGS
+============================================================
+
+BUG-1 (P0): FALSCHE DOSE-SKALIERUNG DER LER
+  Datei: src/euvsimulator/resist/stochastic.py
+  Funktion: poisson_shot_noise + ler_lwr_estimate
+  Ursache: Binarisierung (noisy > thr) einer bei lam<<1 bimodalen
+    Verteilung. Die Kante wird durch die Photonen-Ankunftskontur
+    lam=ln2 bestimmt, nicht durch die optische acid-Kante.
+  Beobachtung: LER ~ dose^+0.59 statt dose^-0.5.
+  Beweis: Messung A (rms_scaling_check) UND Messung B (feste Kante).
+
+BUG-2 (P0): KEINE GRID-INVARIANZ
+  Datei: src/euvsimulator/resist/stochastic.py
+  Funktion: poisson_shot_noise (Voxel-basiertes Rauschen)
+  Ursache: lam ~ dx^2; kein Blur nach dem Rauschen -> weißes
+    Voxelrauschen; die Voxelgröße bestimmt das Rauschregime.
+  Beobachtung: LER ändert sich um Faktor ~90 über dx 0.5->0.0625 nm.
+  Beweis: Messung D (Grid-Sweep).
+
+BUG-3 (P0): FEHLENDE RÄUMLICHE KORRELATION
+  Datei: src/euvsimulator/resist/stochastic.py
+  Funktion: poisson_shot_noise
+  Ursache: Der SE-Blur wird in der Pipeline NUR auf die deterministische
+    dose_map angewendet (vor dose_to_acid). Das Poisson-Rauschen wird
+    DANACH voxel-weise unabhängig aufaddiert -> Lag-1 Autokorrelation
+    des Rauschfelds = 0.006 (praktisch 0). Physikalisch erzeugt ein
+    Photon eine SE-Kaskade über ~5 nm -> das Rauschen MUSS korreliert
+    sein. Ohne Korrelation ist die LER ein Voxel-Quantisierungsartefakt.
+  Beobachtung: Lag-1 Autokorrelation 0.006; 98.4% der Voxel ohne Ereignis.
+  Beweis: Messung M.
+
+BUG-4 (P1): GRÖSSENSKALEN-MISMATCH acid vs lam
+  Datei: src/euvsimulator/resist/stochastic.py
+  Funktion: poisson_shot_noise (Zeile noisy_acid = acid * N/lam)
+  Ursache: acid ist eine dimensionslose Konzentration (0..Q), lam ist
+    eine Molekülzahl (~0.03). Der Quotient N/lam bei N=1 ist ~1/0.03=29.
+    Die Momente stimmen zufällig, aber die Verteilung ist extrem schief
+    (bimodal: 0 oder 29x acid).
+  Beobachtung: 98.4% der Voxel sind 0; einzelne Voxel springen auf
+    das 29-fache.
+  Beweis: Messung M + Part-2 Statistik.
+
+GEGENPRÜFUNG der Fremd-Diagnose:
+  Die Behauptung "Var[noisy] = acid^2/lam mit acid~dose, lam~dose
+  ergibt Var~dose, also LER~sqrt(dose)" ist UNVOLLSTÄNDIG:
+  LER haengt von std/|gradient| ab, und der Gradient ist ebenfalls
+  ~dose. Die reine Varianz-Argumentation sagt LER ~ 1/sqrt(dose)
+  voraus, wenn die Verteilung gaußsch wäre. Der eigentliche Fehler ist
+  die Nicht-Gauß-Verteilung + Binarisierung, nicht die Varianzformel.
+
+============================================================
+12. PRIORISIERUNG
+============================================================
+
+P0 - FUNDAMENTAL PHYSIKALISCH FALSCH:
+  1. LER ~ dose^+0.59 statt dose^-0.5 (BUG-1)
+  2. Grid-Nichtinvarianz: LER ~ dx^2 (BUG-2)
+  3. Fehlende räumliche Korrelation des Rauschens (BUG-3)
+
+P1 - WAHRSCHEINLICH FALSCH:
+  4. Größen-Mismatch acid (Konzentration) vs lam (Molekülzahl) (BUG-4)
+  5. SE-Blur wird vor dem Rauschen statt nach dem Rauschen angewendet
+     (Reihenfolge physikalisch falsch: Photonen -> Poisson -> SE-Kaskade
+      -> Säure; aktuell: dose -> Blur -> acid -> Poisson -> acid)
+
+P2 - MODELLVEREINFACHUNG:
+  6. Kein Voxelvolumen / keine Tiefe (2D-Flächenmodell)
+  7. Quantisierte Kantenextraktion (integer Pixel) für LER
+  8. develop_threshold 0.3 (Config) vs 0.15 (Tests) inkonsistent
+
+P3 - ZUKÜNFTIG:
+  9. Energie-/Ortsauflösung der SE-Kaskade (Monte-Carlo statt Gauss)
+  10. Korrelation zwischen benachbarten Ereignissen (Kaskaden-Modell)
+
+============================================================
+13. KONKRETE FIX-VORSCHLÄGE (noch nicht implementiert!)
+============================================================
+
+FIX-A (minimal, physikalisch begründet):
+  Poisson-Rauschen auf der BLUR-KORRELATIONSSKALA anwenden statt auf
+  dem numerischen Voxel:
+    1. Nbar_ph(x) = dose(x) * A_blur * f / E_ph, mit A_blur ~ pi*sigma^2
+       (Fläche der SE-Blur-PSF), sigma aus se_blur_nm.
+    2. N(x) ~ Poisson(Nbar_ph(x) * QE) auf einem groben Raster
+       (dx_blur ~ sigma) oder: N(x) auf vollem Grid, dann Gauß-Blur
+       mit sigma auf N anwenden (äquivalent).
+    3. acid_noisy(x) = Q * (1 - exp(-C * dose(x) * N_noisy/Nbar))
+    4. Entwicklung auf acid_noisy.
+  Erwartung: grid-invariant (solange dx << sigma), LER ~ 1/sqrt(dose)
+  im linearen Regime, Momente erhalten.
+
+FIX-B (physikalisch vollständiger):
+  Ereignis-basierter Ansatz:
+    1. N_ph ~ Poisson(Nbar_ph) pro Voxel
+    2. Jedes Photon erzeugt eine Gauß-SE-PSF (sigma=se_blur) -> kumuliert
+       in einer "absorbed-energy"-Map (räumlich korreliert!)
+    3. acid = Q*(1-exp(-C*E_abs_map))
+    4. Entwicklung, LER
+  Das ist die physikalisch sauberste Variante, aber teurer.
+
+FIX-C (pragmatisch für Pipeline):
+  In poisson_shot_noise einen Parameter correlation_sigma_nm einführen;
+  N auf vollem Grid sampeln, dann gaussian_se_blur auf das NOISY-Feld
+  anwenden (Blur NACH dem Rauschen), dann acid aus geblurrtem Feld.
+  WICHTIG: Blur-Fläche muss in Nbar berücksichtigt werden, damit die
+  Gesamtphotonenzahl erhalten bleibt (Energieerhaltung).
+
+HINWEIS ZU FIX-A/B/C:
+  Jede dieser Varianten muss gegen die Referenzmodelle (Part 7) und die
+  analytischen Erwartungen validiert werden:
+  - LER ~ 1/sqrt(dose) im linearen Regime
+  - Grid-Invarianz (dx-Sweep)
+  - E[noisy] = acid_det
+  - Var = korrekt (Poisson)
+  - 534 Regressionstests grün
+
+============================================================
+14. BENÖTIGTE REGRESSIONSTESTS
+============================================================
+
+TEST-STOCH-001 (Dose-Skalierung):
+  Feste acid-Kante, dose = [1,2,5,10,20,40,80,160]
+  Erwartung: LER ~ dose^-0.5 (+-0.15 Toleranz für Binarisierungseffekte)
+
+TEST-STOCH-002 (Grid-Invarianz):
+  Gleiche physikalische Struktur, grid = [128,256,512,1024]
+  Erwartung: LER-Abweichung < 20% über das Grid (heute: Faktor 90)
+
+TEST-STOCH-003 (Poisson-Momente):
+  E[N]=lam, Var[N]=lam fuer lam in [0.01, 0.1, 1, 10, 100, 1000]
+  (bereits vorhanden, wird beibehalten)
+
+TEST-STOCH-004 (Reskalierungskonsistenz):
+  E[noisy_acid] = acid_det; rel_noise = 1/sqrt(lam) (2000 Realisierungen)
+
+TEST-STOCH-005 (räumliche Korrelation):
+  Lag-1 Autokorrelation des Rauschfelds > 0.5 bei se_blur=5 nm
+  (heute: 0.006)
+
+TEST-STOCH-006 (Realisations-Konvergenz):
+  n_real = [5, 10, 20, 50]; std(LER-Schätzung) muss monoton fallen
+
+TEST-STOCH-007 (Extremfälle):
+  dose->0, dose gross, QE=0, QE=1: keine NaNs, keine Infs, keine
+  negativen Werte, Erwartungswerte konsistent
+
+============================================================
+15. UNSICHERHEITEN / OFFENE FRAGEN
+============================================================
+
+1. Exakte LER-Skalierung im gesättigten Regime (C*dose >> 1):
+   Die Sättigung von acid = Q*(1-exp(-C*dose)) ändert die Kantenlage.
+   Ob LER exakt -0.5 bleibt, hängt vom Entwicklungsmodell ab
+   (threshold vs Mack). Erwartung: -0.5 im linearen Regime, Abweichung
+   im gesättigten Bereich - muss mit realistischem Resistmodell
+   (Mack + PEB) geprüft werden.
+
+2. Korrekte Korrelationslänge: SE-Blur sigma ist ein Modellparameter
+   (5 nm Default). Die Photonen-Korrelationslänge könnte auch durch die
+   Absorptionslänge des Resists (~50-100 nm) beeinflusst werden.
+   Literatur: Gallatin (2005), Naulleau (2006) - LER ~ 1/sqrt(N) mit
+   N = Photonen pro Korrelationsvolumen.
+
+3. Die richtige Molekülzahl-Skala: QE (0.04) und das Voxelvolumen
+   bestimmen die absolute LER-Höhe. Ohne Kalibrierung gegen
+   experimentelle LER-Werte (typisch 1-3 nm bei 20 mJ/cm2) bleibt die
+   absolute Skala unsicher. Derzeit liefert das Modell 0.02-0.1 nm -
+   zwei Größenordnungen unter experimentellen Werten.
+
+4. Ob der Fix in poisson_shot_noise oder in der Pipeline (vor
+   ler_lwr_estimate) ansetzen soll, muss nach Fix-A Implementierung
+   entschieden werden. Der Pipeline-Aufruf übergibt bereits dose_map
+   und se_blur_nm - die Information ist vorhanden.
+
+============================================================
+16. ABSCHLIESSENDE BEWERTUNG
+============================================================
+
+Die Fremd-Diagnose ("LER-Skalierung falsch") wird BESTÄTIGT, aber mit
+präzisierter Ursache:
+  - NICHT die Varianzformel ist falsch (die ist exakt korrekt)
+  - SONDERN: Binarisierung einer bei lam<<1 bimodalen Verteilung +
+    fehlende räumliche Korrelation + Voxel-abhängiges Rauschen
+
+Der Stochastic-Pfad ist damit NICHT validiert und muss repariert
+werden. Der minimale physikalisch begründete Fix ist FIX-A (Poisson
+auf der Blur-Korrelationsskala) oder FIX-C (Blur nach dem Rauschen
+mit Energieerhaltung).
+
+Empfohlene Reihenfolge:
+  1. FIX-A/C implementieren (eine Variante, nicht beide)
+  2. TEST-STOCH-001..007 hinzufügen
+  3. Dose-Skalierung verifizieren (LER ~ 1/sqrt(dose))
+  4. Grid-Invarianz verifizieren (dx-Sweep)
+  5. 534 Regressionstests + NILS-Gates laufen lassen
+  6. Erst dann LER/LWR als validiert betrachten
+
+============================================================
+ENDE AUDIT-REPORT
+============================================================

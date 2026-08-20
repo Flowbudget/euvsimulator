@@ -112,7 +112,9 @@ def standard_euv_mask(
     line_width_nm : float
         Line width [nm] (default: 32 → 1:1 duty cycle).
     energy_eV : float
-        Photon energy for refractive indices (default: 91.84).
+        Photon energy for refractive indices. Default is 91.84 eV
+        (corresponding to 13.5 nm wavelength via E = hc/λ).
+        Use the derived energy from wavelength for consistency.
 
     Returns
     -------
