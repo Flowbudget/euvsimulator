@@ -167,17 +167,19 @@ class RCWA1D:
         k_xm = k0 * n_i[0] * math.sin(theta) - self.m * (2.0 * math.pi / period)
         Kx = torch.diag(k_xm / k0).to(torch.complex128)
 
-        # Permittivity Toeplitz matrix
-        use_inv = self.cfg.polarization == "TM"
-        E = permittivity_toeplitz(eps_profile, self.M, use_inverse_rule=use_inv)
+        # Permittivity Toeplitz matrices: Toeplitz(ε) and Toeplitz(1/ε)
+        E_eps = permittivity_toeplitz(eps_profile, self.M, use_inverse_rule=False)
+        E_inv = permittivity_toeplitz(eps_profile, self.M, use_inverse_rule=True)
 
-        # Eigenvalue problem: A = E - Kx²  (TE)
+        # Eigenvalue problem
         Kx2 = Kx @ Kx
         if self.cfg.polarization == "TE":
-            A = E - Kx2
+            A = E_eps - Kx2
         else:
-            E_inv = torch.linalg.inv(E)
-            A = E - Kx @ E_inv @ Kx  # Li's TM rule
+            # TM: Li's improved Fourier factorization
+            # A = E_eps - E_eps @ Kx @ inv(E_eps) @ Kx
+            E_eps_inv = torch.linalg.inv(E_eps)
+            A = E_eps - E_eps @ Kx @ E_eps_inv @ Kx
 
         eig_vals, W = torch.linalg.eig(A)
         q = torch.sqrt(eig_vals)
@@ -193,7 +195,12 @@ class RCWA1D:
             q.imag < 0,  # complex: pick Im(q) > 0
         )
         q = torch.where(flip, -q, q)
-        V = W @ torch.diag(q)  # modal admittance (TE)
+        if self.cfg.polarization == "TE":
+            V = W @ torch.diag(q)  # modal admittance: E_y ↔ H_x
+        else:
+            # TM modal admittance: E_eps @ W @ diag(1/q)  (H_y ↔ E_x)
+            q_inv = torch.where(q.abs() > 1e-30, 1.0 / q, torch.zeros_like(q))
+            V = E_eps @ W @ torch.diag(q_inv)
 
         # Rayleigh admittances of incident and substrate media
         kz_inc = torch.sqrt((n_i[0] * k0) ** 2 - k_xm**2 + 0j)
