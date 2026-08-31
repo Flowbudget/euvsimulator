@@ -42,8 +42,8 @@ SEED = 42
 # mean edge profile and raises the edge-fluctuation RMS.  Values were
 # re-measured reproducibly (seed=42, se_blur=5, dose=20); the change
 # is a documented model change, NOT a calibration.
-GOLDEN_LARGE_N_LER = 0.1925484836  # was 0.1205059215 (pre Option C)
-GOLDEN_LARGE_N_LWR = 0.2860692143  # was 0.180564 (pre Option C)
+GOLDEN_LARGE_N_LER = 0.1831419468  # was 0.1925484836 (pre Option C); was 0.1205059215 (pre Option C, pre aerial fix)
+GOLDEN_LARGE_N_LWR = 0.2626072168  # was 0.2860692143 (pre Option C); was 0.180564 (pre Option C, pre aerial fix)
 
 
 def _car_cfg(**kw):
@@ -222,8 +222,8 @@ def test_legacy_off_golden_unchanged():
     # calibration.  Pre-Option-C values: LER=0.0925884545,
     # LWR=0.1459884644.
     r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
-    assert abs(r.ler_nm - 0.1495450884) <= 1e-9
-    assert abs(r.lwr_nm - 0.2358894646) <= 1e-9
+    assert abs(r.ler_nm - 0.1412447989) <= 1e-9
+    assert abs(r.lwr_nm - 0.1837939024) <= 1e-9
 
 
 def test_legacy_mode_applies_development_switch():

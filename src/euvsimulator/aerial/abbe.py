@@ -203,10 +203,10 @@ def aerial_from_orders(
             # coherence for a rotationally symmetric source.  It damps
             # order interference *gradually* — there is no hard cutoff.
             dm = abs(mi - mj)
-            if dm == 0:
-                tcc = 1.0
+            x = math.pi * sigma * na * dm * wavelength_m / period_m
+            if abs(x) < 1e-15:
+                tcc = 1.0  # coherent limit: lim_{x->0} 2*J1(x)/x = 1
             else:
-                x = math.pi * sigma * na * dm * wavelength_m / period_m
                 tcc = 2.0 * _j1(x) / x
 
             # Interference term with defocus phase
@@ -214,8 +214,11 @@ def aerial_from_orders(
             interference = ri_defocused * rj.conj() * tcc * torch.exp(1j * phase)
             aerial_1d += interference
 
-    # Take absolute square (correct intensity: I = |Σ_field|²)
-    aerial_1d = (aerial_1d * aerial_1d.conj()).real
+    # The Hopkins double-sum is already the (real, Hermitian) intensity:
+    # I(x) = Σ_i Σ_j r_i conj(r_j) TCC(i,j) exp(i 2π (m_i-m_j) x/Λ).
+    # The (i,j)+(j,i) pairs carry conjugate phases that cancel the
+    # imaginary part, so taking .real() is exact (P0 fix, 2026-08-31).
+    aerial_1d = aerial_1d.real
 
     # Replicate to 2D: x along columns (dim 1), y along rows (dim 0)
     aerial = aerial_1d.unsqueeze(0).expand(G, G).clone()

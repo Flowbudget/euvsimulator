@@ -11,6 +11,7 @@ from euvsimulator.aerial.hopkins import (
     hopkins_aerial,
     tcc_soc_decomposition,
 )
+from euvsimulator.aerial.abbe import aerial_from_orders
 from euvsimulator.aerial.pupil import circular_pupil, pupil_grid
 from euvsimulator.aerial.source import conventional, dipole_x
 
@@ -373,3 +374,118 @@ class TestEdgeCases:
         hop_img = result["hopkins_aerial"]
         std = hop_img.std().item()
         assert std < 0.01, f"Uniform mask aerial not constant (std = {std:.4f})"
+
+
+# ── Aerial_from_orders P0 regression (TCC sigma=0 + squaring) ──────────────
+
+
+class TestAerialFromOrdersPhysics:
+    """P0 regressions for aerial_from_orders (fix 2026-08-31).
+
+    Covers:
+    1. sigma=0 must not crash (was ZeroDivisionError at TCC line).
+    2. sigma=0 must equal the coherent limit |Σ r_m e^{iφ_m}|².
+    3. Single-order normalization: r_0=1 -> aerial = 1 for any sigma.
+    4. The returned aerial is the linear Hopkins intensity, NOT its square.
+    5. TCC(x->0) = 1 implemented via the x-guard (dm=0 and sigma=0).
+    6. sigma>0 behaviour preserved (Hopkins J1 coherence).
+    """
+
+    @pytest.fixture
+    def orders(self) -> torch.Tensor:
+        # Non-trivial complex amplitudes for 3 orders
+        return torch.tensor(
+            [
+                complex(-0.05, 0.03),
+                complex(0.30, -0.10),
+                complex(-0.04, -0.02),
+            ],
+            dtype=torch.complex128,
+        )
+
+    @pytest.fixture
+    def order_idx(self) -> torch.Tensor:
+        return torch.tensor([-1, 0, 1], dtype=torch.int64)
+
+    @pytest.fixture
+    def params(self):
+        return dict(period_m=48e-9, na=0.33, wavelength_m=13.5e-9, grid=128)
+
+    def test_sigma_zero_does_not_crash(self, orders, order_idx, params):
+        a = aerial_from_orders(orders, order_idx, **params, sigma=0.0)
+        assert a.shape == (params["grid"], params["grid"])
+        assert not torch.isnan(a).any()
+        assert not torch.isinf(a).any()
+        assert (a >= 0).all()
+
+    def test_sigma_zero_matches_coherent_limit(self, orders, order_idx, params):
+        """sigma=0 must equal the fully coherent |Σ r_m exp(i 2π m x/Λ)|²."""
+        import math
+
+        period_m = params["period_m"]
+        x_pos = torch.linspace(-period_m / 2, period_m / 2, params["grid"])
+        I_coherent = torch.zeros(params["grid"], dtype=torch.complex128)
+        for i, m in enumerate(order_idx.tolist()):
+            I_coherent += orders[i] * torch.exp(1j * 2 * math.pi * m * x_pos / period_m)
+        I_coherent = (I_coherent * I_coherent.conj()).real
+
+        a = aerial_from_orders(orders, order_idx, **params, sigma=0.0)
+        diff = (a[0, :] - I_coherent).abs().max().item()
+        assert diff < 1e-6, f"sigma=0 not coherent: max|diff|={diff:.2e}"
+
+    def test_single_order_normalization(self, params):
+        """r_0 = 1, all others 0 -> aerial = 1 constant, for any sigma."""
+        idx = torch.tensor([0], dtype=torch.int64)
+        orders = torch.tensor([complex(1.0, 0.0)], dtype=torch.complex128)
+        for sig in [0.0, 0.1, 0.3, 0.8, 1.0]:
+            a = aerial_from_orders(orders, idx, **params, sigma=sig)
+            assert abs(a.max().item() - 1.0) < 1e-8, f"sigma={sig} max not 1"
+            assert abs(a.min().item() - 1.0) < 1e-8, f"sigma={sig} min not 1"
+
+    def test_not_squared(self, orders, order_idx, params):
+        """The returned aerial is the linear Hopkins I, not I²."""
+        import math
+
+        period_m = params["period_m"]
+        x_pos = torch.linspace(-period_m / 2, period_m / 2, params["grid"])
+        sigma = 1e-6  # ~ coherent, avoids 0/0 edge but TCC ≈ 1
+        a = aerial_from_orders(orders, order_idx, **params, sigma=sigma)
+
+        # True Hopkins double-sum with the same TCC
+        I_true = torch.zeros(params["grid"], dtype=torch.complex128)
+        for i in range(len(order_idx)):
+            mi = int(order_idx[i])
+            ri = orders[i]
+            for j in range(len(order_idx)):
+                mj = int(order_idx[j])
+                rj = orders[j]
+                dm = abs(mi - mj)
+                x_t = math.pi * sigma * params["na"] * dm * params["wavelength_m"] / period_m
+                tcc = 1.0 if abs(x_t) < 1e-15 else 2.0 * _j1_ref(x_t) / x_t
+                I_true += ri * rj.conj() * tcc * torch.exp(1j * 2 * math.pi * (mi - mj) * x_pos / period_m)
+        I_true = I_true.real
+
+        diff_lin = (a[0, :] - I_true).abs().max().item()
+        diff_sq = (a[0, :] - I_true**2).abs().max().item()
+        assert diff_lin < 1e-6, f"aerial ≠ linear I: max|diff|={diff_lin:.2e}"
+        assert diff_sq > 1e-3, f"aerial is still squared: max|diff| vs I²={diff_sq:.2e}"
+
+    def test_sigma_large_coherence_damps(self, orders, order_idx, params):
+        """Contrast should decrease as sigma grows (incoherence)."""
+        contrast = {}
+        for sig in [0.1, 0.5, 1.0, 3.0, 10.0]:
+            a = aerial_from_orders(orders, order_idx, **params, sigma=sig)
+            c = (a.max() - a.min()) / (a.max() + a.min() + 1e-30)
+            contrast[sig] = float(c)
+        # Contrast must monotonically (mostly) decrease; certainly 0.1 > 10.0
+        assert contrast[0.1] > contrast[10.0], (
+            f"Coherence not damped: contrast(0.1)={contrast[0.1]:.4f}, "
+            f"contrast(10)={contrast[10.0]:.4f}"
+        )
+
+
+def _j1_ref(x: float) -> float:
+    """Reference Bessel J1 (scipy) — independent of the module under test."""
+    from scipy.special import j1
+
+    return float(j1(x))

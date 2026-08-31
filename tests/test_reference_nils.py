@@ -71,7 +71,10 @@ def aerial_image_ref(
             phase = 2 * np.pi * (mi - mj) * x / period_m
             a1 += a_coeffs_p[i] * np.conj(a_coeffs_p[j]) * tc * np.exp(1j * phase)
 
-    I = np.real(a1 * np.conj(a1)) * dose_mj_cm2
+    # The Hopkins double-sum is already the (real, Hermitian) intensity.
+    # The (i,j)+(j,i) pairs carry conjugate phases that cancel the
+    # imaginary part, so taking .real() is exact (P0 fix, 2026-08-31).
+    I = np.real(a1) * dose_mj_cm2
     I2 = np.tile(I, (grid, 1))
 
     if sigma_blur_nm > 0:
@@ -153,7 +156,7 @@ def build_orders():
 
 
 def test_nils_blur_zero():
-    """NILS without SE blur should match reference (high, ~5.4)."""
+    """NILS without SE blur should match reference (~2.7)."""
     m_p, a_p, orders_complex, order_indices = build_orders()
 
     # euvsimulator
