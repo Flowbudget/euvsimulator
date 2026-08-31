@@ -672,14 +672,12 @@ def run_simulation(
             ),
         )
 
-        # Average TE/TM for unpolarized (conventional EUV)
-        reflected_orders = (orders_te + orders_tm) / 2.0
-
-        # RCWA returns M orders corresponding to solver.m (from -M//2 to +M//2)
-        # Use exactly the same order range as the solver
+        # Unpolarized illumination: TE and TM are orthogonal incoherent
+        # polarization states.  The physical average is applied AFTER
+        # aerial (intensity) reconstruction, NOT on the complex fields
+        # (P1 fix, 2026-08-31).  Intensity maps are averaged below.
         solver_m = torch.arange(-cfg.n_rcwa_orders // 2, cfg.n_rcwa_orders // 2 + 1, device=device)
         order_indices = solver_m.tolist()
-        amplitudes = reflected_orders
     else:
         # Thin-mask analytic Fourier coefficients (existing path)
         a = r0_abs
@@ -697,17 +695,45 @@ def run_simulation(
 
     # Compute aerial image from orders (Hopkins formulation)
     order_tensor = torch.tensor(order_indices, dtype=torch.int64, device=device)
-    aerial = aerial_from_orders(
-        amplitudes,
-        order_tensor,
-        period_m=period_m,
-        na=cfg.na,
-        wavelength_m=wavelength_m,
-        sigma=cfg.sigma,
-        illumination_shape=cfg.illumination_shape,
-        grid=cfg.grid,
-        focus_nm=cfg.focus_nm,
-    )
+    if cfg.use_rcwa:
+        # Physical unpolarized average: I = (I_TE + I_TM) / 2.
+        # TE and TM are orthogonal incoherent states — averaging must
+        # happen AFTER the quadratic (intensity) reconstruction.
+        aerial_te = aerial_from_orders(
+            orders_te,
+            order_tensor,
+            period_m=period_m,
+            na=cfg.na,
+            wavelength_m=wavelength_m,
+            sigma=cfg.sigma,
+            illumination_shape=cfg.illumination_shape,
+            grid=cfg.grid,
+            focus_nm=cfg.focus_nm,
+        )
+        aerial_tm = aerial_from_orders(
+            orders_tm,
+            order_tensor,
+            period_m=period_m,
+            na=cfg.na,
+            wavelength_m=wavelength_m,
+            sigma=cfg.sigma,
+            illumination_shape=cfg.illumination_shape,
+            grid=cfg.grid,
+            focus_nm=cfg.focus_nm,
+        )
+        aerial = (aerial_te + aerial_tm) / 2.0
+    else:
+        aerial = aerial_from_orders(
+            amplitudes,
+            order_tensor,
+            period_m=period_m,
+            na=cfg.na,
+            wavelength_m=wavelength_m,
+            sigma=cfg.sigma,
+            illumination_shape=cfg.illumination_shape,
+            grid=cfg.grid,
+            focus_nm=cfg.focus_nm,
+        )
 
     # Normalise to dose (absolute intensity scaling, NOT max-normalisation).
     # The threshold is a FIXED fraction of the nominal-dose intensity, so the
