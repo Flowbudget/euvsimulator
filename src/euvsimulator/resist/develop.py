@@ -162,6 +162,102 @@ def threshold_development(
     return (inhibitor <= threshold).to(inhibitor.dtype)
 
 
+def stochastic_development(
+    latent: torch.Tensor,
+    threshold: float = 0.3,
+    strength: float = 1.0,
+    correlation_nm: float = 0.5,
+    dx: float = 1.0,
+    rng: torch.Generator | None = None,
+) -> torch.Tensor:
+    """Event-based stochastic development (STEP 5.3).
+
+    Physical model
+    --------------
+    The dissolution of a resist is a discrete stochastic process:
+    molecular aggregates dissolve when the local driving force
+    (over-threshold latent concentration) overcomes the activation
+    barrier.  The model has three ingredients:
+
+    1. Local driving force (normalised, non-negative):
+
+           drive(x) = max(0, (latent(x) - threshold) / threshold)
+
+    2. Dissolution events are drawn per pixel from a Poisson
+       distribution with mean rate:
+
+           rate(x) = strength * drive(x)
+
+       ``strength`` is dimensionless: the mean number of dissolution
+       events per pixel at full driving force (drive = 1).
+
+    3. Events are spread over a short correlation length
+       ``correlation_nm`` (molecular aggregate size, Gaussian kernel,
+       same separable convolution machinery as the SE blur), giving a
+       spatially coherent dissolution density ``e_dev``.  A pixel is
+       developed when ``e_dev >= 0.5``.
+
+    The coherent spreading suppresses isolated holes inside the
+    developed region (a dissolution aggregate removes a connected
+    cluster, not isolated pixels), which keeps the edge extraction
+    well-defined.  In the limit ``strength -> infinity`` the model
+    reduces to the deterministic threshold development.
+
+    Parameters
+    ----------
+    latent : torch.Tensor
+        Continuous latent image driving development (e.g. acid or
+        deprotected concentration).  2D ``(H, W)``.
+    threshold : float
+        Development threshold on *latent*.  Default 0.3.
+    strength : float
+        Dimensionless development strength: mean dissolution events
+        per pixel at drive = 1.  Larger -> sharper development,
+        smaller stochastic contribution.  Default 1.0.
+    correlation_nm : float
+        Spatial correlation length of dissolution aggregates [nm].
+        Default 0.5 (molecular scale).  ``<= 0`` disables spreading.
+    dx : float
+        Pixel spacing [nm].  Default 1.0.
+    rng : torch.Generator, optional
+        RNG for the Poisson draw.  When None, a fresh CPU generator
+        is created (non-reproducible).  Reproducible runs must pass
+        a seeded generator.
+
+    Returns
+    -------
+    developed : torch.Tensor
+        Binary mask: 1 = developed (dissolved), 0 = undeveloped.
+        Same shape as *latent*.
+    """
+    if latent.ndim != 2:
+        raise ValueError(f"Expected 2D tensor, got {latent.ndim}D")
+    if strength <= 0:
+        raise ValueError(f"development strength must be > 0, got {strength}")
+    if correlation_nm < 0:
+        raise ValueError(
+            f"development correlation_nm must be >= 0, got {correlation_nm}"
+        )
+
+    drive = torch.clamp((latent - threshold) / max(threshold, 1e-12), min=0.0)
+    rate = strength * drive
+
+    if rng is None:
+        rng = torch.Generator(device=latent.device)
+    n_events = torch.poisson(rate, generator=rng)
+
+    if correlation_nm > 0:
+        from euvsimulator.resist.exposure import gaussian_se_blur
+
+        e_dev = gaussian_se_blur(
+            n_events.to(latent.dtype), sigma=correlation_nm, dx=dx
+        )
+    else:
+        e_dev = n_events.to(latent.dtype)
+
+    return (e_dev >= 0.5).to(latent.dtype)
+
+
 # ──────────────────────────────────────────────
 # Surface-advancement / level-set development
 # ──────────────────────────────────────────────

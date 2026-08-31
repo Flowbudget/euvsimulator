@@ -105,7 +105,15 @@ class TestUnbiasedness:
         )
 
     def test_unbiased_with_spatial_pattern(self):
-        """Unbiasedness also holds for a non-uniform dose map."""
+        """E[D_eff] = blur(dose) for a non-uniform dose map.
+
+        Option-C SE-blur path consistency (STEP 5.3E-5.3I): the mean
+        energy density is the SE-PSF-transported dose blur(dose), not
+        the raw dose.  For se_blur=0, blur(dose)=dose and this reduces
+        to the classical unbiasedness.
+        """
+        from euvsimulator.resist.exposure import gaussian_se_blur
+
         x = torch.linspace(-32, 32, 64)
         X, _ = torch.meshgrid(x, x, indexing="ij")
         dose = 20.0 * (0.5 + 0.5 * torch.cos(2 * torch.pi * X / 64.0))
@@ -117,11 +125,11 @@ class TestUnbiasedness:
                 dose_to_energy_factor=F, seed=i,
             )
         mean = acc / n_rep
-        # Global relative bias
-        rel_err = ((mean - dose).abs() / dose.clamp(min=1e-9)).mean().item()
-        # Per-pixel bias at 0.25 nm grid has large variance; use global
-        global_bias = (mean - dose).abs().mean().item() / dose.mean().item()
+        blur_dose = gaussian_se_blur(dose, sigma=5.0, dx=0.25)
+        # Global relative bias against the SE-transported mean
+        global_bias = (mean - blur_dose).abs().mean().item() / blur_dose.mean().item()
         assert global_bias < 0.02, f"pattern global bias {global_bias:.4f} > 0.02"
+        rel_err = ((mean - blur_dose).abs() / blur_dose.clamp(min=1e-9)).mean().item()
         assert rel_err < 0.10, f"pattern per-pixel bias {rel_err:.4f} > 0.10"
 
 
@@ -209,13 +217,24 @@ class TestZeroDose:
         assert torch.allclose(d_eff, torch.zeros_like(dose), atol=1e-12)
 
     def test_mixed_zero_and_positive_dose(self):
-        """Regions with dose=0 stay 0; positive regions stay finite."""
+        """Zero-dose borders receive SE-transported energy (Option C);
+        positive regions stay finite.
+
+        Option-C path consistency (STEP 5.3E-5.3I): the mean energy
+        density is blur(dose), so the SE-PSF carries energy from the
+        exposed region into the zero-dose border.  Border values are
+        therefore positive but finite, and bounded by the transported
+        dose level.
+        """
         dose = torch.zeros((64, 64), dtype=torch.float64)
         dose[16:48, 16:48] = 20.0
         d_eff = photon_deposition_shot_noise(dose, 5.0, dx_nm=0.25, seed=2)
         assert not torch.isnan(d_eff).any()
         assert not torch.isinf(d_eff).any()
-        assert (d_eff[:8, :].abs() < 1e-9).all()  # zero-dose border stays ~0
+        # SE-transported energy in the border: positive, finite, and
+        # bounded well below the exposed-region level
+        assert (d_eff[:8, :] >= 0).all()
+        assert (d_eff[:8, :] < 5.0).all()  # transport tail, not full dose
         assert (d_eff[16:48, 16:48] > 0).all()  # exposed region positive
 
 

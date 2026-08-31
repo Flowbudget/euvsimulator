@@ -51,6 +51,7 @@ P.P. Naulleau et al., "The role of photon shot noise in the
 
 from __future__ import annotations
 
+import math
 from typing import Tuple
 
 import torch
@@ -345,9 +346,9 @@ def photon_deposition_shot_noise(
     n_events = torch.poisson(n_bar, generator=rng)  # integer counts
 
     # 3./4. SE-PSF energy deposition (or identity for se_blur <= 0)
-    if se_blur_nm > 0:
-        from euvsimulator.resist.exposure import gaussian_se_blur
+    from euvsimulator.resist.exposure import gaussian_se_blur
 
+    if se_blur_nm > 0:
         e_dep = gaussian_se_blur(n_events.to(dose.dtype), sigma=se_blur_nm, dx=dx_nm)
         e_bar = gaussian_se_blur(n_bar, sigma=se_blur_nm, dx=dx_nm)
     else:
@@ -355,7 +356,13 @@ def photon_deposition_shot_noise(
         e_bar = n_bar
 
     # 5. Effective noisy dose (numerical guard against div-by-zero)
-    d_eff = dose * e_dep / e_bar.clamp(min=1e-30)
+    # Option-C SE-blur path consistency (STEP 5.3E-5.3H): the mean
+    # energy density is blur(dose) (SE-PSF transport), so the ratio
+    # e_dep/e_bar is centred on blur(dose), not on the raw dose.
+    # Algebraically d_eff == blur(N)*E_ph/(A_voxel*f) (A1 == A2).
+    # For se_blur_nm <= 0, gaussian_se_blur returns dose unchanged.
+    blur_dose = gaussian_se_blur(dose, sigma=se_blur_nm, dx=dx_nm)
+    d_eff = blur_dose * e_dep / e_bar.clamp(min=1e-30)
 
     return d_eff
 
@@ -572,6 +579,246 @@ def extract_ler(
         right_dev = right_finite - right_finite.mean()
         all_dev = torch.cat([left_dev, right_dev])
         return float(torch.sqrt((all_dev**2).mean()))
+
+
+# ──────────────────────────────────────────────
+# Correlation-aware LER estimator (STEP 5.1)
+# ──────────────────────────────────────────────
+
+
+class LEREstimate:
+    """Correlation-aware LER estimate with full statistical metadata.
+
+    Attributes
+    ----------
+    ler_nm : float
+        Point estimate of the edge-fluctuation RMS [nm].
+    n_rows : int
+        Number of physical rows (y-samples) used per realization.
+    n_eff : float
+        Effective number of independent rows (correlation-corrected).
+    l_int_px : float
+        Integral correlation length [pixels].
+    l_int_nm : float
+        Integral correlation length [nm].
+    estimator : str
+        "large_n" (primary) or "corr_corrected" (audit control).
+    seed_count : int
+        Number of independent realizations used.
+    uncertainty_nm : float
+        Standard error of the mean over independent realizations
+        (NaN when only one realization is provided).
+    ci95_low_nm / ci95_high_nm : float
+        Approximate 95 % CI of the mean (mean ± 1.96·SE).
+    rho_truncation : int
+        Fixed truncation rule: first lag k ≥ 1 with rho(k) < 0.05,
+        capped at 200 px (chosen before looking at results).
+    disclaimer : str
+        Standard scientific disclaimer.
+    """
+
+    def __init__(
+        self,
+        ler_nm: float,
+        n_rows: int,
+        n_eff: float,
+        l_int_px: float,
+        l_int_nm: float,
+        estimator: str,
+        seed_count: int,
+        uncertainty_nm: float,
+        ci95_low_nm: float,
+        ci95_high_nm: float,
+        rho_truncation: int,
+    ):
+        self.ler_nm = float(ler_nm)
+        self.n_rows = int(n_rows)
+        self.n_eff = float(n_eff)
+        self.l_int_px = float(l_int_px)
+        self.l_int_nm = float(l_int_nm)
+        self.estimator = estimator
+        self.seed_count = int(seed_count)
+        self.uncertainty_nm = float(uncertainty_nm)
+        self.ci95_low_nm = float(ci95_low_nm)
+        self.ci95_high_nm = float(ci95_high_nm)
+        self.rho_truncation = int(rho_truncation)
+        self.disclaimer = (
+            "Schätzung der Kantenfluktuations-Std für diese "
+            "Modellkonfiguration; kein experimentell validierter Wert."
+        )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return (
+            f"LEREstimate(ler_nm={self.ler_nm:.6f}, n_rows={self.n_rows}, "
+            f"n_eff={self.n_eff:.1f}, l_int_nm={self.l_int_nm:.2f}, "
+            f"estimator='{self.estimator}', seed_count={self.seed_count})"
+        )
+
+
+def _autocorrelation(x: torch.Tensor, kmax: int) -> torch.Tensor:
+    """Empirical autocorrelation rho(k) of a stationary sequence.
+
+    rho(k) = <(x[i]-mu)(x[i+k]-mu)> / <(x[i]-mu)^2>, pooled over lags.
+    """
+    n = x.shape[0]
+    xc = x - x.mean()
+    c0 = (xc * xc).mean()
+    if c0 <= 0:
+        return torch.zeros(kmax + 1, dtype=x.dtype, device=x.device)
+    k_eff = min(kmax, n - 1)
+    out = torch.empty(k_eff + 1, dtype=x.dtype, device=x.device)
+    out[0] = 1.0
+    for k in range(1, k_eff + 1):
+        out[k] = (xc[: n - k] * xc[k:]).mean() / c0
+    if k_eff < kmax:
+        pad = torch.zeros(kmax - k_eff, dtype=x.dtype, device=x.device)
+        out = torch.cat([out, pad])
+    return out
+
+
+def _ler_rms(positions: torch.Tensor) -> float:
+    """RMS deviation from the mean (same definition as extract_ler)."""
+    dev = positions - positions.mean()
+    return float(torch.sqrt((dev**2).mean()))
+
+
+def ler_estimate(
+    developed,
+    threshold: float = 0.3,
+    dx: float = 0.25,
+    edge: str = "both",
+    intensity=None,
+    estimator: str = "large_n",
+    rho_truncation: int | None = None,
+    seed_count: int | None = None,
+) -> LEREstimate:
+    """Correlation-aware LER estimator (STEP 5.1).
+
+    Primary estimator: ``"large_n"`` — RMS of the edge position over all
+    rows (identical observable definition to ``extract_ler``), reported
+    together with the effective number of independent rows ``n_eff`` and
+    the integral correlation length ``l_int``.  For statistically
+    defensible absolute values the field must provide ``n_eff >= 30``
+    (derived from the measured correlation, not hard-coded).
+
+    Audit control: ``estimator="corr_corrected"`` — the same RMS value
+    corrected by the empirical autocorrelation bias factor
+    ``E[s^2] = sigma^2 * (1 - 2*sum_k (1-k/N) rho(k) / (N-1))``.
+    It is a CONTROL method only and never replaces the primary value.
+
+    ``developed`` may be a single 2D tensor or a sequence of 2D tensors
+    (independent realizations / seeds).  ``intensity`` follows the same
+    convention.  When several realizations are supplied, ``ler_nm`` is
+    the mean over realizations and ``uncertainty_nm`` / CI are the SE
+    and approximate 95 % CI of that mean (variation over independent
+    seeds — the primary uncertainty source).  Autocorrelation is pooled
+    over realizations.
+
+    Fixed truncation rule (chosen before inspecting results):
+    first lag k >= 1 with rho(k) < 0.05, capped at 200 px.
+
+    Legacy ``extract_ler`` is untouched; this function is additive.
+    """
+    if estimator not in ("large_n", "corr_corrected"):
+        raise ValueError(f"estimator must be 'large_n' or 'corr_corrected', got {estimator!r}")
+
+    is_seq = isinstance(developed, (list, tuple))
+    fields = developed if is_seq else [developed]
+    inten = intensity if intensity is not None else [None] * len(fields)
+    if is_seq and intensity is not None and len(intensity) != len(fields):
+        raise ValueError("intensity sequence length must match developed sequence length")
+    if not is_seq:
+        inten = [intensity]
+
+    if rho_truncation is None:
+        rho_truncation = 200  # cap; actual truncation found from rho < 0.05
+
+    n_rows = int(fields[0].shape[0])
+    all_rhos = []
+    ler_per_real = []
+    k_trunc_final = rho_truncation
+
+    for dev, intens in zip(fields, inten):
+        left, right = extract_edges(dev, threshold, dx, intens)
+        finite = ~(torch.isnan(left) | torch.isnan(right))
+        if finite.sum() < 3:
+            ler_per_real.append(float("nan"))
+            continue
+        lf, rf = left[finite], right[finite]
+
+        # per-edge autocorrelation (pooled over edges for "both")
+        kmax = min(rho_truncation, n_rows - 1)
+        rho_l = _autocorrelation(lf, kmax)
+        if edge == "both":
+            rho_r = _autocorrelation(rf, kmax)
+            rho = 0.5 * (rho_l + rho_r)
+        elif edge == "left":
+            rho = rho_l
+        elif edge == "right":
+            rho = _autocorrelation(rf, kmax)
+        else:
+            raise ValueError(f"edge must be 'left', 'right' or 'both', got {edge!r}")
+        all_rhos.append(rho)
+
+        # LER (same observable as extract_ler)
+        if edge == "both":
+            dev_l = lf - lf.mean()
+            dev_r = rf - rf.mean()
+            pos = torch.cat([dev_l, dev_r])
+            ler = _ler_rms(pos)
+        elif edge == "left":
+            ler = _ler_rms(lf)
+        else:
+            ler = _ler_rms(rf)
+
+        if estimator == "corr_corrected":
+            # bias factor for E[s^2], s^2 = unbiased sample variance
+            S = 0.0
+            N = n_rows
+            for k in range(1, len(rho)):
+                S += (1.0 - k / N) * float(rho[k])
+            bias = 1.0 - 2.0 * S / (N - 1)
+            bias = max(bias, 1e-6)
+            # RMS^2 = (N-1)/N * s^2  ->  sigma^2 = RMS^2 * N/(N-1) / bias
+            ler = ler * math.sqrt(N / (N - 1) / bias)
+        ler_per_real.append(ler)
+
+    # pooled autocorrelation + truncation (fixed rule: first k with rho<0.05)
+    rho_pooled = torch.stack(all_rhos).mean(dim=0) if all_rhos else torch.zeros(rho_truncation + 1)
+    k_trunc = rho_truncation
+    for k in range(1, len(rho_pooled)):
+        if float(rho_pooled[k]) < 0.05:
+            k_trunc = k
+            break
+    l_int = 0.5 + float(rho_pooled[1:k_trunc].sum()) if k_trunc > 1 else 0.5
+    neff = n_rows / (
+        1.0 + 2.0 * sum((1.0 - k / n_rows) * float(rho_pooled[k]) for k in range(1, min(k_trunc, n_rows)))
+    )
+
+    vals = torch.tensor([v for v in ler_per_real if not math.isnan(v)])
+    if vals.numel() == 0:
+        raise ValueError("no valid edges found in any realization")
+    ler_mean = float(vals.mean())
+    n_seed = int(vals.numel()) if seed_count is None else seed_count
+    if vals.numel() > 1:
+        se = float(vals.std(unbiased=True) / math.sqrt(vals.numel()))
+        ci_low, ci_high = ler_mean - 1.96 * se, ler_mean + 1.96 * se
+    else:
+        se, ci_low, ci_high = float("nan"), float("nan"), float("nan")
+
+    return LEREstimate(
+        ler_nm=ler_mean,
+        n_rows=n_rows,
+        n_eff=neff,
+        l_int_px=l_int,
+        l_int_nm=l_int * dx,
+        estimator=estimator,
+        seed_count=n_seed,
+        uncertainty_nm=se,
+        ci95_low_nm=ci_low,
+        ci95_high_nm=ci_high,
+        rho_truncation=k_trunc,
+    )
 
 
 # ──────────────────────────────────────────────

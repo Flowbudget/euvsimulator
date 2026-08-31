@@ -24,6 +24,7 @@ from euvsimulator.materials import CXROTable
 from euvsimulator.optics.multilayer import mo_si_stack
 from euvsimulator.optics.tmm import reflectivity
 from euvsimulator.resist.develop import (
+    stochastic_development,
     threshold_development,
 )
 from euvsimulator.resist.exposure import dose_to_acid
@@ -32,6 +33,7 @@ from euvsimulator.constants import HC_EV_NM
 from euvsimulator.resist.stochastic import (
     extract_ler,
     extract_lwr,
+    ler_estimate,
     photon_deposition_shot_noise,
 )
 
@@ -72,6 +74,11 @@ class SimulationResult:
     absorber_reflectivity: float = 0.0
     ler_nm: float = 0.0
     lwr_nm: float = 0.0
+    ler_metadata: dict | None = None  # Structured LER metadata (large_n estimator)
+    # Populated when stochastic_ler_estimator="large_n".  Keys: ler_nm,
+    # n_rows, n_eff, l_int_px, l_int_nm, uncertainty_nm, ci95_low_nm,
+    # ci95_high_nm, seed_count, estimator, rho_truncation, disclaimer.
+    # None for the legacy estimator.
 
 
 @dataclass
@@ -158,6 +165,26 @@ class SimulationConfig:
     stochastic_develop_threshold: float = 0.3  # Development threshold for LER/LWR extraction
     stochastic_quantum_efficiency: float = 0.04  # Acid molecules per absorbed photon
     stochastic_seed: int | None = None  # RNG seed (None = random)
+    # Correlation-aware large-N LER (STEP 5.1/5.2B)
+    #
+    # REFERENCE CONFIGURATION FOR SCIENTIFIC LER VALIDATION:
+    #   se_blur_nm               = 5.0
+    #   dose_mj_cm2              = 40.0
+    #   stochastic_ler_grid_y    = 4096
+    #   stochastic_ler_estimator = "large_n"
+    #
+    # Note: the software default se_blur_nm=0.0 is technically valid
+    # (white noise -> N_eff = N) but is NOT the scientific reference.
+    # The reference configuration was used for the internal LER audits
+    # (N_eff ~= 59, LER ~= 0.07 nm at 40 mJ/cm2); it is a reference for
+    # internal scientific validation, NOT yet experimentally validated.
+    stochastic_ler_grid_y: int = 4096  # Requested Y dimension of the stochastic LER field
+    stochastic_ler_estimator: str = "large_n"  # "large_n" | "legacy"
+    # Stochastic development (STEP 5.3): event-based dissolution noise
+    # on the local driving force of the stochastic-path latent image.
+    development_stochasticity: bool = False  # OFF = deterministic threshold development
+    development_strength: float = 1.0  # dimensionless dissolution events per pixel at drive=1
+    development_correlation_nm: float = 0.5  # molecular aggregate correlation length [nm]
 
     # Mask-3D / RCWA parameters (Phase 4)
     use_rcwa: bool = False  # Use full RCWA instead of thin-mask analytic
@@ -191,6 +218,14 @@ class SimulationConfig:
                 raise ValueError("stochastic_develop_threshold must be in (0, 1)")
             if self.stochastic_quantum_efficiency <= 0:
                 raise ValueError("stochastic_quantum_efficiency must be > 0")
+        # LER estimator configuration (no artificial upper bound on grid_y)
+        if self.stochastic_ler_grid_y < 1:
+            raise ValueError("stochastic_ler_grid_y must be a positive integer")
+        if self.stochastic_ler_estimator not in ("large_n", "legacy"):
+            raise ValueError(
+                "stochastic_ler_estimator must be 'large_n' or 'legacy', "
+                f"got {self.stochastic_ler_estimator!r}"
+            )
 
 
 def _cd_via_aerial_threshold(
@@ -303,16 +338,36 @@ def _cd_via_full_chem(
     # The SE-PSF is applied ONCE, inside photon_deposition_shot_noise.
     # dose_map (unblurred) is passed, and dose_to_acid uses apply_blur=False,
     # so no second SE blur is applied.
+    ler_metadata = None
     if cfg.enable_stochastic:
         rng = torch.Generator(device=dose_map.device)
         if cfg.stochastic_seed is not None:
             rng.manual_seed(cfg.stochastic_seed)
 
+        use_large_n = cfg.stochastic_ler_estimator == "large_n"
+        if use_large_n:
+            # Correlation-aware large-N LER (STEP 5.2B/5.2C):
+            # deterministic Y-periodic extension BEFORE stochastic generation.
+            # Any positive grid_y is supported via repeat + trim.  This is
+            # mathematically justified because the current aerial field is
+            # exactly y-invariant (max|aerial[y+1]-aerial[y]| = 0, verified
+            # by test_aerial_y_invariance): every row is bitwise identical,
+            # so the circular Y-blur wrap connects identical rows for ANY N.
+            # If a true 2D mask/RCWA field (not y-invariant) is introduced,
+            # this assumption must be re-evaluated.
+            grid_y = cfg.stochastic_ler_grid_y
+            repetitions = math.ceil(grid_y / dose_map.shape[0])
+            stoch_dose = torch.tile(dose_map, (repetitions, 1))[:grid_y]
+        else:
+            stoch_dose = dose_map
+
         ler_vals = []
         lwr_vals = []
+        dev_fields = []
+        acid_fields = []
         for _ in range(cfg.stochastic_n_realisations):
             d_eff = photon_deposition_shot_noise(
-                dose_map,
+                stoch_dose,
                 se_blur_nm=cfg.se_blur_nm,
                 dx_nm=dx_nm,
                 photon_energy_eV=energy_eV,  # from wavelength via HC_EV_NM
@@ -325,17 +380,33 @@ def _cd_via_full_chem(
                 Q=cfg.dill_Q,
                 apply_blur=False,
             )
-            developed = (acid_noisy > cfg.stochastic_develop_threshold).float()
-            # Sub-pixel edge positions via linear interpolation of the
-            # threshold crossing on the continuous acid field (Step 4).
-            ler_vals.append(
-                extract_ler(
-                    developed,
+            if cfg.development_stochasticity:
+                # STEP 5.3: event-based stochastic development on the
+                # local driving force of the stochastic latent image.
+                # OFF mode (default) keeps the deterministic threshold
+                # development bitwise unchanged.
+                developed = stochastic_development(
+                    acid_noisy,
                     threshold=cfg.stochastic_develop_threshold,
+                    strength=cfg.development_strength,
+                    correlation_nm=cfg.development_correlation_nm,
                     dx=dx_nm,
-                    intensity=acid_noisy,
+                    rng=rng,
                 )
-            )
+            else:
+                developed = (acid_noisy > cfg.stochastic_develop_threshold).float()
+            if use_large_n:
+                dev_fields.append(developed)
+                acid_fields.append(acid_noisy)
+            else:
+                ler_vals.append(
+                    extract_ler(
+                        developed,
+                        threshold=cfg.stochastic_develop_threshold,
+                        dx=dx_nm,
+                        intensity=acid_noisy,
+                    )
+                )
             lwr_vals.append(
                 extract_lwr(
                     developed,
@@ -345,7 +416,35 @@ def _cd_via_full_chem(
                 )
             )
 
-        ler_nm = float(torch.tensor(ler_vals).nanmean())
+        if use_large_n:
+            # One LER estimate per realization (spatial N_eff within each
+            # field), aggregated over seeds (between-seed SE/CI).
+            est = ler_estimate(
+                dev_fields,
+                threshold=cfg.stochastic_develop_threshold,
+                dx=dx_nm,
+                intensity=acid_fields,
+                edge="both",
+                estimator="large_n",
+                seed_count=cfg.stochastic_n_realisations,
+            )
+            ler_nm = est.ler_nm
+            ler_metadata = {
+                "ler_nm": est.ler_nm,
+                "n_rows": est.n_rows,
+                "n_eff": est.n_eff,
+                "l_int_px": est.l_int_px,
+                "l_int_nm": est.l_int_nm,
+                "uncertainty_nm": est.uncertainty_nm,
+                "ci95_low_nm": est.ci95_low_nm,
+                "ci95_high_nm": est.ci95_high_nm,
+                "seed_count": est.seed_count,
+                "estimator": est.estimator,
+                "rho_truncation": est.rho_truncation,
+                "disclaimer": est.disclaimer,
+            }
+        else:
+            ler_nm = float(torch.tensor(ler_vals).nanmean())
         lwr_nm = float(torch.tensor(lwr_vals).nanmean())
     else:
         ler_nm = 0.0
@@ -365,7 +464,7 @@ def _cd_via_full_chem(
     # dev_2d für Visualisierung
     dev_2d = dev_chem.clone()
 
-    return cd_nm, dev_2d, nils_val, ler_nm, lwr_nm
+    return cd_nm, dev_2d, nils_val, ler_nm, lwr_nm, ler_metadata
 
 
 def _find_runs_1d(x: torch.Tensor, target: int = 0) -> list:
@@ -622,11 +721,12 @@ def run_simulation(
     # via resist_model="full_chem" but requires carefully tuned params.
     line_width_px = int(round(cfg.line_width_nm / (period_m / cfg.grid * 1e9)))
     if cfg.resist_model == "full_chem":
-        cd, dev, nils_val, ler_nm, lwr_nm = _cd_via_full_chem(
+        cd, dev, nils_val, ler_nm, lwr_nm, ler_metadata = _cd_via_full_chem(
             aerial, cfg, period_m, half, line_width_px, energy_eV
         )
     else:
         cd, dev, nils_val = _cd_via_aerial_threshold(aerial, cfg, half, line_width_px)
+        ler_metadata = None
         ler_nm = 0.0
         lwr_nm = 0.0
 
@@ -638,6 +738,7 @@ def run_simulation(
         absorber_reflectivity=absorber_reflectivity,
         ler_nm=ler_nm,
         lwr_nm=lwr_nm,
+        ler_metadata=ler_metadata,
     )
 
 
