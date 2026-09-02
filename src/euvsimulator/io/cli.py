@@ -109,7 +109,7 @@ def simulate(
         0.2, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]"
     ),
     dill_C: float = typer.Option(0.05, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
-    dill_Q: float = typer.Option(1.0, "--dill-Q", help="Quantum efficiency (max acid yield)"),
+    dill_Q: float = typer.Option(0.04, "--dill-Q", help="Quantum efficiency (acid molecules per absorbed photon; typical 0.02–0.10 for EUV CAR)"),
     # PEB options
     peb_D: float = typer.Option(5.0, "--peb-D", help="Acid diffusivity [nm²/s]"),
     peb_k: float = typer.Option(0.3, "--peb-k", help="Deprotection rate constant [s⁻¹]"),
@@ -198,7 +198,7 @@ def simulate(
             device=device,
             n_rcwa_orders=orders,
             absorber_material=material,
-            resist_threshold=threshold,
+            resist_threshold_norm=threshold,
             se_blur_nm=se_blur_nm,
             resist_model=resist_model,
             # Dill ABC exposure parameters
@@ -714,7 +714,7 @@ def calibrate(
         # Default initial guess for typical EUV CAR resist
         initial_params = {
             "dill_C": 0.05,
-            "dill_Q": 1.0,
+            "dill_Q": 0.04,
             "peb_k": 0.3,
             "peb_t_bake": 60.0,
             "peb_sigma_diff": 5.0,
@@ -758,7 +758,7 @@ def calibrate(
             grid=128,
             # Resist parameters from calibration
             dill_C=params.get("dill_C", 0.05),
-            dill_Q=params.get("dill_Q", 1.0),
+            dill_Q=params.get("dill_Q", 0.04),
             peb_k=params.get("peb_k", 0.3),
             peb_t_bake=params.get("peb_t_bake", 60.0),
             peb_sigma_diff=params.get("peb_sigma_diff", 5.0),

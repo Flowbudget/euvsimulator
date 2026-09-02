@@ -145,7 +145,7 @@ class SimulationConfig:
     dill_A: float = 0.5  # Bleachable absorption coefficient [1/µm]
     dill_B: float = 0.2  # Non-bleachable absorption coefficient [1/µm]
     dill_C: float = 0.05  # Photo-rate constant [cm²/mJ]
-    dill_Q: float = 1.0  # Quantum efficiency (max acid yield)
+    dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon); typical range 0.02–0.10 for EUV CAR (see resist/exposure.py)
 
     # PEB (reaction-diffusion) parameters
     peb_D: float = 5.0  # Acid diffusivity [nm²/s]

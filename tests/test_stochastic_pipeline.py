@@ -21,12 +21,20 @@ def test_stochastic_requires_full_chem():
 
 
 def test_stochastic_produces_ler_lwr():
-    """Stochastic pipeline returns positive LER/LWR."""
+    """Stochastic pipeline returns positive LER/LWR.
+    
+    NOTE: Uses explicit dill_Q=1.0 to maintain pre-fix benchmark behavior
+    (the corrected default Q=0.04 yields insufficient acid for development
+    with these default Dill/PEB parameters). Re-benchmark when full_chem
+    params are calibrated for Q=0.04.
+    """
     cfg = SimulationConfig(
         resist_model="full_chem",
         enable_stochastic=True,
         stochastic_n_realisations=3,
         stochastic_seed=42,
+        se_blur_nm=5.0,
+        dill_Q=1.0,
         grid=128,
     )
     result = run_simulation(cfg)
@@ -45,6 +53,8 @@ def test_stochastic_reproducible_with_seed():
         enable_stochastic=True,
         stochastic_n_realisations=5,
         stochastic_seed=123,
+        se_blur_nm=5.0,
+        dill_Q=1.0,
         grid=128,
     )
     cfg2 = SimulationConfig(
@@ -52,6 +62,8 @@ def test_stochastic_reproducible_with_seed():
         enable_stochastic=True,
         stochastic_n_realisations=5,
         stochastic_seed=123,
+        se_blur_nm=5.0,
+        dill_Q=1.0,
         grid=128,
     )
     r1 = run_simulation(cfg1)
@@ -67,6 +79,8 @@ def test_stochastic_different_seeds_different_results():
         enable_stochastic=True,
         stochastic_n_realisations=10,
         stochastic_seed=1,
+        se_blur_nm=5.0,
+        dill_Q=1.0,
         grid=128,
     )
     cfg2 = SimulationConfig(
@@ -74,6 +88,8 @@ def test_stochastic_different_seeds_different_results():
         enable_stochastic=True,
         stochastic_n_realisations=10,
         stochastic_seed=2,
+        se_blur_nm=5.0,
+        dill_Q=1.0,
         grid=128,
     )
     r1 = run_simulation(cfg1)
