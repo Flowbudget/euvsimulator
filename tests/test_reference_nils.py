@@ -26,12 +26,34 @@ def mask_amplitudes_ref(period_nm, line_frac, r_space, r_abs, n_orders):
     return m, a
 
 
+def exact_tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm, grid=256):
+    """Exact TCC via 2D source-pupil overlap (numpy reference, P1-1)."""
+    wavelength_m = wavelength_nm * 1e-9
+    period_m = period_nm * 1e-9
+
+    f = np.linspace(-2.0, 2.0, grid)
+    FX, FY = np.meshgrid(f, f)
+
+    S = (FX**2 + FY**2 <= sigma**2).astype(float)
+    S_sum = S.sum()
+    if S_sum < 1e-30:
+        return 1.0  # coherent limit
+
+    fi = mi * wavelength_m / (period_m * na)
+    fj = mj * wavelength_m / (period_m * na)
+
+    Pi = ((FX + fi)**2 + FY**2 <= 1.0).astype(float)
+    Pj = ((FX + fj)**2 + FY**2 <= 1.0).astype(float)
+
+    return float((S * Pi * Pj).sum() / S_sum)
+
+
 def tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm):
-    dm = abs(mi - mj)
-    if dm == 0:
-        return 1.0
-    x = np.pi * sigma * na * dm * wavelength_nm / period_nm
-    return 2.0 * j1(x) / x
+    """TCC reference — uses exact source-pupil overlap (P1-1, 2026-09-01).
+    
+    Replaced Bessel J1 approximation with exact 2D overlap integral.
+    """
+    return exact_tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm)
 
 
 def aerial_image_ref(
@@ -53,19 +75,17 @@ def aerial_image_ref(
     m_orders_p = m_orders[pupil_mask]
     a_coeffs_p = a_coeffs[pupil_mask]
 
-    coherence_orders = sigma * na * period_nm / wavelength_nm
-
-    max_dm = len(m_orders_p) - 1
-    tcc_cache = {
-        dm: tcc_ref(0, dm, sigma, na, wavelength_nm, period_nm) for dm in range(max_dm + 1)
-    }
+    # Precompute full TCC matrix (exact source-pupil overlap, P1-1)
+    n_p = len(m_orders_p)
+    tcc_matrix = np.zeros((n_p, n_p))
+    for i, mi in enumerate(m_orders_p):
+        for j, mj in enumerate(m_orders_p):
+            tcc_matrix[i, j] = exact_tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm)
 
     a1 = np.zeros(grid, dtype=complex)
     for i, mi in enumerate(m_orders_p):
         for j, mj in enumerate(m_orders_p):
-            dm = abs(mi - mj)
-            # No hard coherence cutoff - TCC naturally damps interference
-            tc = tcc_cache[dm]
+            tc = tcc_matrix[i, j]
             if tc == 0.0:
                 continue
             phase = 2 * np.pi * (mi - mj) * x / period_m
@@ -93,36 +113,57 @@ def aerial_image_ref(
     return I2
 
 
-def nils_from_image_ref(aerial, period_nm, grid, threshold_frac=0.5):
+def nils_from_image_ref(aerial, period_nm, grid, threshold=None):
+    """Independent Mack NILS (numpy). Does not import euvsimulator.nils.
+
+    NILS = CD * |dI/dx| / I_edge at linear threshold crossings.
+    Left and right edges averaged. Default threshold = 0.5 * mean(cut),
+    matching aerial_threshold Optical-CD at nominal dose.
+    """
     half = grid // 2
-    cut = aerial[half, :]
-    Imin, Imax = cut.min(), cut.max()
-    thr = Imin + threshold_frac * (Imax - Imin)
+    cut = np.asarray(aerial[half, :], dtype=float)
+    G = cut.size
     dx_nm = period_nm / grid
-    dIdx = np.gradient(cut, dx_nm)
-    edge_idx = int(np.argmax(np.abs(dIdx)))
-    slope = dIdx[edge_idx]
-    Iedge = cut[edge_idx]
-    if Iedge < 1e-12:
+    if G < 2:
         return 0.0
-    nils_slope = abs(slope) / Iedge
-    below = cut < thr
-    runs = []
-    start = None
-    for i, b in enumerate(below):
-        if b and start is None:
-            start = i
-        elif not b and start is not None:
-            runs.append((start, i - 1))
-            start = None
-    if start is not None:
-        runs.append((start, len(below) - 1))
-    if runs:
-        longest = max(runs, key=lambda r: r[1] - r[0])
-        cd = (longest[1] - longest[0] + 1) * dx_nm
+    if threshold is None:
+        thr = 0.5 * float(cut.mean())
     else:
-        cd = 0.0
-    return nils_slope * cd
+        thr = float(threshold)
+    if thr <= 1e-30:
+        return 0.0
+    crossings = []
+    for i in range(G - 1):
+        a = float(cut[i])
+        b = float(cut[i + 1])
+        if (a - thr) * (b - thr) > 0.0:
+            continue
+        denom = b - a
+        if abs(denom) < 1e-30:
+            continue
+        t = (thr - a) / denom
+        if t < 0.0 or t > 1.0:
+            continue
+        crossings.append((i + t, denom / dx_nm))
+    if len(crossings) < 2:
+        return 0.0
+    best_width = -1.0
+    best = None
+    for k in range(len(crossings) - 1):
+        x0, s0 = crossings[k]
+        x1, s1 = crossings[k + 1]
+        mid = int(round(0.5 * (x0 + x1)))
+        mid = min(G - 1, max(0, mid))
+        if cut[mid] >= thr:
+            continue
+        width = x1 - x0
+        if width > best_width:
+            best_width = width
+            best = (s0, s1)
+    if best is None or best_width <= 0.0:
+        return 0.0
+    cd = best_width * dx_nm
+    return 0.5 * (cd * abs(best[0]) / thr + cd * abs(best[1]) / thr)
 
 
 # ---- Common test parameters ----
@@ -231,8 +272,12 @@ def test_nils_blur_10nm():
     assert diff < 0.3, f"NILS mismatch: euvsimulator={n_op:.3f}, Ref={n_ref:.3f}, diff={diff:.3f}"
 
 
-def test_nils_realistic_range():
-    """NILS with CAR-typical SE blur (10 nm) should be in realistic range 1.5–4.0."""
+def test_nils_blur_reduces_nils():
+    """SE blur must lower Mack NILS relative to the unblurred image.
+
+    The previous 1.5–4.0 'literature range' was calibrated to the old
+    (Imin+Imax)/2 + argmax|dI/dx| heuristic and is not a Mack-NILS bound.
+    """
     m_p, a_p, orders_complex, order_indices = build_orders()
 
     ae = aerial_from_orders(
@@ -244,15 +289,17 @@ def test_nils_realistic_range():
         sigma=COMMON["sigma"],
         grid=COMMON["grid"],
     )
-    # Apply SE blur in the resist exposure step (as it should be)
     from euvsimulator.resist.exposure import gaussian_se_blur
-    dx_nm = COMMON["period_nm"] / COMMON["grid"]
-    ae = gaussian_se_blur(ae, sigma=10.0, dx=dx_nm)
+
     dx_nm = COMMON["period_nm"] / COMMON["grid"]
     half = COMMON["grid"] // 2
-    n_op = nils(ae, half, 128, dx_nm)
-
-    assert 1.5 <= n_op <= 4.0, f"NILS {n_op:.3f} not in realistic range [1.5, 4.0]"
+    n_noblur = nils(ae, half, 128, dx_nm)
+    ae_blur = gaussian_se_blur(ae, sigma=10.0, dx=dx_nm)
+    n_blur = nils(ae_blur, half, 128, dx_nm)
+    assert n_blur > 0.0, f"blurred NILS vanished: {n_blur:.3f}"
+    assert n_blur < n_noblur, (
+        f"SE blur should reduce NILS: blur={n_blur:.3f} vs none={n_noblur:.3f}"
+    )
 
 
 if __name__ == "__main__":
@@ -260,6 +307,6 @@ if __name__ == "__main__":
     print("test_nils_blur_zero PASSED")
     test_nils_blur_10nm()
     print("test_nils_blur_10nm PASSED")
-    test_nils_realistic_range()
-    print("test_nils_realistic_range PASSED")
+    test_nils_blur_reduces_nils()
+    print("test_nils_blur_reduces_nils PASSED")
     print("ALL TESTS PASSED")

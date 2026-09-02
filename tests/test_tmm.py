@@ -185,3 +185,86 @@ class TestTMMConvenience:
         assert isinstance(R, float)
         expected = ((1.0 - 1.5) / (1.0 + 1.5)) ** 2
         assert R == pytest.approx(expected, abs=1e-4)
+
+
+class TestTMMn0Sin2:
+    """P1-2 validation: TMM n0_sin2 extension for evanescent orders."""
+
+    def test_theta_vs_n0_sin2_equivalent(self):
+        """TMM with theta0 should equal TMM with n0_sin2 = sin^2(theta0)."""
+        n_layers = torch.tensor([1.5 + 0.0j], dtype=torch.complex128)
+        d = torch.tensor([1e-9], dtype=torch.float64)
+        wl = torch.tensor([500e-9], dtype=torch.float64)
+        theta0 = torch.tensor([math.radians(30.0)], dtype=torch.float64)
+
+        R_theta, r_theta = reflectivity(
+            n_layers, d, wl, theta0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=True,
+        )
+        n0_sin2 = torch.tensor([math.sin(math.radians(30.0)) ** 2], dtype=torch.float64)
+        R_n0, r_n0 = reflectivity(
+            n_layers, d, wl, theta0=None,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=True,
+            n0_sin2=n0_sin2,
+        )
+        assert abs(R_theta.item() - R_n0.item()) < 1e-12
+        assert abs(r_theta.item() - r_n0.item()) < 1e-12
+
+    def test_theta_vs_n0_sin2_tm(self):
+        """Same equivalence check for TM polarization."""
+        n_layers = torch.tensor([1.5 + 0.0j], dtype=torch.complex128)
+        d = torch.tensor([1e-9], dtype=torch.float64)
+        wl = torch.tensor([500e-9], dtype=torch.float64)
+        theta0 = torch.tensor([math.radians(30.0)], dtype=torch.float64)
+
+        R_theta, r_theta = reflectivity(
+            n_layers, d, wl, theta0,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=False,
+        )
+        n0_sin2 = torch.tensor([math.sin(math.radians(30.0)) ** 2], dtype=torch.float64)
+        R_n0, r_n0 = reflectivity(
+            n_layers, d, wl, theta0=None,
+            n_substrate=torch.tensor(1.5 + 0.0j),
+            te=False,
+            n0_sin2=n0_sin2,
+        )
+        assert abs(R_theta.item() - R_n0.item()) < 1e-12
+
+    def test_evanescent_no_nan(self):
+        """TMM with n0_sin2 > 1 must not produce NaN for passive media."""
+        n_layers = torch.tensor([0.94 + 0.03j], dtype=torch.complex128)
+        d = torch.tensor([50e-9], dtype=torch.float64)
+        wl = torch.tensor([13.5e-9], dtype=torch.float64)
+
+        for n0_sin2_val in [1.05, 1.2, 1.5, 2.0, 5.0]:
+            n0_sin2 = torch.tensor([n0_sin2_val], dtype=torch.float64)
+            R, r = reflectivity(
+                n_layers, d, wl, theta0=None,
+                n_substrate=torch.tensor(0.94 + 0.03j),
+                te=True,
+                n0_sin2=n0_sin2,
+            )
+            assert not torch.isnan(R).any(), f"NaN at n0_sin2={n0_sin2_val}"
+            assert not torch.isnan(r).any(), f"NaN at n0_sin2={n0_sin2_val}"
+            assert not torch.isinf(R).any(), f"Inf at n0_sin2={n0_sin2_val}"
+
+    def test_evanescent_reflectivity_bounded(self):
+        """|r| must be <= 1 for passive media, even with n0_sin2 > 1."""
+        n_layers = torch.tensor([0.94 + 0.03j], dtype=torch.complex128)
+        d = torch.tensor([50e-9], dtype=torch.float64)
+        wl = torch.tensor([13.5e-9], dtype=torch.float64)
+
+        for n0_sin2_val in [0.5, 0.8, 0.95, 1.0, 1.05, 1.2, 1.5, 2.0]:
+            n0_sin2 = torch.tensor([n0_sin2_val], dtype=torch.float64)
+            R, r = reflectivity(
+                n_layers, d, wl, theta0=None,
+                n_substrate=torch.tensor(0.94 + 0.03j),
+                te=True,
+                n0_sin2=n0_sin2,
+            )
+            assert abs(r.item()) <= 1.0 + 1e-10, (
+                f"|r| = {abs(r.item()):.6f} > 1 at n0_sin2={n0_sin2_val}"
+            )

@@ -140,22 +140,16 @@ def aerial_from_orders(
     # Spatial positions over one period
     x_pos = torch.linspace(-period_m / 2, period_m / 2, G, device=device)
 
-    # Maximum order accepted by pupil
+    # Maximum order accepted by the pupil.
+    # For on-axis (sigma=0): |m| <= NA * period / wavelength
+    # For partially-coherent illumination (sigma>0), source shift extends
+    # the effective range:
+    #   |m| <= (1+sigma) * NA * period / wavelength
+    # Orders beyond this have TCC=0 and make no contribution.
+    # See _compute_tcc_matrix() for the source-pupil overlap integral.
     max_order = int(math.floor(na * period_m / wavelength_m))
-
-    # Coherence area in order units: Δm = σ · NA · Λ / λ
-    coherence_orders = sigma * na * period_m / wavelength_m
-
-    # Illumination shape modifies the effective coherence
-    shape = illumination_shape.lower()
-    if shape in ("annular",):
-        # Annular: inner sigma ~0.4-0.5 of outer, creates minimum coherence distance
-        inner_coherence = 0.3 * na * period_m / wavelength_m
-    elif shape in ("dipole", "dipole_x", "dipole_y"):
-        pass  # use default coherence_orders
-    elif shape in ("quasar",):
-        pass
-    # else: conventional — use coherence_orders as-is
+    if sigma > 0.0:
+        max_order = int(math.ceil((1.0 + sigma) * na * period_m / wavelength_m))
 
     # Build the order amplitude vector and mask
     M = orders_complex.shape[0]
@@ -164,8 +158,17 @@ def aerial_from_orders(
 
     aerial_1d = torch.zeros(G, dtype=torch.complex128, device=device)
 
+    # Pre-compute the TCC matrix via exact 2D source-pupil overlap (P1-1 fix)
+    tcc_matrix = _compute_tcc_matrix(
+        order_indices, sigma, na, wavelength_m, period_m, device=device,
+        illumination_shape=illumination_shape,  # P1-3: pass shape to TCC
+    )
+
     # Pre-compute defocus phase for each order (quadratic in order index)
     # φ_m = -π * focus_nm * m² * wavelength / period²  (small-angle approximation)
+    # The defocus phase is applied symmetrically to BOTH orders in the
+    # Hopkins double-sum (P1-Defocus fix, 2026-09-01):
+    #   I = Σ_i Σ_j (a_i·e^{iφ_i}) · (a_j·e^{iφ_j})* · TCC_ij · e^{i·2π·(m_i−m_j)·x/Λ}
     focus_m = focus_nm * 1e-9  # nm → m
     defocus_phase = torch.zeros(M, dtype=torch.complex128, device=device)
     if focus_m != 0.0:
@@ -176,42 +179,33 @@ def aerial_from_orders(
     else:
         defocus_phase = torch.ones(M, dtype=torch.complex128, device=device)
 
+    # Apply defocus phase to all orders (P1-Defocus fix)
+    orders_defocused = orders_complex * defocus_phase
+
     for i in range(M):
         mi = int(order_indices[i])
-        ri = orders_complex[i]
+        ri = orders_defocused[i]
         if abs(ri) < 1e-15:
             continue
         if abs(mi) > max_order:
             continue  # outside pupil
 
-        # Apply defocus phase to this order
-        ri_defocused = ri * defocus_phase[i]
-
         for j in range(M):
             mj = int(order_indices[j])
-            rj = orders_complex[j]
+            rj = orders_defocused[j]
             if abs(rj) < 1e-15:
                 continue
             if abs(mj) > max_order:
                 continue  # outside pupil
 
-            # TCC factor: Hopkins mutual coherence for a circular source.
-            # For a source of partial coherence sigma, the cross-coherence
-            # between orders m_i and m_j is (Hopkins 1953):
-            #   TCC(i,j) = 2*J1(x) / x,  x = pi * sigma * NA * (m_i-m_j) * lambda / period
-            # The Bessel J1 form (not J0) is the correct degree of
-            # coherence for a rotationally symmetric source.  It damps
-            # order interference *gradually* — there is no hard cutoff.
-            dm = abs(mi - mj)
-            x = math.pi * sigma * na * dm * wavelength_m / period_m
-            if abs(x) < 1e-15:
-                tcc = 1.0  # coherent limit: lim_{x->0} 2*J1(x)/x = 1
-            else:
-                tcc = 2.0 * _j1(x) / x
+            # TCC factor: exact 2D source-pupil overlap integral (P1-1 fix).
+            tcc = tcc_matrix[i, j]
 
-            # Interference term with defocus phase
+            # Interference term with defocus phase.
+            # Both orders carry the defocus phase, so the combined
+            # phase is φ_i - φ_j, which preserves Hermitian symmetry.
             phase = 2.0 * math.pi * (mi - mj) * x_pos / period_m
-            interference = ri_defocused * rj.conj() * tcc * torch.exp(1j * phase)
+            interference = ri * rj.conj() * tcc * torch.exp(1j * phase)
             aerial_1d += interference
 
     # The Hopkins double-sum is already the (real, Hermitian) intensity:
@@ -231,13 +225,14 @@ def nils(
     line_center: int,
     line_width_px: int,
     dx_nm: float = 1.0,
+    threshold: float | None = None,
 ) -> float:
-    """Normalised Image Log-Slope at the line edge.
+    """Mack NILS at the printed intensity-threshold edges.
 
-    NILS = CD · d(log I)/dx = CD · (1/I) · (dI/dx), evaluated at the
-    line edge (the point of steepest intensity gradient along the
-    centre row).  The measured CD (width of the undeveloped region) is
-    used when the line edge is found via the gradient maximum.
+    NILS = CD · |dI/dx| / I_edge, evaluated at the crossings of
+    ``threshold`` (Mack 2007 §4.5).  CD is the distance between the
+    two interpolierte Kanten of the longest below-threshold run.
+    Left and right edge NILS are averaged.
 
     Parameters
     ----------
@@ -246,51 +241,91 @@ def nils(
     line_center : int
         Row index of the centre line-cut.
     line_width_px : int
-        Nominal line width in pixels (fallback if edge not found).
+        Unused except as a last-resort fallback if no edge is found.
     dx_nm : float
         Grid spacing [nm/pixel].
+    threshold : float, optional
+        Intensity threshold of the printed edge.  If omitted, defaults
+        to ``0.5 * mean(cut)``, which matches the default aerial_threshold
+        Optical-CD at nominal dose=20 mJ/cm².  Callers that already
+        computed a CD threshold MUST pass it — do not rely on this
+        default for a non-default resist_threshold_norm or dose.
 
     Returns
     -------
     nils : float
-        Normalised image log-slope (dimensionless).
+        Mean Mack NILS of the two printed edges (dimensionless).
     """
-    G = aerial.shape[0]
-    cut = aerial[line_center, :]
-    Imin, Imax = cut.min(), cut.max()
+    cut = aerial[line_center, :].to(dtype=torch.float64)
+    G = int(cut.shape[0])
+    if G < 2 or dx_nm <= 0.0:
+        return 0.0
+
+    Imin = float(cut.min())
+    Imax = float(cut.max())
     if Imax <= Imin + 1e-12:
         return 0.0
-    # gradient (per nm)
-    dIdx = torch.gradient(cut, spacing=dx_nm)[0]
-    # steepest point (use absolute value — sign depends on edge orientation)
-    edge_idx = int(torch.argmax(torch.abs(dIdx)))
-    slope = dIdx[edge_idx]
-    Iedge = cut[edge_idx]
-    if Iedge < 1e-12:
-        return 0.0
-    nils_slope = abs(slope) / Iedge  # per nm
 
-    # measured CD: width of undeveloped (below median) region
-    thr = (Imin + Imax) / 2.0
-    below = cut < thr
-    runs = []
-    start = None
-    for i, b in enumerate(below):
-        b = bool(b)
-        if b and start is None:
-            start = i
-        elif not b and start is not None:
-            runs.append((start, i - 1))
-            start = None
-    if start is not None:
-        runs.append((start, len(below) - 1))
-    if runs:
-        longest = max(runs, key=lambda r: r[1] - r[0])
-        cd_nm = (longest[1] - longest[0] + 1) * dx_nm
+    if threshold is None:
+        thr = 0.5 * float(cut.mean())
     else:
-        cd_nm = line_width_px * dx_nm
+        thr = float(threshold)
 
-    return nils_slope * cd_nm
+    if thr <= 1e-30:
+        return 0.0
+
+    # Linear interpolierte crossings between adjacent samples.
+    # slope on that segment is exact for piecewise-linear I(x).
+    crossings: list[tuple[float, float]] = []
+    for i in range(G - 1):
+        a = float(cut[i])
+        b = float(cut[i + 1])
+        da = a - thr
+        db = b - thr
+        if da == 0.0 and db == 0.0:
+            continue
+        if da * db > 0.0:
+            continue
+        denom = b - a
+        if abs(denom) < 1e-30:
+            continue
+        t = (thr - a) / denom
+        if t < 0.0 or t > 1.0:
+            continue
+        x_px = i + t
+        slope_per_nm = denom / dx_nm
+        crossings.append((x_px, slope_per_nm))
+
+    if len(crossings) < 2:
+        return 0.0
+
+    # Pair consecutive crossings; keep the longest below-threshold span
+    # (same selection as the pipeline Optical-CD run, but sub-pixel).
+    best: tuple[float, float, float, float] | None = None
+    best_width = -1.0
+    for k in range(len(crossings) - 1):
+        x0, s0 = crossings[k]
+        x1, s1 = crossings[k + 1]
+        mid_px = 0.5 * (x0 + x1)
+        i_mid = min(G - 1, max(0, int(round(mid_px))))
+        if float(cut[i_mid]) >= thr:
+            continue
+        width = x1 - x0
+        if width > best_width:
+            best_width = width
+            best = (x0, s0, x1, s1)
+
+    if best is None:
+        return 0.0
+
+    cd_nm = best_width * dx_nm
+    if cd_nm <= 0.0:
+        return 0.0
+
+    _, slope_left, _, slope_right = best
+    nils_left = cd_nm * abs(slope_left) / thr
+    nils_right = cd_nm * abs(slope_right) / thr
+    return 0.5 * (nils_left + nils_right)
 
 
 # Backward-compatible alias for hopkins.py
@@ -428,3 +463,125 @@ def abbe_image(
             aerial = aerial + weight * intensity
 
     return aerial
+
+
+# ──────────────────────────────────────────────
+# P1-1: Exact TCC via 2D source-pupil overlap
+# ──────────────────────────────────────────────
+
+
+def _compute_tcc_matrix(
+    order_indices: torch.Tensor,
+    sigma: float,
+    na: float,
+    wavelength_m: float,
+    period_m: float,
+    grid: int = 256,
+    device: torch.device | None = None,
+    illumination_shape: str = "conventional",
+) -> torch.Tensor:
+    """Compute the exact TCC matrix via 2D source-pupil overlap integral.
+
+    TCC(i,j) = int int S(fx,fy) P(fx+fi,fy) P*(fx+fj,fy) dfx dfy
+               / int int S dfx dfy
+
+    where S is the source intensity distribution (determined by
+    illumination_shape), P is the pupil (unit disk), and
+    fi = mi * lambda / (period * NA) is the normalized spatial frequency
+    of order mi.
+
+    Supported illumination shapes:
+    - "conventional": uniform disk of radius sigma
+    - "annular": ring from sigma_inner to sigma
+    - "dipole_x" / "dipole": two poles on the x-axis
+    - "dipole_y": two poles on the y-axis
+    - "quasar": four poles (quadrupole)
+
+    Parameters
+    ----------
+    order_indices : (M,) int64
+        Diffraction order indices.
+    sigma : float
+        Partial coherence factor (outer source radius in pupil-normalized units).
+    na : float
+        Numerical aperture.
+    wavelength_m : float [m]
+        Free-space wavelength.
+    period_m : float [m]
+        Mask period.
+    grid : int
+        Integration grid size (default: 256 -> 256x256).
+    device : torch.device, optional
+    illumination_shape : str
+        Source shape (default: "conventional").
+
+    Returns
+    -------
+    TCC : (M, M) complex128
+        Transmission Cross Coefficient matrix.
+    """
+    M = order_indices.shape[0]
+    if device is None:
+        device = torch.device("cpu")
+
+    f = torch.linspace(-2.0, 2.0, grid, device=device, dtype=torch.float64)
+    FX, FY = torch.meshgrid(f, f, indexing="ij")
+    r2 = FX**2 + FY**2
+
+    # Build source mask for the requested illumination shape
+    shape = illumination_shape.lower()
+    if shape == "annular":
+        sigma_inner = 0.3 * sigma
+        S = ((r2 <= sigma**2) & (r2 >= sigma_inner**2)).to(torch.float64)
+    elif shape in ("dipole", "dipole_x"):
+        pole_sigma = 0.2 * sigma
+        half = 0.3 * sigma  # separation/2
+        pole_r = (FX - half) ** 2 + FY**2 <= pole_sigma**2
+        pole_l = (FX + half) ** 2 + FY**2 <= pole_sigma**2
+        S = ((pole_r | pole_l) & (r2 <= sigma**2)).to(torch.float64)
+    elif shape == "dipole_y":
+        pole_sigma = 0.2 * sigma
+        half = 0.3 * sigma
+        pole_u = FX**2 + (FY - half) ** 2 <= pole_sigma**2
+        pole_d = FX**2 + (FY + half) ** 2 <= pole_sigma**2
+        S = ((pole_u | pole_d) & (r2 <= sigma**2)).to(torch.float64)
+    elif shape == "quasar":
+        pole_sigma = 0.2 * sigma
+        half = 0.3 * sigma
+        angle = torch.tensor(math.pi / 6.0, device=device)  # 30 deg
+        ca, sa = torch.cos(angle), torch.sin(angle)
+        # Four rotated poles
+        poles = torch.zeros(grid, grid, dtype=torch.bool, device=device)
+        for cx, cy in [(half, half), (half, -half), (-half, half), (-half, -half)]:
+            # Rotate coordinates
+            rx = FX * ca - FY * sa - cx
+            ry = FX * sa + FY * ca - cy
+            poles = poles | (rx**2 + ry**2 <= pole_sigma**2)
+        S = (poles & (r2 <= sigma**2)).to(torch.float64)
+    elif shape == "conventional":
+        S = (r2 <= sigma**2).to(torch.float64)
+    else:
+        supported = ["conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"]
+        raise ValueError(
+            f"Unknown illumination_shape {illumination_shape!r}. "
+            f"Supported shapes: {supported}"
+        )
+
+    S_sum = S.sum()
+    if S_sum < 1e-30:
+        # Coherent limit: TCC = 1 for all pairs
+        return torch.ones(M, M, dtype=torch.complex128, device=device)
+
+    f_ord = order_indices.to(torch.float64) * wavelength_m / (period_m * na)
+
+    P_shifted = torch.zeros(M, grid, grid, dtype=torch.float64, device=device)
+    for i, fi in enumerate(f_ord):
+        P_shifted[i] = ((FX + fi) ** 2 + FY**2 <= 1.0).to(torch.float64)
+
+    S_weighted = S.reshape(-1)
+    P_flat = P_shifted.reshape(M, -1)
+
+    TCC = (P_flat * S_weighted[None, :]) @ P_flat.T
+    TCC = TCC / S_sum
+
+    return TCC.to(torch.complex128)

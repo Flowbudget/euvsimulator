@@ -193,6 +193,9 @@ class SimulationConfig:
     mask_sidewall_roughness_nm: float = 0.0  # Sidewall roughness sigma [nm]
 
     def __post_init__(self):
+        # Validate dose
+        if self.dose_mj_cm2 <= 0:
+            raise ValueError(f"dose_mj_cm2 must be > 0, got {self.dose_mj_cm2}")
         # Validate resist parameters
         if self.dill_C <= 0:
             raise ValueError("dill_C must be > 0")
@@ -260,22 +263,62 @@ def _cd_via_aerial_threshold(
     dx_nm = cfg.period_nm / G
     device = aerial.device
 
-    # NILS at the line edge
+    # NILS at the printed Optical-CD threshold edge (Mack).
     dx_nm = cfg.period_nm / cfg.grid
-    nils_val = nils(aerial, half, line_width_px, dx_nm)
+    nils_val = nils(aerial, half, line_width_px, dx_nm, threshold=threshold_val)
 
-    # Positive-tone developed mask
+    # Positive-tone developed mask (used for visualization, unchanged)
     dev = (cut > threshold_val).float()
     dev_2d = dev.unsqueeze(0).expand(G, G).clone()
 
-    # CD extraction: find the largest run of undeveloped pixels (dev == 0)
-    runs = _find_runs_1d(dev, target=0)
-    if len(runs) == 0:
+    # Sub-pixel CD extraction via linear threshold-crossing interpolation.
+    # Same crossing logic as nils() — finds pairs of (below-threshold run)
+    # crossings and uses the longest pair for CD.
+    crossings: list[float] = []  # crossing positions in pixels
+    for i in range(G - 1):
+        a = float(cut[i])
+        b = float(cut[i + 1])
+        da = a - threshold_val
+        db = b - threshold_val
+        if da == 0.0 and db == 0.0:
+            continue
+        if da * db > 0.0:
+            continue
+        denom = b - a
+        if abs(denom) < 1e-30:
+            continue
+        t = (threshold_val - a) / denom
+        if t < 0.0 or t > 1.0:
+            continue
+        crossings.append(i + t)
+
+    if len(crossings) < 2:
         cd_nm = 0.0
     else:
-        longest = max(runs, key=lambda r: r[1] - r[0])
-        lidx, ridx = longest
-        cd_nm = (ridx - lidx + 1) * dx_nm
+        # Pair consecutive crossings to find below-threshold runs.
+        # For a periodic profile, crossings alternate between
+        # below-threshold and above-threshold edges.
+        # Each consecutive pair (x_k, x_{k+1}) defines a run.
+        # Also consider the wrap-around pair (x_last, x_first + G).
+        best_width_px = -1.0
+        for k in range(len(crossings)):
+            x0 = crossings[k]
+            x1 = crossings[(k + 1) % len(crossings)]
+            if k == len(crossings) - 1:
+                x1 = x1 + G  # wrap around periodic boundary
+            mid_px = 0.5 * (x0 + x1)
+            if mid_px > G:
+                mid_px = mid_px - G
+            i_mid = min(G - 1, max(0, int(round(mid_px))))
+            if float(cut[i_mid]) >= threshold_val:
+                continue  # above-threshold → not an absorber run
+            width = x1 - x0
+            if width > best_width_px:
+                best_width_px = width
+        if best_width_px < 0.0:
+            cd_nm = 0.0
+        else:
+            cd_nm = best_width_px * dx_nm
 
     return cd_nm, dev_2d, nils_val
 
@@ -307,8 +350,16 @@ def _cd_via_full_chem(
     else:
         dose_map_blurred = dose_map
 
-    # NILS on the blurred dose map (what resist actually sees)
-    nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm)
+    # NILS on the blurred dose map (what resist actually sees).
+    # Same Optical-CD threshold convention as aerial_threshold:
+    #   thr = resist_threshold_norm * mean(field) * (20 / dose)
+    # so NILS and CD share one printed edge even in the full_chem path.
+    dc_level = float(dose_map_blurred.mean())
+    nominal_dose = 20.0
+    threshold_val = (
+        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+    )
+    nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm, threshold=threshold_val)
 
     acid = dose_to_acid(
         dose_map_blurred,
@@ -588,44 +639,34 @@ def run_simulation(
     order_indices = list(range(-n_orders, n_orders + 1))
 
     if cfg.use_rcwa:
-        from euvsimulator.mask3d.geometry import build_permittivity_profile, standard_euv_mask
+        from euvsimulator.mask3d.geometry import build_permittivity_profile, MaskLayer, MaskStack
         from euvsimulator.mask3d.rcwa_torch import RCWA1D, RCWAConfig
 
-        # Build mask stack with Phase 4 parameters
-        mask = standard_euv_mask(
-            absorber=cfg.absorber_material,
-            absorber_thickness_nm=cfg.absorber_height_nm,
-            capping="Ru",
-            capping_thickness_nm=2.5,
-            n_bilayers=cfg.ml_n_bilayers,
+        # Build mask stack WITHOUT Ru in the absorber layers.
+        # Ru is part of the ML operator (the ML stack's top layer).
+        # The RCWA grating consists of the Ta absorber only (60 nm).
+        n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, energy_eV)
+        layers = [
+            MaskLayer(
+                material=cfg.absorber_material,
+                thickness_nm=cfg.absorber_height_nm,
+                nk=complex(n_ta_c, k_ta_c),
+                etched=True,
+            ),
+        ]
+        # Apply taper/undercut if specified (stored in cfg, not yet implemented)
+        if cfg.absorber_taper_deg != 90.0 or cfg.mask_undercut_nm != 0.0:
+            pass  # Taper/undercut grid geometry is not yet implemented in build_permittivity_profile
+
+        mask = MaskStack(
+            absorber_layers=layers,
+            multilayer_bilayers=cfg.ml_n_bilayers,
+            d_mo_nm=cfg.ml_d_mo_nm,
+            d_si_nm=cfg.ml_d_si_nm,
+            substrate_nk=complex(n_si, k_si),
             period_nm=cfg.period_nm,
             line_width_nm=cfg.line_width_nm,
-            energy_eV=energy_eV,
         )
-        # Apply taper/undercut if specified
-        if cfg.absorber_taper_deg != 90.0 or cfg.mask_undercut_nm != 0.0:
-            from euvsimulator.mask3d.geometry import MaskLayer, MaskStack
-
-            n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, energy_eV)
-            n_ru_c, k_ru_c = table.refractive_index("Ru", energy_eV)
-            layers = [
-                MaskLayer(material="Ru", thickness_nm=2.5, nk=complex(n_ru_c, k_ru_c), etched=True),
-                MaskLayer(
-                    material=cfg.absorber_material,
-                    thickness_nm=cfg.absorber_height_nm,
-                    nk=complex(n_ta_c, k_ta_c),
-                    etched=True,
-                ),
-            ]
-            mask = MaskStack(
-                absorber_layers=layers,
-                multilayer_bilayers=cfg.ml_n_bilayers,
-                d_mo_nm=cfg.ml_d_mo_nm,
-                d_si_nm=cfg.ml_d_si_nm,
-                substrate_nk=complex(n_si, k_si),
-                period_nm=cfg.period_nm,
-                line_width_nm=cfg.line_width_nm,
-            )
 
         eps_profile, thicknesses, eps_sub = build_permittivity_profile(
             mask, n_samples=1024, device=device

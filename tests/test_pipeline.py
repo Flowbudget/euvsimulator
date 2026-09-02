@@ -1,5 +1,8 @@
 """Tests for the full simulation pipeline."""
 
+import pytest
+import torch
+
 from euvsimulator.pipeline import SimulationConfig, run_simulation, simulate_line_space
 
 
@@ -33,6 +36,256 @@ class TestPipeline:
         assert 1.5 <= result.nils_value <= 4.0, (
             f"NILS={result.nils_value:.3f} not in realistic range"
         )
+
+
+class TestConfigThreshold:
+    """P0-1 regression: CLI --threshold must control resist_threshold_norm."""
+
+    def test_default_threshold_unchanged(self):
+        """Default benchmark must remain unchanged (CD=[sub-pixel] ~27.62, NILS=4.9685)."""
+        result = run_simulation()
+        assert abs(result.cd_nm - 27.62) < 0.01, f"Default CD changed: {result.cd_nm}"
+        assert abs(result.nils_value - 4.9685) < 0.001, f"Default NILS changed: {result.nils_value}"
+
+    def test_threshold_0_3_changes_cd(self):
+        """resist_threshold_norm=0.3 must produce different CD from default."""
+        r_default = run_simulation()
+        r_0_3 = run_simulation(SimulationConfig(resist_threshold_norm=0.3))
+        assert abs(r_0_3.cd_nm - r_default.cd_nm) > 0.01, (
+            "threshold=0.3 must change CD, got same as default"
+        )
+
+    def test_threshold_0_3_equals_cli_semantics(self):
+        """CLI --threshold 0.3 maps to resist_threshold_norm=0.3 (same semantics)."""
+        r = run_simulation(SimulationConfig(resist_threshold_norm=0.3))
+        # CD must be smaller than default (lower threshold = wider line)
+        assert r.cd_nm < 27.0, f"threshold=0.3 should give CD < 27.0, got {r.cd_nm}"
+
+    def test_full_chem_threshold_unchanged(self):
+        """full_chem path uses mack_M_th for development, not resist_threshold_norm."""
+        r_default = run_simulation(SimulationConfig(resist_model="full_chem"))
+        r_norm = run_simulation(SimulationConfig(resist_model="full_chem", resist_threshold_norm=0.3))
+        # full_chem CD is determined by mack_M_th, not resist_threshold_norm
+        # NILS uses resist_threshold_norm though, so NILS should change
+        assert abs(r_norm.nils_value - r_default.nils_value) > 0.001, (
+            "full_chem NILS must change with resist_threshold_norm"
+        )
+
+
+class TestConfigDose:
+    """P0-2 regression: dose <= 0 must raise ValueError."""
+
+    def test_dose_20_ok(self):
+        """Standard dose works."""
+        r = run_simulation(SimulationConfig(dose_mj_cm2=20.0))
+        assert r.cd_nm > 0
+
+    def test_dose_1_ok(self):
+        """Low but positive dose works."""
+        r = run_simulation(SimulationConfig(dose_mj_cm2=1.0))
+        assert r.cd_nm >= 0
+
+    def test_dose_1e_12_ok(self):
+        """Very small positive dose is allowed (physically marginal but > 0)."""
+        r = run_simulation(SimulationConfig(dose_mj_cm2=1e-12))
+        assert r.cd_nm >= 0
+
+    def test_dose_0_raises(self):
+        """dose=0 must raise ValueError."""
+        with pytest.raises(ValueError, match="dose_mj_cm2 must be > 0"):
+            SimulationConfig(dose_mj_cm2=0.0)
+
+    def test_dose_neg_0_raises(self):
+        """dose=-0.0 must raise ValueError."""
+        with pytest.raises(ValueError, match="dose_mj_cm2 must be > 0"):
+            SimulationConfig(dose_mj_cm2=-0.0)
+
+    def test_dose_negative_raises(self):
+        """Negative dose must raise ValueError."""
+        with pytest.raises(ValueError, match="dose_mj_cm2 must be > 0"):
+            SimulationConfig(dose_mj_cm2=-1.0)
+        with pytest.raises(ValueError, match="dose_mj_cm2 must be > 0"):
+            SimulationConfig(dose_mj_cm2=-100.0)
+
+
+class TestConfigIlluminationShape:
+    """P1 regression: unknown illumination_shape must raise ValueError."""
+
+    def test_conventional_works(self):
+        """Default illumination shape works."""
+        r = run_simulation(SimulationConfig(illumination_shape="conventional"))
+        assert abs(r.cd_nm - 27.62) < 0.01
+
+    def test_all_valid_shapes_work(self):
+        """Every supported shape runs without error."""
+        for shape in ("conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"):
+            r = run_simulation(SimulationConfig(illumination_shape=shape))
+            assert r.cd_nm > 0, f"{shape}: CD should be positive"
+
+    def test_case_insensitive(self):
+        """Case variations of valid shapes are accepted (code calls .lower())."""
+        for shape in ("Conventional", "DIPOLE", "Annular", "Quasar"):
+            # Use _compute_tcc_matrix directly (fast path)
+            from euvsimulator.aerial.abbe import _compute_tcc_matrix
+            import torch
+            orders = torch.tensor([-1, 0, 1], dtype=torch.int64)
+            tcc = _compute_tcc_matrix(orders, sigma=0.8, na=0.33,
+                                      wavelength_m=13.5e-9, period_m=64e-9,
+                                      grid=64, illumination_shape=shape)
+            assert tcc is not None
+
+    def test_unknown_shape_raises(self):
+        """Unknown illumination_shape must raise ValueError with supported list."""
+        with pytest.raises(ValueError, match="Unknown illumination_shape"):
+            run_simulation(SimulationConfig(illumination_shape="INVALID"))
+
+    def test_multiple_unknown_shapes_raise(self):
+        """Various unknown shapes all raise ValueError."""
+        for shape in ("INVALID", "custom", "hexapole", "quadrupole", "unknown"):
+            with pytest.raises(ValueError, match="Unknown illumination_shape"):
+                run_simulation(SimulationConfig(illumination_shape=shape))
+
+    def test_error_message_lists_supported(self):
+        """Error message lists supported shapes for user guidance."""
+        with pytest.raises(ValueError) as exc:
+            run_simulation(SimulationConfig(illumination_shape="INVALID"))
+        msg = str(exc.value)
+        assert "supported" in msg.lower() or "Supported" in msg
+        assert "conventional" in msg
+
+
+class TestConfigOrderCutoff:
+    """P2 regression: sigma>0 must extend order range beyond on-axis max_order."""
+
+    def test_sigma0_period40_unchanged(self):
+        """sigma=0 must use on-axis cutoff (no source shift)."""
+        r = run_simulation(SimulationConfig(
+            period_nm=40, line_width_nm=20, sigma=0.0, grid=256))
+        assert r.cd_nm == 0.0, f"sigma=0 period=40 should give CD=0, got {r.cd_nm}"
+
+    def test_sigma08_period40_now_has_cd(self):
+        """sigma=0.8, period=40 must produce CD>0 (source shift enables order 1)."""
+        r = run_simulation(SimulationConfig(
+            period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
+        assert r.cd_nm > 0.0, f"sigma=0.8 period=40 should have CD>0, got {r.cd_nm}"
+
+    def test_sigma08_period32_cd_positive(self):
+        """Very small period benefits from source shift at sigma>0."""
+        r = run_simulation(SimulationConfig(
+            period_nm=32, line_width_nm=16, sigma=0.8, grid=256))
+        assert r.cd_nm > 0.0, f"sigma=0.8 period=32 should have CD>0, got {r.cd_nm}"
+
+    def test_benchmark_unchanged(self):
+        """Standard benchmark must remain unchanged after order cutoff fix."""
+        r = run_simulation()
+        assert abs(r.cd_nm - 27.62) < 0.01, f"Default CD changed: {r.cd_nm}"
+        assert abs(r.nils_value - 4.9685) < 0.001, f"Default NILS changed: {r.nils_value}"
+
+    def test_sigma1_period64_works(self):
+        """sigma=1.0 at period=64 runs and produces CD>0."""
+        r = run_simulation(SimulationConfig(sigma=1.0))
+        assert r.cd_nm > 0, f"sigma=1.0 period=64 should produce CD>0, got {r.cd_nm}"
+
+    def test_sigma_continuity(self):
+        """CD vs sigma should be continuous at period=40 (was a discrete jump)."""
+        r0 = run_simulation(SimulationConfig(period_nm=40, line_width_nm=20, sigma=0.3, grid=256))
+        r1 = run_simulation(SimulationConfig(period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
+        # Both should have CD>0 (not the old 0→14 jump at period=44 cutoff)
+        assert r0.cd_nm > 0 and r1.cd_nm > 0
+
+
+class TestConfigSubPixelCD:
+    """P2 fix: CD uses sub-pixel threshold crossings (not integer pixel runs)."""
+
+    def test_benchmark_subpixel_cd(self):
+        """Standard benchmark CD = ~27.62 nm (sub-pixel, not 27.50 integer)."""
+        r = run_simulation()
+        assert abs(r.cd_nm - 27.62) < 0.01, f"CD = {r.cd_nm:.4f}, expected ~27.62"
+        assert abs(r.nils_value - 4.9685) < 0.001, f"NILS changed: {r.nils_value}"
+
+    def test_cd_not_quantized_to_pixels(self):
+        """CD at grid=256 must NOT be an exact integer multiple of dx."""
+        r = run_simulation()
+        dx_nm = 64.0 / 256
+        cd_px = r.cd_nm / dx_nm
+        # Sub-pixel CD should not be an exact integer pixel count
+        assert abs(cd_px - round(cd_px)) > 0.001, (
+            f"CD={r.cd_nm:.4f} nm = {cd_px:.2f} px — appears quantized"
+        )
+
+    def test_grid_convergence_monotonic(self):
+        """CD should be roughly monotonic across grids (not oscillating)."""
+        cd_vals = []
+        for grid in [256, 512, 1024, 2048]:
+            r = run_simulation(SimulationConfig(grid=grid))
+            cd_vals.append(r.cd_nm)
+        # CD should be increasing toward asymptote ~27.66
+        assert cd_vals[0] < cd_vals[-1], (
+            f"CD not trending up: {cd_vals}"
+        )
+
+    def test_subpixel_cd_small_period(self):
+        """period=40, sigma=0.8: CD must be >0 (P2 order-cutoff fix still active)."""
+        r = run_simulation(SimulationConfig(
+            period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
+        assert r.cd_nm > 10.0, f"CD should be >10 nm, got {r.cd_nm}"
+
+    def test_subpixel_cd_asymmetric(self):
+        """period=64, duty=0.3 produces consistent sub-pixel CD ~19.05 nm."""
+        r = run_simulation(SimulationConfig(
+            period_nm=64, line_width_nm=19.2, grid=256))
+        # CD should be ~19.05 nm (sub-pixel) and not quantized
+        assert 18.5 < r.cd_nm < 19.5, f"CD out of range: {r.cd_nm}"
+
+    def test_nils_unchanged_by_cd_fix(self):
+        """NILS must be unchanged — uses its own sub-pixel logic independently."""
+        r = run_simulation()
+        assert abs(r.nils_value - 4.9685) < 0.001
+
+
+class TestOrderBoundaryInvariant:
+    """P2 invariant: no Fourier order beyond ceil((1+σ)·NA·Λ/λ) has non-zero TCC."""
+
+    @staticmethod
+    def _check_shape_order_boundary(shape, sigma, period_nm, eps=1e-6):
+        from euvsimulator.aerial.abbe import _compute_tcc_matrix
+        import math
+        lam = 13.5e-9; NA = 0.33; period_m = period_nm * 1e-9
+        max_order = int(math.floor(NA * period_m / lam))
+        if sigma > 0:
+            max_order = int(math.ceil((1.0 + sigma) * NA * period_m / lam))
+        probe = max_order + 10
+        orders = torch.tensor(list(range(-probe, probe + 1)), dtype=torch.int64)
+        tcc = _compute_tcc_matrix(orders, sigma=sigma, na=NA, wavelength_m=lam,
+                                   period_m=period_m, grid=256, illumination_shape=shape)
+        diag = tcc.diag().real
+        violations = [(int(m), float(diag[idx])) for idx, m in enumerate(orders)
+                      if abs(int(m)) > max_order and float(diag[idx]) > eps]
+        return max_order, violations
+
+    def test_order_boundary_conventional(self):
+        mo, v = self._check_shape_order_boundary("conventional", 0.8, 40)
+        assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+    def test_order_boundary_annular(self):
+        mo, v = self._check_shape_order_boundary("annular", 0.8, 40)
+        assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+    def test_order_boundary_dipole_x(self):
+        mo, v = self._check_shape_order_boundary("dipole_x", 0.8, 40)
+        assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+    def test_order_boundary_dipole_y(self):
+        mo, v = self._check_shape_order_boundary("dipole_y", 0.8, 40)
+        assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+    def test_order_boundary_quasar(self):
+        mo, v = self._check_shape_order_boundary("quasar", 0.8, 40)
+        assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+    def test_order_boundary_sigma_high(self):
+        for s in ["conventional", "annular", "dipole_x", "dipole_y", "quasar"]:
+            mo, v = self._check_shape_order_boundary(s, 1.0, 32)
+            assert len(v) == 0, f"{s}: Orders > {mo} have non-zero TCC: {v}"
+    def test_order_boundary_large_period(self):
+        for s in ["conventional", "annular", "dipole_x", "dipole_y", "quasar"]:
+            mo, v = self._check_shape_order_boundary(s, 0.8, 128)
+            assert len(v) == 0, f"{s}: Orders > {mo} have non-zero TCC: {v}"
 
 
 class TestPolarizationAveraging:
