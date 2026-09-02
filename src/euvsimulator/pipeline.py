@@ -197,22 +197,36 @@ class SimulationConfig:
 
     # Mack development parameters.
     #
-    # LITERATURE STATUS (2026-09-02 research pass): no EUV-specific,
-    # peer-reviewed source for Rmax/Rmin/n/Mth was found. The Mack
-    # (1987) model itself long predates EUV lithography and is normally
-    # fit per-resist to measured develop-rate data, not read off a
-    # universal reference. One illustrative non-EUV (DUV/i-line era)
-    # example resist "PD523AD" (commonly used in teaching/Prolith
-    # material, not independently verified here against a primary
-    # measurement) reports two different fitted parameter sets
-    # depending on developer/process: Rmax=85 or 183 nm/s, Rmin=0.009
-    # or 0.006 nm/s, Mth=0.060 or 0.450, n not given. This only shows
-    # the plausible order of magnitude and the large resist-to-resist/
-    # process-to-process spread -- it is NOT a substitute for an
-    # EUV-CAR-specific fit and should not be treated as a validated
-    # reference. mack_n=5.0 below happens to be close to a value (5.8)
-    # seen for that same non-EUV example, but this is a coincidence,
-    # not evidence. Recalibrating these against real EUV develop-rate
+    # LITERATURE STATUS (2026-09-02 research pass, extended per explicit
+    # user follow-up): no freely-accessible, EUV-specific, peer-reviewed
+    # source for Rmax/Rmin/n/Mth was found, despite two rounds of
+    # targeted search. The Mack (1987) model itself long predates EUV
+    # lithography and is normally fit per-resist to measured develop-rate
+    # data, not read off a universal reference. Two EUV-specific
+    # candidate papers were identified but are PAYWALLED from this
+    # environment (no institutional access available here):
+    #   - "Extraction and identification of resist modeling parameters
+    #     for EUV Lithography," Proc. SPIE 6923, 69230T (2008).
+    #   - Long, L. T.; Neureuther, A. R.; Naulleau, P. P. "Three-
+    #     dimensional modeling of EUV photoresist using the multivariate
+    #     Poisson propagation model." J. Micro/Nanopatterning Mater.
+    #     Metrol. 20(3), 034601 (2021). doi:10.1117/1.JMM.20.3.034601
+    #     (a search summary -- NOT independently read here -- mentioned
+    #     develop rate calibrated at deprotection fraction 0.27 = 35
+    #     nm/30s; treat as an unverified lead only, not a citable value.)
+    # If institutional/library access to either is available, they are
+    # the most promising next step for a real EUV-specific Mack fit.
+    # One illustrative non-EUV (DUV/i-line era) example resist "PD523AD"
+    # (commonly used in teaching/Prolith material, not independently
+    # verified here against a primary measurement) reports two different
+    # fitted parameter sets depending on developer/process: Rmax=85 or
+    # 183 nm/s, Rmin=0.009 or 0.006 nm/s, Mth=0.060 or 0.450, n not
+    # given. This only shows the plausible order of magnitude and the
+    # large resist-to-resist/process-to-process spread -- it is NOT a
+    # substitute for an EUV-CAR-specific fit and should not be treated
+    # as a validated reference. mack_n=5.0 below happens to be close to
+    # a value (5.8) seen for that same non-EUV example, but this is a
+    # coincidence, not evidence. Recalibrating these against real EUV develop-rate
     # data is an open item -- flagged as a judgment call without solid
     # literature backing (see arbeitslog / stop-and-ask criteria).
     mack_R_max: float = 100.0  # Max development rate [nm/s] -- order-of-magnitude only, no EUV-specific source found

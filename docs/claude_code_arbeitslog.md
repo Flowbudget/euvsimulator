@@ -75,4 +75,40 @@ Auftrag: "Änderung würde Ergebnisse verändern, die bereits als gründlich gep
 Mack-Parameter-Neuabstimmung (Aufgabe 2/3) hat keine solide externe Grundlage — hier ist eine
 explizite Rückmeldung des Nutzers nötig, bevor mit Ermessenswerten weitergearbeitet wird.
 
+**Nutzer-Antwort:** Option B gewählt ("gezielter nach EUV-spezifischen Mack-Fits suchen, auch
+wenn das an eine Bezahlschranke stoßen könnte").
+
+---
+
+## 2026-09-02 — Aufgabe 1 (Fortsetzung): Gezielte Mack-Parameter-Suche (Option B)
+
+**Was:** Fünf weitere gezielte Websuchen + Versuche, konkrete SPIE-/Konferenz-Paper direkt zu
+lesen (WebFetch auf PDF- und HTML-Fassungen, `curl` gegen eScholarship, Semantic-Scholar-API).
+
+**Ergebnis: Zwei konkrete, thematisch exakt passende Kandidaten gefunden, aber beide von hier
+aus nicht frei zugänglich (Bezahlschranke bzw. JS-Block):**
+1. "Extraction and identification of resist modeling parameters for EUV Lithography," *Proc.
+   SPIE* 6923, 69230T (2008) — SPIE Digital Library + ResearchGate liefern 403/leer.
+2. Long, L. T.; Neureuther, A. R.; Naulleau, P. P. "Three-dimensional modeling of EUV
+   photoresist using the multivariate Poisson propagation model." *J. Micro/Nanopatterning
+   Mater. Metrol.* 20(3), 034601 (2021). doi:[10.1117/1.JMM.20.3.034601](https://doi.org/10.1117/1.JMM.20.3.034601)
+   — SPIE Digital Library liefert leeren Inhalt beim Abruf; eScholarship-Mirror
+   (escholarship.org/uc/item/5d17b1sr) ist eine JS-Single-Page-App, per `curl`/WebFetch nicht
+   auslesbar. Eine (nicht selbst gelesene, nur aus einer Suchmaschinen-Zusammenfassung
+   stammende) Erwähnung deutete auf einen kalibrierten Entwicklungsrate-Punkt bei
+   Entschützungsgrad 0.27 = 35nm/30s hin — **das wird NICHT als Zahl übernommen**, da nicht am
+   Original verifiziert (genau die Art unbelegter Übernahme, die dieses Projekt vermeiden soll).
+
+**Ehrliches Fazit:** Trotz genuiner, mehrstufiger Suche keine frei zugängliche, EUV-spezifische,
+primärquellenverifizierte Quelle für Mack R_max/R_min/n/M_th gefunden. Beide Kandidaten-Paper
+sind im Code als Zeiger dokumentiert (`pipeline.py`, Kommentar bei `mack_*`), falls du oder Hermes
+institutionellen Zugang habt.
+
+**Verifiziert:** `SimulationConfig()` lädt weiterhin fehlerfrei nach der erweiterten
+Dokumentation.
+
+**Damit ist Aufgabe 1 abgeschlossen** (Dill A/B/C/Q und PEB solide referenziert; Mack-Parameter
+mit bestem Aufwand recherchiert, Lücke transparent dokumentiert statt erfunden). Wartet auf
+Nutzer-Entscheidung, wie mit der Mack-Lücke in Aufgabe 2/3 umzugehen ist.
+
 ---
