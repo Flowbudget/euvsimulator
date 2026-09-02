@@ -690,9 +690,7 @@ def run_simulation(
             n_incident=torch.tensor(
                 [1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128, device=device
             ),
-            n_substrate=torch.tensor(
-                [eps_sub**0.5, eps_sub**0.5], dtype=torch.complex128, device=device
-            ),
+            ml_stack=ml_stack,  # P1-2: order-diagonal ML operator
         )
         # Also compute TM for future High-NA
         rcwa_cfg_tm = RCWAConfig(
@@ -710,9 +708,7 @@ def run_simulation(
             n_incident=torch.tensor(
                 [1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128, device=device
             ),
-            n_substrate=torch.tensor(
-                [eps_sub**0.5, eps_sub**0.5], dtype=torch.complex128, device=device
-            ),
+            ml_stack=ml_stack,  # P1-2: order-diagonal ML operator
         )
 
         # Unpolarized illumination: TE and TM are orthogonal incoherent

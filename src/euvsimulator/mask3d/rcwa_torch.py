@@ -132,6 +132,7 @@ class RCWA1D:
         period: float,
         n_incident: Optional[torch.Tensor] = None,
         n_substrate: Optional[torch.Tensor] = None,
+        ml_stack=None,
     ) -> torch.Tensor:
         """Run the RCWA simulation.
 
@@ -146,7 +147,12 @@ class RCWA1D:
         n_incident : (2,) complex128, optional
             (n_upper, n_lower) of incident medium.
         n_substrate : (2,) complex128, optional
-            (n_upper, n_lower) of substrate.
+            (n_upper, n_lower) of substrate. Ignored when ml_stack is provided.
+        ml_stack : MultilayerStack, optional
+            Multilayer stack for the P1-2 order-diagonal ML reflection operator.
+            When provided, the bottom boundary condition is an order-diagonal
+            ML reflection operator computed via TMM (Option C).
+            The ML stack's top layer (e.g., Ru) is used as the interface medium.
 
         Returns
         -------
@@ -222,7 +228,32 @@ class RCWA1D:
         S_layer = self._propagation_smatrix(q, thicknesses, k0)
 
         # Build bottom interface S-matrix: eigenmodes ↔ substrate Rayleigh
-        S_bot = self._eigenmode_to_rayleigh_smatrix(Y_sub, W, V)
+        if ml_stack is not None:
+            # ── P1-2: Order-diagonal ML reflection operator (Option C) ──
+            # The ML stack's top layer (e.g., Ru) is the interface medium.
+            n_ML_top = ml_stack.n_layers[0]  # complex refractive index of top layer
+            kz_ML = torch.sqrt((n_ML_top * k0) ** 2 - k_xm**2 + 0j)
+            kz_ML = torch.where(kz_ML.imag < 0, -kz_ML, kz_ML)
+
+            if self.cfg.polarization == "TE":
+                Y_ML_top = torch.diag(kz_ML / k0).to(torch.complex128)
+            else:
+                Y_ML_top = torch.diag(n_ML_top ** 2 * k0 / kz_ML).to(torch.complex128)
+
+            # Interface: eigenmode ↔ Rayleigh modes in ML top layer
+            S_interface = self._eigenmode_to_rayleigh_smatrix(Y_ML_top, W, V)
+
+            # Build order-diagonal ML reflection operator
+            S_ML = _build_ml_reflection_operator(
+                ml_stack, k_xm, k0, self.cfg.wavelength,
+                self.cfg.polarization, self.device,
+            )
+
+            # Cascade: S_bot = S_interface ⨂ S_ML
+            S_bot = self._redheffer_star_matrix(S_interface, S_ML)
+        else:
+            # Original: homogeneous substrate half-space
+            S_bot = self._eigenmode_to_rayleigh_smatrix(Y_sub, W, V)
 
         # Cascade: total S = S_top ⨂ S_layer ⨂ S_bot
         S_total = self._redheffer_star_matrix(self._redheffer_star_matrix(S_top, S_layer), S_bot)
@@ -407,6 +438,83 @@ class RCWA1D:
             prev_r0 = r0
 
         return eff, max_orders
+
+
+# ──────────────────────────────────────────────
+# P1-2: Order-diagonal ML reflection operator
+# ──────────────────────────────────────────────
+
+
+def _build_ml_reflection_operator(
+    ml_stack,
+    k_xm: torch.Tensor,
+    k0: float,
+    wavelength: float,
+    polarization: str,
+    device: torch.device,
+) -> torch.Tensor:
+    """Build the order-diagonal ML reflection operator S_ML.
+
+    For each Rayleigh order m, the complex TMM reflection coefficient
+    r_m of the full ML stack is computed.  The ML is a planar stack,
+    so its S-matrix is diagonal in the order basis::
+
+        S_ML[0, 0, m, m] = r_m          (reflection, order m)
+        S_ML[0, 1] = S_ML[1, 0] = 0     (no transmission)
+        S_ML[1, 1] = 0                   (no reflection from below)
+
+    The incident medium for the TMM is the ML stack's top layer
+    (e.g., Ru capping layer), which is also the medium of the
+    Rayleigh modes at the interface.
+
+    Parameters
+    ----------
+    ml_stack : MultilayerStack
+        The multilayer stack (top -> bottom, including the cap).
+    k_xm : (M,) float64
+        In-plane wavevectors of each Rayleigh order.
+    k0 : float
+        Free-space wavevector magnitude.
+    wavelength : float [m]
+        Free-space wavelength.
+    polarization : str
+        "TE" or "TM".
+    device : torch.device
+
+    Returns
+    -------
+    S_ML : (2, 2, M, M) complex128
+        Order-diagonal ML reflection operator.
+    """
+    from euvsimulator.optics.tmm import reflectivity_at_kx
+
+    M = k_xm.shape[0]
+    te = polarization == "TE"
+
+    # ML stack layers (including the cap)
+    n_layers = ml_stack.n_layers  # (N,) complex128
+    thicknesses = ml_stack.thicknesses  # (N,) float64 [m]
+
+    # The incident medium for the ML is the top of the ML stack
+    # (same as the RCWA interface medium — the Ru capping layer).
+    n_inc = n_layers[0]  # complex refractive index of top layer
+
+    # Substrate (bulk Si below the ML)
+    n_sub = ml_stack.n_layers[-1] if hasattr(ml_stack, 'substrate_nk') else n_layers[-1]
+
+    S_ML = torch.zeros(2, 2, M, M, dtype=torch.complex128, device=device)
+
+    for m in range(M):
+        kx_norm = float(k_xm[m].real.item()) / k0
+        r_m = reflectivity_at_kx(
+            n_layers, thicknesses, wavelength,
+            kx_norm=kx_norm, te=te,
+            n_incident=complex(float(n_inc.real), float(n_inc.imag)),
+            n_substrate=complex(float(n_sub.real), float(n_sub.imag)),
+        )
+        S_ML[0, 0, m, m] = r_m
+
+    return S_ML
 
 
 # ──────────────────────────────────────────────

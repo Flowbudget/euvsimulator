@@ -222,11 +222,12 @@ def stack_smatrix(
     n_layers: torch.Tensor,
     thicknesses: torch.Tensor,
     wavelengths_m: torch.Tensor,
-    theta0: torch.Tensor,
-    n_incident: torch.Tensor,
-    n_substrate: torch.Tensor,
+    theta0: torch.Tensor | None = None,
+    n_incident: torch.Tensor = torch.tensor(1.0 + 0.0j),
+    n_substrate: torch.Tensor = torch.tensor(1.0 + 0.0j),
     te: bool = True,
     roughness_nm: float | None = None,
+    n0_sin2: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Total scattering matrix for a multilayer stack.
 
@@ -238,8 +239,9 @@ def stack_smatrix(
         Physical thickness of each layer.
     wavelengths_m : (W,) float64 [m]
         Wavelength grid.
-    theta0 : float or () tensor [rad]
+    theta0 : float or () tensor [rad], optional
         Angle of incidence in the incident medium.
+        Required when n0_sin2 is not provided.
     n_incident : complex128
         Incident medium index (vacuum: 1.0).
     n_substrate : complex128
@@ -249,6 +251,10 @@ def stack_smatrix(
     roughness_nm : float or None
         RMS interface roughness in nm for Névot–Croce damping.
         None or 0 → ideal (abrupt) interfaces.
+    n0_sin2 : float or (W,) tensor, optional
+        Pre-computed n0²·sin²(θ0) or (k_x/k0)² for evanescent orders.
+        When provided, theta0 is ignored and this value is used directly.
+        Can be > 1 for evanescent orders (k_x > k0).
 
     Returns
     -------
@@ -263,23 +269,33 @@ def stack_smatrix(
 
     n_b = n_layers.unsqueeze(0).expand(W, N).contiguous().to(torch.complex128)
     d_b = thicknesses.unsqueeze(0).expand(W, N).contiguous()
-    theta0_b = torch.as_tensor(theta0, dtype=torch.float64).expand(W)
 
     k0 = 2.0 * math.pi / wavelengths_m  # (W,)
-    sin_theta0 = torch.sin(theta0_b)
-    n0_sin2 = ((n_inc * sin_theta0) ** 2).real  # (W,) — real for vacuum incident
+
+    # Compute n0_sin2: either from theta0 or from provided value
+    if n0_sin2 is not None:
+        # Use pre-computed n0_sin2 (supports evanescent orders with n0_sin2 > 1)
+        n0_sin2_b = torch.as_tensor(n0_sin2, dtype=torch.float64, device=n_layers.device)
+        if n0_sin2_b.dim() == 0:
+            n0_sin2_b = n0_sin2_b.expand(W)
+    elif theta0 is not None:
+        theta0_b = torch.as_tensor(theta0, dtype=torch.float64).expand(W)
+        sin_theta0 = torch.sin(theta0_b)
+        n0_sin2_b = ((n_inc * sin_theta0) ** 2).real  # (W,) — real for vacuum incident
+    else:
+        raise ValueError("Either theta0 or n0_sin2 must be provided")
 
     # k_z and admittance for each layer
     kz_all = torch.zeros(W, N, dtype=torch.complex128, device=n_layers.device)
     eta_all = torch.zeros(W, N, dtype=torch.complex128, device=n_layers.device)
     for j in range(N):
-        kz_all[:, j] = _kz(n_b[:, j], k0, n0_sin2)
+        kz_all[:, j] = _kz(n_b[:, j], k0, n0_sin2_b)
         eta_all[:, j] = _admittance(n_b[:, j], kz_all[:, j], k0, te)
 
     # kz and admittance for incident and substrate
-    kz_inc = _kz(n_inc, k0, n0_sin2)
+    kz_inc = _kz(n_inc, k0, n0_sin2_b)
     eta_inc = _admittance(n_inc, kz_inc, k0, te)
-    kz_sub = _kz(n_sub, k0, n0_sin2)
+    kz_sub = _kz(n_sub, k0, n0_sin2_b)
     eta_sub = _admittance(n_sub, kz_sub, k0, te)
 
     # Start with the top interface: incident medium → first layer
@@ -323,11 +339,12 @@ def reflectivity(
     n_layers: torch.Tensor,
     thicknesses: torch.Tensor,
     wavelengths_m: torch.Tensor,
-    theta0: torch.Tensor,
+    theta0: torch.Tensor | None = None,
     n_incident: torch.Tensor = torch.tensor(1.0 + 0.0j),
     n_substrate: torch.Tensor = torch.tensor(1.0 + 0.0j),
     te: bool = True,
     roughness_nm: float | None = None,
+    n0_sin2: torch.Tensor | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Intensity reflectivity and complex reflection coefficient.
 
@@ -336,12 +353,16 @@ def reflectivity(
     n_layers : (N,) complex128
     thicknesses : (N,) float64 [m]
     wavelengths_m : (W,) float64 [m]
-    theta0 : float or () tensor [rad]
+    theta0 : float or () tensor [rad], optional
+        Required when n0_sin2 is not provided.
     n_incident : complex128, optional
     n_substrate : complex128, optional
-    te : bool, optional (default: True → TE)
+    te : bool, optional (default: True -> TE)
     roughness_nm : float or None, optional
-        RMS interface roughness [nm] for Névot–Croce damping.
+        RMS interface roughness [nm] for Nevot-Croce damping.
+    n0_sin2 : float or (W,) tensor, optional
+        Pre-computed n0^2*sin^2(theta0) or (k_x/k0)^2.
+        Enables evanescent-order computation.
 
     Returns
     -------
@@ -354,13 +375,14 @@ def reflectivity(
         n_layers,
         thicknesses,
         wavelengths_m,
-        theta0,
-        n_incident,
-        n_substrate,
+        theta0=theta0,
+        n_incident=n_incident,
+        n_substrate=n_substrate,
         te=te,
         roughness_nm=roughness_nm,
+        n0_sin2=n0_sin2,
     )
-    # Reflection coefficient r = S₁₁ (port 0 → port 0 = reflected wave)
+    # Reflection coefficient r = S11 (port 0 -> port 0 = reflected wave)
     r = S[..., 0, 0]
     R = (r * r.conj()).real
     return R, r
@@ -422,3 +444,73 @@ def reflectivity_scan(
         n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm
     )
     return wl, R
+
+
+def reflectivity_at_kx(
+    n_layers: torch.Tensor,
+    thicknesses: torch.Tensor,
+    wavelength_m: float,
+    kx_norm: float,
+    te: bool = True,
+    n_incident: torch.Tensor = torch.tensor(1.0 + 0.0j),
+    n_substrate: torch.Tensor = torch.tensor(1.0 + 0.0j),
+    roughness_nm: float | None = None,
+) -> complex:
+    """Complex reflection coefficient for a given normalized transverse
+    wavevector kx/k0.
+
+    This is the primary interface for the RCWA ML operator: given the
+    in-plane wavevector of a Rayleigh order, compute the complex
+    reflection coefficient of the full ML stack.
+
+    For propagating orders (|kx_norm| <= 1): delegates to the standard
+    TMM with the equivalent angle.
+
+    For evanescent orders (|kx_norm| > 1): uses n0_sin2 = kx_norm**2,
+    which is > 1 and handled correctly by the extended stack_smatrix().
+
+    Parameters
+    ----------
+    n_layers : (N,) complex128
+        Refractive indices of the ML stack (top -> bottom).
+    thicknesses : (N,) float64 [m]
+        Layer thicknesses.
+    wavelength_m : float [m]
+        Free-space wavelength.
+    kx_norm : float
+        Normalized transverse wavevector: k_x / k0.
+        Can be > 1 for evanescent orders.
+    te : bool
+        True -> TE, False -> TM.
+    n_incident : complex128
+        Incident medium refractive index.
+    n_substrate : complex128
+        Substrate refractive index.
+    roughness_nm : float or None
+        RMS interface roughness for Nevot-Croce damping.
+
+    Returns
+    -------
+    r : complex
+        Complex reflection coefficient of the ML stack.
+        The phase is defined at the TOP of the ML stack (first layer).
+    """
+    wl = torch.tensor([wavelength_m], dtype=torch.float64)
+    n0_sin2_val = kx_norm ** 2
+
+    # Ensure n_incident and n_substrate are tensors (not Python complex)
+    if isinstance(n_incident, complex):
+        n_incident = torch.tensor(n_incident, dtype=torch.complex128)
+    if isinstance(n_substrate, complex):
+        n_substrate = torch.tensor(n_substrate, dtype=torch.complex128)
+
+    _, r = reflectivity(
+        n_layers, thicknesses, wl,
+        theta0=None,
+        n_incident=n_incident,
+        n_substrate=n_substrate,
+        te=te,
+        roughness_nm=roughness_nm,
+        n0_sin2=torch.tensor([n0_sin2_val], dtype=torch.float64),
+    )
+    return r[0]

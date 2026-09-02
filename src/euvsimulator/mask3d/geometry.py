@@ -179,12 +179,11 @@ def build_permittivity_profile(
 
     # Permittivity of line and space materials
     # Line: absorber + capping layers
+    # Note: abs_nk is the complex refractive index n+ik.
+    # The RCWA solver expects permittivity epsilon = (n+ik)^2.
     space_eps = complex(1.0, 0.0)  # vacuum
-    abs_eps = stack.absorber_layers[-1].nk  # absorber material
-    cap_eps = stack.absorber_layers[0].nk if stack.absorber_layers else abs_eps
-
-    # Effective line permittivity (absorber dominates)
-    line_eps = abs_eps
+    abs_nk = stack.absorber_layers[-1].nk  # absorber material (n+ik)
+    line_eps = complex(abs_nk.real, abs_nk.imag) ** 2  # (n+ik)^2 = permittivity
 
     x = torch.linspace(0, period_m, n_samples, device=device)
     half_line = line_m / 2.0
@@ -197,8 +196,8 @@ def build_permittivity_profile(
     n_mo, k_mo = 0.9238, 0.00637
     n_si, k_si = 0.999, 0.00183
     d_mo, d_si = stack.d_mo_nm, stack.d_si_nm
-    eps_mo = complex(n_mo - k_mo * 1j) ** 2
-    eps_si = complex(n_si - k_si * 1j) ** 2
+    eps_mo = complex(n_mo + k_mo * 1j) ** 2
+    eps_si = complex(n_si + k_si * 1j) ** 2
     eps_sub = (eps_mo * d_mo + eps_si * d_si) / (d_mo + d_si)
 
     thicknesses = torch.tensor(
