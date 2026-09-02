@@ -231,7 +231,7 @@ def nils(
 
     NILS = CD · |dI/dx| / I_edge, evaluated at the crossings of
     ``threshold`` (Mack 2007 §4.5).  CD is the distance between the
-    two interpolierte Kanten of the longest below-threshold run.
+    two interpolated edges of the longest below-threshold run.
     Left and right edge NILS are averaged.
 
     Parameters
@@ -274,8 +274,8 @@ def nils(
     if thr <= 1e-30:
         return 0.0
 
-    # Linear interpolierte crossings between adjacent samples.
-    # slope on that segment is exact for piecewise-linear I(x).
+    # Linear-interpolated crossings between adjacent samples.
+    # The slope on that segment is exact for piecewise-linear I(x).
     crossings: list[tuple[float, float]] = []
     for i in range(G - 1):
         a = float(cut[i])
@@ -299,14 +299,27 @@ def nils(
     if len(crossings) < 2:
         return 0.0
 
-    # Pair consecutive crossings; keep the longest below-threshold span
-    # (same selection as the pipeline Optical-CD run, but sub-pixel).
+    # Pair crossings and keep the longest below-threshold span.
+    # The profile is periodic, so the below-threshold run that "wins" may
+    # straddle the array boundary (e.g. when the line sits at the mask
+    # edge rather than the centre).  This must mirror the wrap-around
+    # pairing in pipeline._cd_via_aerial_threshold() exactly — otherwise
+    # NILS and CD can silently disagree about which run is the printed
+    # line, and NILS returns 0.0 whenever the wrap-around run is the only
+    # valid (below-threshold) one (confirmed via the default --use-rcwa
+    # CLI benchmark, where nils() previously returned 0.0 while CD was
+    # computed correctly at ~26.18 nm).
     best: tuple[float, float, float, float] | None = None
     best_width = -1.0
-    for k in range(len(crossings) - 1):
+    n_cross = len(crossings)
+    for k in range(n_cross):
         x0, s0 = crossings[k]
-        x1, s1 = crossings[k + 1]
+        x1, s1 = crossings[(k + 1) % n_cross]
+        if k == n_cross - 1:
+            x1 = x1 + G  # wrap around periodic boundary
         mid_px = 0.5 * (x0 + x1)
+        if mid_px > G:
+            mid_px = mid_px - G
         i_mid = min(G - 1, max(0, int(round(mid_px))))
         if float(cut[i_mid]) >= thr:
             continue
