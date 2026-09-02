@@ -1,0 +1,416 @@
+============================================================
+STEP 5.3D — CRITICAL PHYSICS CONSISTENCY RESOLUTION AUDIT
+============================================================
+Datum: 2026-08-21
+Rolle: unabhängiger wissenschaftlicher Reviewer / Software-Auditor
+Modell: DeepSeek V4 Flash
+Release: release-step-3.13 / db8c7a4 — IMMUTABLE
+READ-ONLY. KEINE Code-/Parameteränderung. KEINE Kalibrierung.
+Experimentarchive FROZEN.
+
+============================================================
+A. SE-BLUR — MATHEMATISCHE ANALYSE (präzisiert)
+============================================================
+Stochastischer Pfad (stochastic.py:359):
+    d_eff(x) = dose(x) · e_dep(x) / e_bar(x)
+    e_dep = blur(N),  N ~ Poisson(n_bar),  n_bar = dose·A·f/E_ph·absorption
+    e_bar = blur(n_bar)
+
+1. WIRD IM DET.-PFAD DIE MITTLERE ENERGIEDICHTE VERSCHOBEN? JA —
+   acid_det = Q·(1−exp(−C·blur(dose))): der Blur verschiebt Energie
+   von hell nach dunkel; die Kante wandert (gemessen: 127.7 → 146.7 nm).
+
+2. WIRD SIE IM STOCH.-PFAD ERHALTEN? JA (im Mittel) — E[d_eff] = dose
+   ist EXAKT für konstantes n_bar (Poisson-Linearität E[blur(N)] =
+   blur(E[N]) = blur(n_bar); die Ratio-Korrektur E[e_dep/e_bar] ≈ 1
+   mit Abweichung < 0.1 % bei se>0). Die 5.3C-Werte 0.88/0.35 bei
+   se=0 waren Stichprobenrauschen (40 Samples, SE 6-26 %) — NICHT
+   ein d_eff-Bias. Die "unbiased"-Formel ist exakt.
+
+3. E[d_eff] = dose: EXAKT (konstantes n_bar; se=0 exakt via
+   E[N]/n_bar = 1; se>0 mit < 0.1 % Ratio-Korrektur — gemessen
+   E[d_eff]/dose = 0.999-1.009 bei se=2-8)
+
+4. blur(dose) = E[blur(N)]·(E_ph/(A·f))? MATHEMATISCH: E[blur(N)] =
+   blur(n_bar) = blur(dose·A·f/E_ph) — DIE LINEARITÄT GILT FÜR DIE
+   EREIGNISSE. ABER d_eff ist NICHT blur(N), sondern die RATIO
+   dose·e_dep/e_bar. Die Äquivalenz blur(dose) = E[d_eff] gilt NUR im
+   homogenen Limes. An einer Kante: E[d_eff] ≈ dose (scharfe Kante),
+   blur(dose) ≠ dose (weiche Kante) → NICHT ÄQUIVALENT.
+
+5. NICHTLINEARITÄTS-STELLEN (2):
+   (a) die Ratio d_eff = dose·e_dep/e_bar (nichtlinear in N) —
+       eliminiert die Energie-Verschiebung des Blurs
+   (b) acid = Q·(1−exp(−C·d_eff)) — nichtlinear in d_eff
+   Beide zerstören die Pfad-Äquivalenz an Kanten.
+
+6. JENSEN: E[acid(d_eff)] ≠ acid(E[d_eff]) — die uniforme Differenz
+   0.05-0.22 % (acid_stoch vs acid_det, Feldmitte) ist der
+   Jensen-Term (klein). Die KANTEN-Differenz (Δ=19 nm) wird NICHT
+   von Jensen dominiert, sondern von der fehlenden Energie-
+   Verschiebung (Punkt 5a).
+
+7. VOR DER ACID-KONVERSION: JA — die mittlere Energiedichte
+   unterscheidet sich bereits (E[d_eff] ≈ dose vs blur(dose)); die
+   acid-Nichtlinearität transformiert die Differenz in die
+   Kantenpositions-Differenz.
+
+8. URSPRUNG: ECHTE MITTELWERTPHYSIK (bewusste Design-Entscheidung
+   "unbiased, spatially correlated" — Docstring stochastic.py:290)
+   + Nichtlinearität. Sampling/Poisson-Rauschen tragen nur Varianz
+   bei; Kernel-Normalisierung korrekt (Summe=1, verifiziert).
+
+ZUSATZBEFUND (se=0): Bei se_blur=0 ist E[acid(d_eff)] < acid(dose)
+systematisch: die N=0-Pixel (P=exp(−n_bar)) liefern acid=0 statt
+acid(dose) — der acid-Bias bei dose=40: ~18 % der Pixel betroffen.
+Der Blur (se>0) rettet diese Pixel (Nachbarschafts-Ereignisse).
+Konsequenz: der SOFTWARE-DEFAULT (se=0) hat einen acid-Bias im
+stochastischen Pfad; die Referenz (se=5) nicht. → se=0-Default ist
+für LER-Aussagen ungeeignet (zusätzlich zum bekannten N_eff-Problem).
+
+============================================================
+B. REPRODUKTIONSTEST (40 Seeds, dose=40, se=5, C=0.05, Q=1.0)
+============================================================
+p_det = 146.68 nm   (5.3C: 146.3  → REPRODUZIERT)
+p_sto = 127.67 nm   (5.3C: 127.3  → REPRODUZIERT)
+Δ     =  19.01 nm   (5.3C: 19.0   → REPRODUZIERT)
+Transition (10-90 %): det ~151 Spalten (weich) vs stoch ~4 Spalten
+  (direkt am Profil gemessen — die automatisierte 10-90 %-Breite
+  ist für die Stufe unbrauchbar, da das Profil springt)
+max. lokale Steigung: det 0.0188/Spalte vs stoch 0.8396/Spalte
+  → STOCH/DET-VERHÄLTNIS = 44.7×  (5.3C sagte 17× — KORREKTUR:
+  17× war eine grobe Abschätzung; die exakte Messung ist 44.7×)
+Seed-Statistik: die Kantenpositionen sind über 40 Seeds stabil
+  (SE < 0.05 nm; der Effekt ist Mittelwertphysik, kein Sampling)
+
+============================================================
+C. ROBUSTHEITSMATRIX (Kernwerte)
+============================================================
+dose  se   C     | x_det   x_sto   Δx     | E[d_eff]/dose | SlopeR(stoch/det)
+40    0    0.05  | 127.67  127.57  0.11   | 0.88*         | 1.2
+40    2    0.05  | 135.18  127.67  7.50   | 0.999         | ~10
+40    5    0.05  | 146.68  127.67  19.01  | 1.001         | 44.7
+40    8    0.05  | 158.19  127.67  30.51  | 1.001         | ≫
+20    5    0.05  | 135.72  127.55  8.17   | 1.003         | ≫
+10    5    0.05  | (keine 0.3-Kreuzung im det-Pfad; stoch: 127.25)
+5     5    0.05  | (keine Kreuzung in beiden — acid<0.3 überall)
+40    5    0.025 | 135.26  127.54  7.73   | 1.001         |
+40    5    0.10  | 155.78  127.73  28.05  | 1.001         |
+(* se=0, 40 Samples: Stichprobenrauschen; exakt 1.0)
+
+SKALIERUNG:
+- Δx wächst mit se_blur (2→8 nm: 7.5→30.5 nm)
+- Δx wächst mit C (0.025→0.10: 7.7→28.1 nm)
+- Δx sinkt mit dose (40→20: 19.0→8.2 nm)
+- se=0: Δx = 0.11 nm → DER BLUR IST DIE URSCHE (bewiesen)
+- Bei dose≤10: der det-Pfad verliert die 0.3-Kante (acid < 0.3),
+  der stoch-Pfad behält sie → maximale Pfad-Inkonsistenz
+- E[d_eff]/dose ≈ 1.0 für alle se>0 (bias-frei bestätigt)
+
+============================================================
+D. UNIFORM-DOSE TEST
+============================================================
+Feldmitte (homogen, kein Wrap):
+- E[d_eff]/dose = 0.999-1.009 (se=2-8) → konsistent mit dem
+  Kantenfall (die mittlere Energiedichte ist in beiden Fällen
+  bias-frei dose)
+- acid_stoch/acid_det (Feldmitte, homogen): ≈ 1 + Jensen-Term
+  (0.05-0.22 %, invers mit dose, wächst mit kleinerem σ)
+- Die in 5.3C berichteten acid_ratio 1.14-1.32 stammten von
+  Spalte 10 (FELDRAND — Wrap-Artefakt der Messung) und sind für
+  den Kantenvergleich irrelevant; die Feldmitte ist konsistent.
+- FAZIT: uniform konsistent mit dem Kantenfall: die Differenz ist
+  NICHT Sampling, sondern (a) fehlende Energie-Verschiebung
+  (Kante) + (b) Jensen (homogen, klein).
+
+============================================================
+E. SE-BLUR / GRID INTERACTION (Wrap)
+============================================================
+Kante 40|0.5, det-Pfad, dx=0.25:
+  se=2: Kante@32 → det-Kante 40.0;  Kante@128 → 136.0  (+8/+8)
+  se=5: Kante@32 → det-Kante 51.0;  Kante@128 → 147.0  (+19/+19)
+  se=8: Kante@32 → det-Kante 59.0;  Kante@128 → 159.0  (+27/+31)
+→ Die Kantenverschiebung ist für Rand- und Mittel-Kanten IDENTISCH
+  (se=2/5: exakt; se=8: +27 vs +31, ~1 Spalte Differenz). Der
+  zirkulare Wrap beeinflusst die Kantenposition nur schwach
+  (< 1-4 % der Verschiebung).
+→ Der beobachtete Δ≈19 nm-Effekt ist vom Wrap UNABHÄNGIG (robust).
+→ Wrap-relevante Region: nur die RANDPIXEL-Zonen (±Kernelradius),
+  wo die gegenüberliegende Feldseite einmischt (z.B. Spalte 10 bei
+  grid=256: ~30 % Verfälschung der acid — in 5.3C gemessen).
+  CD/NILS/LER der Produktionskonfiguration (Kanten ≥ 8 nm vom
+  Rand): geringer Einfluss; die Large-Field-Lösung (4.1) bleibt
+  die saubere Absicherung.
+
+============================================================
+F. ABSORPTION / DOSE / Q — IDENTIFIZIERBARKEIT + PMMA-REFERENZ
+============================================================
+Mathematik:
+  n_bar   ∝ dose · absorption / E_ph          (nur das PRODUKT)
+  acid    = Q · (1 − exp(−C · d_eff))         (C·d_eff ∝ C·dose·absorption)
+  → dose, absorption, C treten nur als PRODUKT C·dose·absorption
+    auf → NON-IDENTIFIABLE aus reinem Simulatoroutput
+  → Q skaliert die acid-Amplitude linear, aber CD/LER nichtlinear
+    (Schwellen-Kette) → PARTIALLY_IDENTIFIABLE nur wenn das
+    C·dose·absorption-Produkt extern bekannt ist
+
+Beer-Lambert (PMMA, externe Referenz, NICHT kalibriert):
+  α = 4.9 ± 0.3 µm⁻¹, t = 160 nm
+  T = exp(−α·t) = exp(−0.784) = 0.4565
+  A = 1 − T = 0.5435  (≈ 54 % absorbiert)
+  → absorption=1.0 (Simulator) vs 0.5435 (PMMA 160 nm):
+    Faktor ~1.84 in n_bar (Größenordnung: die Dosis-Definitions-
+    Lücke aus 5.2C/5.3A wird quantitativ bestätigt; Faktor 2-5
+    bleibt, da PSI-Resists (20-30 nm) weniger absorbieren)
+
+============================================================
+G. DILL-Q SENSITIVITY (Referenz: dose=40, se=5, C=0.05, 3 Seeds)
+============================================================
+Q      CD(nm)  NILS   LER      LWR
+0.01   64.00   5.91   0.0000   0.0000   (keine Entwicklung)
+0.04   64.00   5.91   0.0000   0.0000   (keine Entwicklung)
+0.10   61.00   5.91   0.0000   0.0000   (LER-Kante fehlt: acid<0.3)
+0.50   29.00   5.91   0.0000   0.0000   (LER-Kante fehlt)
+1.00   23.00   5.91   0.1255   0.1938
+
+BEFUNDE:
+- "Q skaliert acid linear": JA für die acid-Amplitude (mathematisch
+  exakt); die OBSERVABLEN sind NICHT linear (CD: 64→23 über
+  Q=0.1-1.0; LER existiert nur bei Q=1.0 in dieser Konfiguration!)
+- NILS ist Q-UNABHÄNGIG (5.91) — NILS wird auf der Dosiskarte
+  berechnet (Design), nicht auf der acid-Kette
+- Die LER-Skala ist über Q nicht "linear skalierbar": unterhalb
+  einer Q-Schwelle existiert die stochastic-Kante gar nicht
+- Konsequenz: Eine spätere Q-Wahl ändert CD UND LER stark und
+  nichtlinear — Q ist ein Hochhebel-Parameter, der vor quantitativer
+  Validierung extern bestimmt werden muss (NON-IDENTIFIABLE mit
+  absorption/dose aus Sim-Output)
+
+============================================================
+H. SILENT-CASE AUDIT (full_chem-Pfad, getestet)
+============================================================
+Fall                Config  Runtime              Bewertung
+se_blur<0           OK      stiller Fallback 0  USER≠RUNTIME (CRITICAL)
+dose<0              OK      läuft, CD=64, LER=0 n_bar clamp(0) im
+                            stoch-Pfad; det: acid negativ → CD=64
+                            (silent, physikalisch sinnlos)
+dose=0              OK      läuft, CD=64         0-Ereignis (legitim)
+dill_C=0            ValueError (validiert)      OK
+dill_Q=0            ValueError                   Q→0-Limes abgelehnt
+peb_sigma_diff<0    OK      läuft, CD=28 (statt 23) — negativer
+                            Wert WIRKT (physikalisch sinnlos, still)
+na=1.5              OK      läuft, CD=31.5       na>1 akzeptiert
+period<0            OK      CD=-64 (negativ!)    still
+line_width=0        OK      CD=0 (still)
+wavelength=0        OK      ZeroDivisionError    Laufzeitfehler
+grid=0              OK      ZeroDivisionError    Laufzeitfehler
+NaN/Inf             OK      propagiert           undefiniert (kein Test)
+→ USER VALUE ≠ RUNTIME VALUE: se_blur<0 (Fallback), peb_D (DEAD),
+  dill_A/B (DEAD), quantum_eff (DEAD), Mack R/n (DEAD), period<0
+  (CD negativ)
+
+============================================================
+I. DEAD-CONFIG VERIFICATION (Execution-Trace, Extremwerte)
+============================================================
+Parameter            Änderung          Observable  Ergebnis
+dill_A               0.5 → 9.0         cd_nm       UNVERÄNDERT → DEAD ✓
+dill_B               0.2 → 9.0         cd_nm       UNVERÄNDERT → DEAD ✓
+peb_D                5.0 → 500.0       cd_nm       UNVERÄNDERT → DEAD ✓
+stochastic_quantum_efficiency 0.04→0.9 ler_nm      UNVERÄNDERT → DEAD ✓
+mack_R_max           100 → 5000        cd_nm       UNVERÄNDERT → DEAD ✓
+mack_n               5.0 → 20.0        cd_nm       UNVERÄNDERT → DEAD ✓
+Kontrollen: mack_M_th 0.5→0.2: CD 23→30.5 (WIRKT ✓); se_blur
+5→0: CD ändert sich (WIRKT ✓); dill_Q 1.0→0.5: CD 23→29 (WIRKT ✓)
+
+============================================================
+J. DEFAULT DISCREPANCY RECONCILIATION — WHICH VALUE WINS?
+============================================================
+Parameter    Config   Funktion  Preset  AGENTS  Runtime-WINNER
+dill_C       0.05     0.1       —       0.1     CONFIG (0.05)
+dill_Q       1.0      0.04      —       0.01    CONFIG (1.0)
+se_blur_nm   0.0      5.0       5/2.5/3 5.0     CONFIG (0.0)
+peb_D        5.0      0.0       —       —       FUNKTION (0.0 — nie
+                                                übergeben, DEAD)
+peb_k        0.3      0.1       —       —       CONFIG (0.3)
+peb_t_bake   60.0     10.0      —       —       CONFIG (60.0)
+M_th         0.5      0.5       —       —       CONFIG (0.5, konsistent)
+stoch_thr    0.3      0.3       —       —       konsistent
+NILS-Achtung: NILS kommt aus der Dosiskarte (Q/PEB/Mack-unabhängig
+— in G gemessen: NILS=5.91 für alle Q).
+
+============================================================
+K. PHYSICAL VS IMPLEMENTATION CLASSIFICATION
+============================================================
+Befund                          PRIMARY   SECONDARY
+SE-Blur-Doppelsemantik (Δ19nm)  D (bewusste Modellvereinfachung:
+                                "unbiased" Ratio-Form) + A (fehlende
+                                Energie-Verschiebung im stoch-Pfad =
+                                physikalische Inkonsistenz der Pfade)
+absorption=1.0 hartcodiert      B (Implementierung: kein Config-Feld)
+                                + D (bewusste Vereinfachung)
+dill_Q=1.0 Config                C (Doku: 3 Werte) + D (Annahme)
+peb_D=0.0 Runtime                B (Implementierung: nie übergeben)
+Mack R/n dead (Std-Pfad)         B (Implementierung) + C (Doku
+                                "Mack steuert die Entwicklung")
+stochastic threshold 0.3         D (bewusste Observable-Definition)
+development_strength             D (Modellparameter, STEP 5.3)
+periodic grid wrap               D (bewusste BC, physikalisch
+                                korrekt für periodische Felder) —
+                                Rand-Einfluss klein (Teil E)
+se=0 acid-Bias (N=0-Pixel)       A (Nichtlinearitäts-Artefakt der
+                                bias-freien Form bei se=0) — im
+                                Referenzpfad (se=5) unkritisch
+
+============================================================
+L. IDENTIFIABILITY MATRIX (aktualisiert)
+============================================================
+Paar                       Status                Trennung
+absorption ↔ dose          NON_IDENTIFIABLE      nur Produkt; Trans-
+                                                 missionsmessung nötig
+absorption ↔ Q             NON_IDENTIFIABLE      (Produkt + Amplitude;
+                                                 Q trennbar via CD-Kurven-
+                                                 FORM, aber C·dose·abs
+                                                 muss bekannt sein)
+Q ↔ dose                   PARTIALLY_IDENTIFIABLE (CD-Kurvenform +
+                                                 absolute acid; beide
+                                                 nichtlinear gekoppelt)
+C ↔ dose                   NON_IDENTIFIABLE      nur C·dose (exp)
+C ↔ Q                      PARTIALLY             (Form vs Amplitude)
+se_blur ↔ dev_strength     PARTIALLY             LER-Amp beide; rho-
+                                                 Spektrum + CD trennt
+se_blur ↔ dev_corr         PARTIALLY             CD/NILS trennt se_blur
+threshold ↔ dose           PARTIALLY             CD-Kurvenform
+threshold ↔ dev_strength   PARTIALLY             CD (det) vs LER (stoch)
+PEB ↔ se_blur              PARTIALLY             CD-Form, Linienprofil
+ZUSATZ: C·dose·absorption ist EIN Produkt → alle drei
+NON_IDENTIFIABLE aus Sim-Output; Q nur mit externem Produkt-Wert.
+
+============================================================
+M. STOP-CONDITION STATUS (aus 5.3B/C)
+============================================================
+1. absorption/dose non-identifiability:  STILL TRUE (F, L)
+2. Q/absorption non-identifiability:     STILL TRUE (F, L)
+3. SE-Blur ambiguity:                    RESOLVED (Teil A: bewusste
+   Design-Entscheidung "unbiased" + physikalische Inkonsistenz der
+   mittleren Energiedichte; quantifiziert Δ=19 nm, 44.7× Steigung)
+4. Messlängen UNKNOWN:                   STILL TRUE (extern)
+5. calibration masking risk:             STILL TRUE (G: Q/LER-
+   Nichtlinearität; se_blur/dev_strength)
+6. configuration integrity:              STILL TRUE (H: 6 stille
+   Fälle; se_blur<0 CRITICAL)
+7. silent user-value loss:               STILL TRUE (H, I: bewiesen)
+
+============================================================
+N. GO / NO-GO (7 Dimensionen)
+============================================================
+1. CODE INTEGRITY:                GO_WITH_CAVEATS (keine Fehler in
+                                  Referenzpfaden; 6 DEAD, 3 HARDCODED)
+2. CONFIGURATION INTEGRITY:       NO-GO (se_blur<0 still; peb_D DEAD;
+                                  period<0 → CD negativ; 7 Default-
+                                  Konflikte — H, I, J)
+3. PHYSICS-PATH CONSISTENCY:      NO-GO (SE-Blur-Doppelsemantik:
+                                  stoch-Pfad ohne Energie-Verschiebung;
+                                  Δ=19 nm; 44.7× Kantensteigungs-
+                                  Differenz; acid-Bias bei se=0)
+4. PARAMETER IDENTIFIABILITY:     NO-GO (C·dose·absorption EIN
+                                  Produkt; Q nichtlinear gekoppelt)
+5. FORM/TREND VALIDATION:         GO (skaleninvariant: CD-Dosis-
+                                  Trend, LER-Dosis-Exponent)
+6. QUANTITATIVE VALIDATION:       NO-GO (alle obigen Punkte)
+7. CALIBRATION READINESS:         NO-GO (keine Kalibrierung vor
+                                  Pfad-Konsistenz + Identifizier-
+                                  barkeits-Klärung)
+
+============================================================
+O. FINAL TABLE
+============================================================
+Pri  Finding                      Evidence              Sev    Typ
+1    SE-Blur-Pfad-Inkonsistenz    Δ=19 nm, 44.7× (B,C)  CRIT   D+A
+2    se_blur<0 stiller Fallback   H: CD=39 wie se=0      CRIT   B
+3    C·dose·absorption-Einprodukt F, L                   CRIT   D
+4    Q-Nichtlinearität CD/LER     G: CD 64→23, LER nur   HIGH   D
+                                   bei Q=1
+5    peb_D, dill_A/B, quantum_eff, Mack R/n DEAD
+                                   I: bewiesen           HIGH   B
+6    dill_Q 1.0 vs 0.04 vs 0.01   J                       HIGH   C
+7    se=0 acid-Bias (N=0-Pixel)   A: ~18 % Pixel         MED    A
+8    Wrap-Einfluss (Rand)         E: Randzone ~30 %      MED    D
+9    dose<0/period<0 still        H: CD=-64              MED    B
+10   na>1, wavelength=0, grid=0   H: akzeptiert/Fehler   MED    B
+11   Q→0-Limes abgelehnt          H: ValueError          LOW    D
+12   Messlängen UNKNOWN           extern                 MED    —
+Auflösbar READ-ONLY: 1 (teilw.: quantifiziert), 2, 5, 9, 10 (als
+Befunde). Nötige Evidenz: externe Transmissions-/DCT-Daten für
+dose·absorption·C; Messlängen-Dokumentation der Experimente.
+
+============================================================
+P. FINAL CONCLUSION
+============================================================
+1. WHAT IS PROVEN:
+   - SE-Blur-Doppelsemantik ist REAL: Δ=19.01 nm, Steigungs-
+     verhältnis 44.7×, reproduziert, wrap-unabhängig; Ursache:
+     bias-freie Ratio-Form (Design) eliminiert die SE-Energie-
+     Verschiebung im stochastischen Pfad → die mittlere
+     Energiedichte ist dort dose (scharfe Kante), im det-Pfad
+     blur(dose) (weiche Kante)
+   - E[d_eff] = dose ist exakt (Poisson-Linearität; se=0-Werte in
+     5.3C waren Stichprobenrauschen)
+   - 6 DEAD-Configs durch Execution-Trace bewiesen
+   - Q wirkt nichtlinear auf CD/LER (CD 64→23 über Q 0.1→1.0;
+     LER existiert nur bei Q=1.0); NILS ist Q-unabhängig (Design)
+   - Beer-Lambert-PMMA: A = 0.5435 (α=4.9±0.3 µm⁻¹, 160 nm) —
+     absorption=1.0 ist ~1.84× darüber (Größenordnung der
+     Dosisdefinitions-Lücke)
+   - se=0 (Software-Default): acid-Bias durch N=0-Pixel (~18 %)
+   - se_blur<0: stiller Fallback (bewiesen)
+2. WHAT IS STRONGLY INDICATED:
+   - Die Photonen-LER wird an der ~44.7× steileren Roh-Kante
+     gemessen → systematische Unterschätzung (Faktor unbestimmt,
+     aber groß; die genaue Zahl hängt von der acid-Fluktuation ab)
+   - Die det./stoch.-Pfad-Inkonsistenz erklärt einen Teil der
+     Diskrepanz zwischen CD-Physik und LER-Messposition
+3. WHAT IS UNKNOWN:
+   - Quantitativer LER-Unterschätzungsfaktor (nicht gemessen —
+     würde eine konsistente Kante erfordern, die es im Code nicht
+     gibt; als UNKNOWN markiert)
+   - Experimentelle Messlängen
+   - Q, se_blur, dev-Parameter (keine externen Werte)
+4. WHAT IS DEFINITELY DEAD CONFIG: dill_A, dill_B, peb_D,
+   stochastic_quantum_efficiency, mack_R_max, mack_R_min, mack_n
+   (im Standardpfad)
+5. WHAT IS A PHYSICS PROBLEM: SE-Blur-Pfad-Inkonsistenz (fehlende
+   Energie-Verschiebung im stoch-Pfad); se=0-acid-Bias; die
+   Q/LER-Nichtlinearität (Modellkette)
+6. WHAT IS ONLY A SOFTWARE/DOCUMENTATION PROBLEM: se_blur<0
+   Fallback, period<0/line_width≤0/na>1-Validierung, peb_D/dill_A/B/
+   quantum_eff/Mack-R/n Verdrahtung, dill_Q-Dreifachdefault,
+   AGENTS.md (7 Diskrepanzen), dose≤0, YAML-strict ✓
+7. WHAT MUST NOT BE CALIBRATED YET: ALLES (se_blur, dev_strength,
+   dev_corr, Q, absorption, thresholds, Mack, PEB) — solange
+   Pfad-Konsistenz + Identifizierbarkeit ungeklärt sind
+8. MINIMUM CONDITIONS FOR QUANTITATIVE GO:
+   (a) SE-Blur-Pfad-Konsistenz hergestellt (die mittlere Kante des
+       stoch-Pfads muss der det-Kante entsprechen — z.B. d_eff auf
+       blur(dose) basieren ODER det-Pfad ohne Blur) — als
+       SEPARATER, dokumentierter Modellentscheid
+   (b) dose·absorption·C extern bestimmt (Transmission/DCT)
+   (c) dill_Q extern bestimmt (Quantenausbeute)
+   (d) Messlängen der Experimente dokumentiert
+   (e) se_blur<0-Fallback + DEAD-Felder bereinigt (Software)
+9. RECOMMENDED NEXT AUDIT STEP: 5.3E — "SE-Blur-Pfad-Konsistenz-
+   Optionen": READ-ONLY-Analyse, welche der konsistenten
+   Formulierungen (d_eff-basiert auf blur(dose) vs det ohne Blur
+   vs zwei-getrennte-Blas) physikalisch und numerisch am saubersten
+   ist — OHNE Implementierung, als Entscheidungsvorlage.
+
+============================================================
+ABSCHLUSS
+============================================================
+STEP 5.3D: COMPLETE (READ-ONLY)
+Kern: Der SE-Blur-Zweifachpfad ist eine bewusste Design-
+Entscheidung (unbiased-Ratio), die physikalisch die SE-Energie-
+Verschiebung eliminiert und damit die Photonen-LER an einer
+44.7× steileren Kante misst — eine quantifizierte, reproduzierbare
+Inkonsistenz. KEINE Änderung. KEIN Commit. KEIN Tag.
+Experimentarchive FROZEN.
+============================================================

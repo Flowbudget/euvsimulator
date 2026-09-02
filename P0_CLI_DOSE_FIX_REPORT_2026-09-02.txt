@@ -1,0 +1,187 @@
+================================================================================
+P0-FIX IMPLEMENTIERUNGSBERICHT
+euvsimulator  2026-09-02
+================================================================================
+
+1. GIT-BASELINE
+--------------------------------------------------------------------------------
+HEAD: 08618727eebcb5dc20304dc47021a8f13754a6c9
+Branch: main
+Pre-existing modified files: 12 (RCWA, TCC, Defocus, geometry, TMM, LER-Tests)
+  - NICHT durch diesen Task verändert.
+  - Nur 3 Dateien durch diesen Task geändert:
+    src/euvsimulator/io/cli.py
+    src/euvsimulator/pipeline.py
+    tests/test_pipeline.py
+
+================================================================================
+2. P0-1 — CLI --threshold (Ursache)
+================================================================================
+
+Befund aus dem Audit BESTÄTIGT:
+
+CLI-Definition (cli.py:96):
+  --threshold -> typer.Option(0.5, ...)
+
+CLI -> Config (cli.py:201):
+  SimulationConfig(..., resist_threshold=threshold, ...)  ← TOTES FELD
+
+SimulationConfig (pipeline.py:136):
+  resist_threshold: float = 0.5    ← Deklariert, NIE gelesen
+
+Pipeline verwendet (pipeline.py:258, 317):
+  resist_threshold_norm: float = 0.5    ← AKTIV
+
+Konsequenz:
+  CLI --threshold 0.3  -> CD = 27.50 nm (identisch zu Default)
+  resist_threshold_norm=0.3 -> CD = 22.50 nm (tatsächlich andere Simulation)
+
+================================================================================
+3. P0-1 — Änderung (1 Zeile)
+================================================================================
+
+Datei: src/euvsimulator/io/cli.py, Zeile 201
+
+VORHER:
+  resist_threshold=threshold,
+
+NACHHER:
+  resist_threshold_norm=threshold,
+
+CLI --threshold 0.3 steuert jetzt das aktive Feld resist_threshold_norm.
+Das tote Feld resist_threshold bleibt unangetastet (out of scope).
+
+================================================================================
+4. P0-1 — Tests
+================================================================================
+
+TestConfigThreshold (4 Tests, test_pipeline.py):
+  test_default_threshold_unchanged  -> CD=27.50, NILS=4.9685 ✅
+  test_threshold_0_3_changes_cd     -> CD != 27.50 ✅
+  test_threshold_0_3_equals_cli_semantics -> CD < 27.0 ✅
+  test_full_chem_threshold_unchanged -> full_chem NILS ändert sich ✅
+
+================================================================================
+5. P0-2 — dose <= 0 (Ursache)
+================================================================================
+
+Befund aus dem Audit BESTÄTIGT:
+
+Pipeline verwendet (pipeline.py:258, 317):
+  max(cfg.dose_mj_cm2, 1e-9)
+
+Dieser Clamp akzeptiert stumm:
+  dose=0.0   -> CD=64.00 (physikalisch sinnlos)
+  dose=-0.0  -> CD=64.00 (inkonsistent zu +0.0 im alten Code)
+  dose=-1.0  -> CD=0.00  (physikalisch sinnlos)
+
+Keine Validierung in __post_init__ vorhanden.
+
+================================================================================
+6. P0-2 — Änderung (3 Zeilen)
+================================================================================
+
+Datei: src/euvsimulator/pipeline.py, Zeile 195-197
+
+Eingefügt in __post_init__():
+  if self.dose_mj_cm2 <= 0:
+      raise ValueError(f"dose_mj_cm2 must be > 0, got {self.dose_mj_cm2}")
+
+Dies validiert zentral bei der Config-Erstellung, bevor die Pipeline
+die Dosis verwendet. Betrifft alle API-Wege (CLI, Python API, kwargs).
+
+Der max(dose, 1e-9)-Clamp bleibt als Division-by-Zero-Schutz bestehen
+(ist jetzt redundant, da dose>0 garantiert, aber harmlos).
+
+================================================================================
+7. P0-2 — Tests
+================================================================================
+
+TestConfigDose (6 Tests, test_pipeline.py):
+  test_dose_20_ok      -> CD=27.50 ✅
+  test_dose_1_ok       -> CD=64.00 ✅
+  test_dose_1e_12_ok   -> CD=64.00 ✅
+  test_dose_0_raises   -> ValueError ✅
+  test_dose_neg_0_raises -> ValueError ✅
+  test_dose_negative_raises -> ValueError ✅
+
+================================================================================
+8. VOLLSTÄNDIGE TEST-SUITE
+================================================================================
+
+771 passed, 0 failed (vorher: 761 passed, 0 failed)
+  +10 neue Tests (P0-1: 4, P0-2: 6)
+  -0 Regressionen
+  -0 geänderte bestehende Tests
+
+================================================================================
+9. BENCHMARK VORHER/NACHHER
+================================================================================
+
+Standardbenchmark (64/32, NA 0.33, σ 0.8, conventional, aerial_threshold):
+
+                  VORHER    NACHHER   ÄNDERUNG
+Optical CD:       27.50 nm  27.50 nm  KEINE ✅
+NILS:             4.9685    4.9685    KEINE ✅
+
+Defaultbenchmark unverändert.
+
+================================================================================
+10. GIT DIFF --STAT (nur meine Änderungen)
+================================================================================
+
+ src/euvsimulator/io/cli.py    |  2 +-
+ src/euvsimulator/pipeline.py  |  3 +
+ tests/test_pipeline.py        | 72 +++++++++++++++++++++++++++++++++++
+ 3 files changed, 76 insertions(+), 1 deletion(-)
+
+================================================================================
+11. DIFF-REVIEW — UNBEABSICHTIGTE ÄNDERUNGEN
+================================================================================
+
+Geprüft:
+  - Keine Änderung an nils()                   ✅
+  - Keine Änderung der Mack-Definition         ✅
+  - Keine Änderung der CD-Formel               ✅
+  - Keine Änderung am TCC                      ✅
+  - Keine Änderung am Fourier-Modell           ✅
+  - Keine Änderung an Source-Geometrien        ✅
+  - Keine Änderung am Maskenmodell             ✅
+  - Keine Änderung an Literatur-/Benchmarkwerten ✅
+  - Keine Änderung an pre-existing Files       ✅
+  - Nur cli.py (1 Zeile), pipeline.py (3 Z.), test_pipeline.py (72 Z.) ✅
+
+================================================================================
+12. WISSENSCHAFTLICHE AUSWIRKUNGEN
+================================================================================
+
+Die Fixes korrigieren API-/Input-Semantik, NICHT die Physik:
+
+P0-1: CLI --threshold steuert jetzt den tatsächlich verwendeten
+  normalisierten Threshold. Der wissenschaftliche Modelloutput bleibt
+  unverändert für den Default-Fall.
+
+P0-2: Ungültige Dosen (≤0) werden jetzt abgelehnt statt stumm
+  akzeptiert. Der gültige Eingabebereich (dose > 0) bleibt unverändert.
+
+KEINE Behauptung externer Validierung.
+Die wissenschaftlichen Modellgrenzen bestehen unverändert:
+  - NILS=4.9685 ist nicht extern validiert
+  - CD=27.50 nm ist nicht extern validiert
+  - Domänengrenzen (sigma≥2, period≤40nm, grid<64) bleiben unmarkiert
+
+================================================================================
+13. VERBLEIBENDE BEKANNTE FINDINGS (NICHT IN DIESEM TASK)
+================================================================================
+
+P0 (behoben):  CLI --threshold, dose<=0
+P1 (unfixed):  Unknown illumination_shape -> conventional ohne Warnung
+P2 (unfixed):  sigma≥2 Sättigung, period≤40nm max_order=0, CLI fehlende
+               Parameter (focus, illumination), docstring "max"≠"mean"
+P3 (unfixed):  xpos endpoint, grid-Konvergenz, negative-zero-Paradox
+               (durch P0-2 nun abgefangen)
+P4 (unfixed):  Dead code (_apply_se_blur, source/plasma.py)
+
+================================================================================
+ENDE BERICHT
+================================================================================

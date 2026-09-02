@@ -1,0 +1,181 @@
+============================================================
+STEP 5.2A — BASELINE / PRODUCTION LER CALL-SITE INVENTORY
+============================================================
+Datum: 2026-08-21
+Rolle: unabhängiger wissenschaftlicher + numerischer
+       Reviewer
+Release-Baseline: release-step-3.13 / db8c7a4 — IMMUTABLE
+KEINE Änderungen in diesem Schritt (READ-ONLY).
+
+============================================================
+A. GIT BASELINE
+============================================================
+HEAD: db8c7a4718c5f4b54f130cfe0c27962e8cc3313d
+Working tree: Clean (nur STEP-5.1 Änderungen + Analyse-Artefakte)
+Bekannte STEP-5.1 Änderungen:
+  - src/euvsimulator/resist/stochastic.py (+241 Zeilen: math import, LEREstimate, ler_estimate, _autocorrelation, _ler_rms)
+  - tests/test_ler_estimate.py (neu, 11 Tests)
+Unerwartete Änderungen: KEINE
+
+============================================================
+B. LER CALL-SITE INVENTORY
+============================================================
+| File | Function | LER Path | Legacy/New | Production Relevant |
+|---|---|---|---|---|
+| src/euvsimulator/pipeline.py:33 | Import | extract_ler | Legacy | YES |
+| src/euvsimulator/pipeline.py:332-337 | _cd_via_full_chem() | extract_ler(dev, thresh, dx, intensity) | Legacy | **YES** (stochastic production) |
+| src/euvsimulator/pipeline.py:340-345 | _cd_via_full_chem() | extract_lwr() | Legacy | YES |
+| src/euvsimulator/pipeline.py:735-736 | ler_lwr_estimate() | extract_ler() + extract_lwr() | Legacy | YES (legacy API) |
+| src/euvsimulator/resist/stochastic.py:507 | extract_ler() | Definition | Legacy | **API consumers** |
+| src/euvsimulator/resist/stochastic.py:582 | LEREstimate | Definition | **New (5.1)** | Not yet in production |
+| src/euvsimulator/resist/stochastic.py:679 | ler_estimate() | Definition | **New (5.1)** | Not yet in production |
+| src/euvsimulator/resist/stochastic.py:887 | ler_lwr_estimate() | Uses extract_ler() | Legacy | YES (legacy API) |
+
+============================================================
+C. ACTUAL PRODUCTION DATA FLOW
+============================================================
+Stochastic field generation (pipeline.py:_cd_via_full_chem, lines 311-338)
+    │
+    ▼
+seed loop (stochastic_n_realisations)
+    │
+    ▼
+photon_deposition_shot_noise()  ← dose_map + SE blur + Poisson
+    │
+    ▼
+dose_to_acid()  ← acid_noisy (stochastic field)
+    │
+    ▼
+threshold_development()  → developed (binary mask)
+    │
+    ▼
+extract_ler(developed, threshold, dx, intensity=acid_noisy)
+    │  (Legacy, naive std über ALLE 256 Zeilen)
+    ▼
+extract_lwr()  ← same pattern
+    │
+    ▼
+ler_vals / lwr_vals Listen (pro Seed)
+    │
+    ▼
+ler_nm = mean(ler_vals)  ← naive mean über Seeds
+lwr_nm = mean(lwr_vals)
+    │
+    ▼
+SimulationResult.ler_nm / lwr_nm  (float)
+
+Key parameters:
+- stochastic_n_realisations (default: 1) — NICHT N rows!
+- Grid size: grid=256 → y-Dimension = 256 rows
+- dx = period_nm / grid = 64/256 = 0.25 nm
+- Seed handling: stochastic_seed (None = random) pro Config, aber Loop nutzt frischen RNG pro Realisierung
+
+============================================================
+D. CURRENT FIELD SIZE
+============================================================
+| Parameter | Value | Source |
+|---|---|---|
+| x dimension | 256 px | grid=256 |
+| y dimension | 256 px | grid=256 (square) |
+| dx | 0.25 nm | period_nm / grid = 64/256 |
+| physical width | 64 nm | period_nm |
+| physical height | 64 nm | period_nm (1 Periode) |
+| PSF / blur | σ=5 nm, circular | gaussian_se_blur (exposure.py) |
+| circular boundary | YES (STEP 3.9 fix) | mode="circular" |
+
+N=256 Interpretation: Hard-coded Default in SimulationConfig.grid=256. Die y-Dimension entspricht der Grid-Größe — statistische Sampling-Wahl + physikalische Periode = 64 nm, KEINE statistische Anforderung. stochastic_n_realisations steuert Seed-Anzahl (Default 1), nicht Feldhöhe.
+
+============================================================
+E. CURRENT REPORT (SimulationResult)
+============================================================
+| Field | Currently Available | Notes |
+|---|---|---|
+| ler_nm | ✓ | float (naive mean über Seeds) |
+| lwr_nm | ✓ | float |
+| n_rows | ✗ | — |
+| n_eff | ✗ | — |
+| l_int_px | ✗ | — |
+| l_int_nm | ✗ | — |
+| SE | ✗ | — |
+| CI95 | ✗ | — |
+| n_seeds | ✗ | — |
+| estimator | ✗ | — |
+| rho_truncation | ✗ | — |
+| disclaimer | ✗ | — |
+
+Kleinste Metadaten-Injektionsstelle: SimulationResult dataclass (Zeilen 46-74) → optionale LEREstimate-Felder oder Metadaten-Erweiterung.
+
+============================================================
+F. LEGACY PROTECTION
+============================================================
+Consumers, die UNVERÄNDERT bleiben MÜSSEN:
+1. pipeline.py:332-337 → extract_ler() (stochastic production path)
+3. pipeline.py:340-345 → extract_lwr() (same)
+3. stochastic.py:735-736 → ler_lwr_estimate() → extract_ler() + extract_lwr() (legacy API)
+4. Externe Consumers via from euvsimulator.resist.stochastic import extract_ler
+5. Bestehende Tests, die extract_ler nutzen (11 neue Tests + bestehende)
+
+Diese DÜRFEN NICHT verändert werden — bitweise identisch zu aktuellem Verhalten.
+
+============================================================
+G. MINIMAL STEP-5.2 CHANGE SET
+============================================================
+1. pipeline.py — Import hinzufügen: from euvsimulator.resist.stochastic import ler_estimate
+2. pipeline.py:_cd_via_full_chem() — LER-Berechnung ersetzen (Zeilen 311-350):
+   - Liste von acid_noisy Tensors für alle Seeds bauen
+   - ler_estimate(acid_noisy_list, estimator="large_n", threshold=cfg.stochastic_develop_threshold, dx=dx_nm, intensity=acid_noisy_list, edge="left") aufrufen
+   - est.ler_nm, est.n_eff, est.l_int_nm, est.uncertainty_nm, est.ci95_low/high_nm, est.seed_count, est.rho_truncation extrahieren
+   - In SimulationResult speichern (dataclass erweitern) oder als zusätzliche Metadaten zurückgeben
+   - Legacy extract_ler Pfad für Backward Compatibility behalten (optional Flag)
+3. SimulationResult dataclass — Optionale Metadaten-Felder oder nested LEREstimate
+4. SimulationConfig — Optional: stochastic_ler_estimator enum Feld ("legacy" | "large_n") für kontrollierten Rollout
+6. ler_lwr_estimate() — Optional estimator Parameter (default "legacy") für Backward Compat
+
+============================================================
+H. REQUIRED STEP-5.2 TESTS
+============================================================
+| Test | Purpose | Code Path | Pass Criterion |
+|---|---|---|---|
+| test_legacy_extract_ler_unchanged | Backward compat | extract_ler() | Identischer Output zu STEP 5.1 |
+| test_large_n_integration | Pipeline Integration | _cd_via_full_chem → ler_estimate("large_n") | n_eff >= 30, Metadaten vorhanden |
+| test_legacy_flag | Backward compat | Pipeline mit estimator="legacy" | Output matcht aktuelles extract_ler |
+| test_metadata_propagation | Report | SimulationResult | Metadaten-Felder befüllt |
+| test_large_n_convergence | Science | ler_estimate(..., N>=2048) | 2048→4096 ≤ 1% |
+| test_subsampling_control | Science | ler_estimate | spacing > L_int → ≤1% |
+| test_same_n_bc_control | BC Guard | Release vs Large-field | t ≤ 2 |
+| test_shift_invariance | BC Guard | Region-shift 0-32nm | t ≤ 2 für gültige Shifts |
+| test_dose_scaling | Science | Dosis-Serie | Slope ≈ -0.75 (konsistent) |
+| test_determinism | Regression | Same seed | Bitweise identisch |
+| test_full_regression | All | pytest tests/ | 571+ Tests PASS |
+
+============================================================
+I. ADVERSARIAL FINDINGS
+============================================================
+| Risk | Evidence | Mitigation |
+|---|---|---|
+| Hidden N=256 fallback | stochastic_n_realisations ≠ Feldhöhe; Feld y=grid | Large-N braucht explizite Felderweiterung, nicht Seed-Anzahl |
+| Falscher Production Call Path | ler_lwr_estimate nutzt auch extract_ler — darf NICHT still migriert werden | Expliziter Flag/Parameter; Legacy Default |
+| Legacy/New Mixing im Report | SimulationResult aktuell nur float | Metadaten als separate Felder/nested Object; Legacy ler_nm unverändert |
+| Seed Aggregation Errors | Aktuell mean über Seeds; neue SE/CI aus Seed-Varianz | Seed-Handling in ler_estimate prüfen (Sequenz-Support) |
+| Falsche Feld-Größen Annahmen | y=grid (256) hard-coded; Large-N braucht y>256 | Felderweiterung via tile ODER Config-Option; keine Physik-Änderung |
+| Fehlende Metadaten-Propagation | SimulationResult hat keine Metadaten-Felder | Dataclass erweitern oder Metadaten-Dict hinzufügen |
+| Accidental Physical-Model Changes | Keine im Audit gefunden | Regression Suite (571 Tests) als Guard |
+| Seed Handling Mismatch | stochastic_seed Config; Loop nutzt frischen RNG | ler_estimate akzeptiert Sequenz von Feldern; Seed-Alignment prüfen |
+
+============================================================
+J. GO / NO-GO
+============================================================
+GO — Repository-Evidenz liefert klaren, minimalen, nicht-invasiven Implementierungspfad:
+
+1. **Einziger Production Call-Site** (_cd_via_full_chem, Zeilen 331-337) — chirurgischer Austausch möglich
+2. **Legacy vollständig geschützt** — extract_ler unangetastet, ler_lwr_estimate unangetastet
+3. **Architektur unterstützt Additivität** — ler_estimate bereits implementiert mit Sequenz-Support
+4. **Feld-Erweiterungs-Mechanismus klar** — tile aerial field für Large-N (bereits in STEP 4.1 validiert)
+7. **Keine Hidden Fallbacks** — via Search verifiziert
+8. **Keine Physical-Model Änderungen** — via Diff-Inspektion bestätigt
+
+Implementierungsrisiko: NIEDRIG — minimale Fläche, additiv, vollständig testbar.
+
+============================================================
+STOP — Audit complete. Keine Implementierung durchgeführt.
+============================================================

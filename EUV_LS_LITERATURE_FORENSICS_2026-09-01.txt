@@ -1,0 +1,239 @@
+================================================================================
+LITERATUR-FORENSIK  L/S-IMAGING-GATE
+euvsimulator vs unabhaengige Primaerquelle
+2026-09-01 13:25 CEST
+NO CODE CHANGES. Keine Grafikablesung. Keine erfundenen Zahlen.
+================================================================================
+
+ENTSCHEIDUNG
+--------------------------------------------------------------------------------
+NO COMPARABLE DATA
+
+Kein DIRECT MATCH. Kein CONDITIONAL MATCH mit einer
+belastbaren quantitativen Metrik (NILS / optical CD / aerial
+contrast / dose-to-size / Bossung-Zahl im Text oder in einer
+Tabelle).
+
+Simulator-NILS 4.9685 bleibt unfalsifiziert und unbestaetigt.
+Das ist der wissenschaftliche Stand, nicht ein vorlaeufiges
+Zwischenergebnis, das man mit einer "typischen" NILS ersetzen
+duerfte.
+
+
+ZIEL-DOIs (explizit geprueft)
+--------------------------------------------------------------------------------
+A) Erdmann, Evanschitzky, Bottiglieri, van Setten, Fliervoet
+   "3D mask effects in high NA EUV imaging"
+   Proc. SPIE 10957, Extreme Ultraviolet (EUV) Lithography X (2019)
+   DOI 10.1117/12.2515678
+   OpenAlex 2026-09-01: is_oa=false,
+   any_repository_has_fulltext=false
+   Fraunhofer Publica Eintrag existiert
+   (publica.fraunhofer.de/handle/publica/406080)
+   aber Bot-Wall, kein PDF.
+   Abstract bei Crossref: leer.
+   VOLLTEXT: PAYWALL — NO DATA
+   Keine Zahl aus Titel/Abstract rekonstruiert.
+
+B) Evanschitzky, Erdmann
+   "Advanced EUV mask and imaging modeling"
+   JM3 16(4) 041005 (2017)
+   DOI 10.1117/1.jmm.16.4.041005
+   OpenAlex: is_oa=false, kein Repository-Volltext.
+   VOLLTEXT: PAYWALL — NO DATA
+
+
+DREI BESTE NEAR-MATCHES (Ausschlussgrund jeweils)
+--------------------------------------------------------------------------------
+
+NEAR 1 — Erdmann et al., Advanced Optical Technologies 6 (2017) 187
+DOI 10.1515/aot-2017-0019
+HTML-Volltext gelesen 2026-09-01
+https://www.degruyterbrill.com/document/doi/10.1515/aot-2017-0019/html
+(PDF-Download per curl 0 Byte / HTTP 202; HTML oeffentlich.)
+
+Parameter              Literatur                         Simulator           Status
+wavelength             13.5 nm DIRECT                    13.5 nm             EXACT
+NA                     0.33 DIRECT (Fig. 5 caption)      0.33                EXACT
+illumination           circular sigma=0.7 (Fig. 5)       conventional 0.8    CLOSE/MISMATCH
+                       AND dipole/annular/CQuad in       conventional
+                       anderen Figuren
+sigma                  0.7 (circular, Fig. 5)            0.8                 CLOSE  (nicht EXACT)
+pitch                  mask 400 nm / 4x = 100 nm wafer   64 nm               MISMATCH
+                       (Fig. 4 caption: 88/400 nm mask)
+mask CD                target 22 nm wafer (Fig. 5)       32 nm               MISMATCH
+absorber               TaBN                              Ta                  CLOSE
+absorber height        80 nm default (Fig. 3)            ~60 nm              MISMATCH
+mask model             rigorous 3D (RCWA/FDTD/FEM)       thin-mask Fourier   MISMATCH
+resist model           process windows; nicht            aerial_threshold    UNKNOWN
+                       aerial_threshold 0.5*mean
+threshold              UNKNOWN                           0.5 mean            UNKNOWN
+quantity NILS          NUR in Figuren (10,12,15,16,20)   4.9685              NO DATA
+definition             "normalized local contrast        Mack at printed     UNKNOWN
+                       (NILS)"; BF = Fokus mit           threshold edge
+                       groesstem NILS. Keine Gleichung
+                       mit I_edge / printed edge.
+
+Quantitative result: NO DATA
+  Keine NILS-Zahl im Fliesstext. Keine Tabelle mit NILS.
+  Figuren nicht abgelesen (Auftrag).
+
+Ausschluss:
+  (1) Pitch 100 nm wafer vs 64 nm.
+  (2) Target 22 nm vs 32 nm.
+  (3) sigma 0.7 circular vs 0.8; andere Panels dipole/CQuad.
+  (4) 3D-Maske vs thin-mask.
+  (5) Keine extrahierbare NILS-Zahl ohne Grafikablesung.
+  (6) NILS-Definition nicht als Mack-an-printed-edge spezifiziert.
+
+NOT DIRECTLY COMPARABLE
+
+
+NEAR 2 — Tsubaki et al., J. Photopolym. Sci. Technol. 26 (2013) 599
+OA-PDF gelesen:
+https://www.jstage.jst.go.jp/article/photopolymer/26/5/26_599/_pdf
+Sentaurus Lithography. NILS-Zahlen STEHEN IM TEXT.
+
+Parameter              Literatur                         Simulator           Status
+wavelength             EUV (NXE/MET) IMPLIED             13.5 nm             CLOSE
+NA                     0.25 NXE:3100 / 0.33 NXE:3300B    0.33                EXACT fuer 0.33-Teil
+illumination           conventional sigma 0.81 (0.25NA)  conventional 0.8    CLOSE (0.25NA)
+                       conventional sigma 0.90 (0.33NA)                      MISMATCH (0.33NA: 0.90)
+pitch                  30 nm 1:1 dense C/H (0.25NA)      64 nm L/S           MISMATCH
+                       24 nm 1:1 dense C/H (0.33NA)
+mask CD                C/H, mask bias 0..15 nm           32 nm L/S           MISMATCH
+absorber               UNKNOWN                           Ta                  UNKNOWN
+absorber height        UNKNOWN                           ~60 nm              UNKNOWN
+mask model             Sentaurus (nicht spezifiziert     thin-mask           UNKNOWN
+                       Kirchhoff vs 3D)
+resist model           NTI vs PTI, resist edge           aerial_threshold    MISMATCH
+threshold              UNKNOWN                           0.5 mean            UNKNOWN
+quantity               NILS 2.8-2.9 (0.25NA dense C/H,   4.9685 L/S          MISMATCH
+                       0% flare, zero bias) DIRECT
+                       NILS ~2.8 iso trench NTI 3% flare
+                       "NILS at resist pattern edge"
+definition             NILS at resist pattern edge       Mack printed        NOT DIRECTLY
+                                                         aerial threshold    COMPARABLE
+
+Quantitative result (nur was im Text steht, C/H nicht L/S):
+  0.25 NA, conventional sigma 0.81, 30 nm 1:1 dense CONTACT HOLES:
+    NILS 2.8-2.9 at zero mask bias, 0% flare (PTI)
+    NILS ~3.6 at 0% flare, 15 nm mask bias (NTI)
+  0.33 NA, conventional sigma 0.90, 24 nm 1:1 dense C/H:
+    NILS-Zahlen in Fig. 4/5; im Text "optimum NILS number is around 2.8"
+    fuer iso trench NTI bei 3% flare — nicht fuer 24 nm dense C/H als
+    klare Tabelle. Dense-C/H-NILS bei 0.33 NA: FIGURE, nicht als
+    eindeutige Textzahl fuer denselben Fall wie der Simulator.
+
+Ausschluss (entscheidend):
+  Kontaktloecher, nicht L/S 32/64 nm.
+  sigma 0.90 vs 0.8 bei NA 0.33.
+  NILS an der Resistkante, nicht an der Aerial-Threshold-Kante.
+  Deshalb selbst die Textzahl 2.8-2.9 NICHT gegen Simulator 4.9685
+  halten.
+
+NOT DIRECTLY COMPARABLE
+
+
+NEAR 3 — Sekiguchi, InTech 2011, DOI 10.5772/23533
+OA-PDF (vorherige Session, unveraendert):
+https://api.intechopen.com/chapter/pdf-download/23486.pdf
+Table 4: lambda 13.5 nm, NA 0.3, sigma 0.8, 32 nm L&S, Prolith.
+
+Parameter              Literatur                         Simulator           Status
+wavelength             13.5 DIRECT                       13.5                EXACT
+NA                     0.3 DIRECT                        0.33                CLOSE
+illumination           UNKNOWN (HiNA-3)                  conventional        UNKNOWN
+sigma                  0.8 DIRECT                        0.8                 EXACT
+pitch                  32 nm L&S genannt; Pitch nicht    64 nm               UNKNOWN
+                       als Zahl in Table 4
+mask CD                32 nm L&S                         32 nm               CLOSE
+absorber               UNKNOWN                           Ta                  UNKNOWN
+absorber height        UNKNOWN                           ~60 nm              UNKNOWN
+mask model             Prolith UNKNOWN                   thin-mask           UNKNOWN
+resist model           Development-rate + Prolith        aerial_threshold    MISMATCH
+threshold              UNKNOWN                           0.5 mean            UNKNOWN
+quantity               keine NILS, keine optical CD      4.9685 / 27.50      NO DATA
+definition             —                                 Mack printed        —
+
+Ausschluss: keine quantitative Imaging-Metrik.
+  "Resolution can be maintained up to 32 nm" ist qualitativ.
+
+
+NILS-DEFINITION (quellenweise)
+--------------------------------------------------------------------------------
+Simulator:
+  NILS = CD * |dI/dx| / I_edge
+  CD = Abstand der beiden Threshold-Kreuzungen (Optical CD intern
+       in nils() interpoliert; Pipeline-CD bleibt pixelweise 27.50 nm)
+  x_edge = gedruckte Threshold-Kante
+  I_edge = threshold = 0.5 * mean(aerial) im Default
+  beide Kanten gemittelt
+  CD-Typ: optical/aerial, nicht Mask-CD, nicht SEM-CD
+
+AOT 2017:
+  BF := Fokus mit groesstem NILS.
+  "normalized local contrast (NILS)"
+  Keine Gleichung. Unklar: designed vs printed edge, welche CD,
+  eine oder zwei Kanten, I im Nenner.
+  NOT DIRECTLY COMPARABLE  (Definition unvollstaendig + andere
+  Geometrie)
+
+Tsubaki 2013:
+  "NILS at resist pattern edge"
+  Resistkante != Aerial-Threshold-Kante.
+  NOT DIRECTLY COMPARABLE
+
+LIRIAS 2025 (gelesen, Hyper-NA / 6.7 nm):
+  "logarithmic slope of the aerial image intensity at the edge of
+   a feature, normalized by the feature size"
+  Kante unspezifiziert (designed vs printed).
+  Simulations: pitch 12 nm bei 6.7 nm, NA 0.33 willkuerlich fuer
+  diesen Stack — MISMATCH Wellenlaenge/Pitch.
+  NILS-Zahlen in Figure 4/6, nicht als Tabelle im Text.
+  NO DATA fuer den 13.5/64/0.33/0.8-Benchmark.
+
+
+WAS NICHT GETAN WURDE (Absicht)
+--------------------------------------------------------------------------------
+- Figuren visuell abgelesen
+- 32 nm L/S als 64 nm Pitch deklariert (Sekiguchi: UNKNOWN)
+- NILS von C/H auf L/S umgerechnet
+- Resist-CD = Optical-CD
+- NA 0.3 = 0.33 EXACT (nur CLOSE)
+- Dipole/CQuad/annular = conventional
+- NA 0.55 = 0.33
+- Simulator 4.9685 als Literaturwert
+
+
+SUCHPROTOKOLL
+--------------------------------------------------------------------------------
+OpenAlex Works-DOI: beide Ziel-DOIs closed, kein Repo-Volltext.
+Crossref: Abstracts leer.
+Fraunhofer Publica: Bot-Wall.
+De Gruyter AOT 2017: HTML Volltext im Browser gelesen; PDF 0 Byte.
+JSTAGE 26(5) 599: PDF gelesen.
+LIRIAS Hyper-NA Manuskript: PDF gelesen.
+Unpaywall: Erdmann 2019 / JM3 041005 nicht OA.
+Semantic Scholar: Erdmann 2019 isOpenAccess false.
+McIntyre-Suche OpenAlex OA: kein L/S 64 nm / NA 0.33 / sigma 0.8
+  NILS-Datensatz mit Volltext.
+Albany Dissertation URL: HTTP 403.
+FAU Fuehner Diss OPUS: HTML-Captcha, kein PDF.
+
+
+Sources
+--------------------------------------------------------------------------------
+[1] https://doi.org/10.1117/12.2515678
+[2] https://doi.org/10.1117/1.jmm.16.4.041005
+[3] https://www.degruyterbrill.com/document/doi/10.1515/aot-2017-0019/html
+[4] https://doi.org/10.1515/aot-2017-0019
+[5] https://www.jstage.jst.go.jp/article/photopolymer/26/5/26_599/_pdf
+[6] https://lirias.kuleuven.be/retrieve/eba01715-a0ce-4e98-9227-045faa3b855e
+[7] https://api.intechopen.com/chapter/pdf-download/23486.pdf
+[8] https://api.openalex.org/works/doi:10.1117/12.2515678
+
+STOP. Keine Codeaenderung. Kein Feature.
+================================================================================
+ENDE
+================================================================================

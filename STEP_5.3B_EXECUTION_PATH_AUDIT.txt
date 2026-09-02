@@ -1,0 +1,336 @@
+============================================================
+STEP 5.3B — PARAMETER EXECUTION / PHYSICS PATH AUDIT
+============================================================
+Datum: 2026-08-21
+Modell: DeepSeek V4 Flash
+Rolle: unabhängiger wissenschaftlicher Reviewer / Software-Auditor
+Release: release-step-3.13 / db8c7a4 — IMMUTABLE
+READ-ONLY. KEINE Code-/Parameteränderung. KEINE Kalibrierung.
+Experimentarchive FROZEN (nur gelesen für Punkt 15, wie erlaubt).
+
+============================================================
+A. EXECUTION-PATH-MATRIX (Kernbefunde)
+============================================================
+Status-Legende: ACTIVE / PARTIALLY_ACTIVE / DEAD_CONFIG /
+HARDCODED / DERIVED / NUMERICAL / CONSTANT / UNUSED / AMBIGUOUS
+
+Parameter        Status   Pfad (Config→Funktion→Observable)
+se_blur_nm       ACTIVE   Config→pipeline Z.305/371→2 VERSCHIEDENE
+                          Anwendungen (siehe H): det. Blur auf
+                          dose_map; stoch. Blur auf Poisson-Ereignisse
+                          → CD/NILS (det.) bzw. LER/LWR (stoch.)
+                          Status: AMBIGUOUS (Definition: SE-Blur auf
+                          Dosis = Näherung; auf Ereignisse = physikal.)
+absorption       HARDCODED stochastic.py:273 Default 1.0; KEIN
+                          Config-Feld; wirkt auf n_bar; → acid → LER.
+                          Dosisdefinition: absorbierte Dosis.
+                          Experimentell bestimmbar: JA (α vorhanden!)
+dill_A, dill_B   DEAD_CONFIG nur Config+CLI (pipeline.py:145-146);
+                          KEINE Funktion verwendet sie; keine
+                          Observable beeinflusst
+dill_C           ACTIVE   Config→dose_to_acid (beide Pfade)
+dill_Q           ACTIVE   Config→dose_to_acid (beide Pfade)
+stochastic_quantum_efficiency
+                 DEAD_CONFIG pipeline.py:166+219 validiert, aber NIE
+                          übergeben; der tatsächliche Q-Wert kommt von
+                          dill_Q (pipeline Z.380)
+peb_D            DEAD_CONFIG nur Config+CLI; NIE an
+                          reaction_diffusion_analytical übergeben
+                          (Pipeline übergibt sigma_diff, D=0.0 bleibt
+                          Funktions-Default)
+peb_k, peb_t_bake, peb_sigma_diff
+                 ACTIVE   Config→reaction_diffusion_analytical
+mack_R_max, R_min, n
+                 DEAD im Standardpfad: nur surface_advancement_level_
+                          set + wafer_fit (Pipeline ruft diese nicht);
+                          "Mack steuert die Entwicklung" gilt im
+                          full_chem-Standardpfad NICHT
+mack_M_th        ACTIVE   Config→threshold_development (det. CD-Pfad)
+resist_threshold / resist_threshold_norm
+                 ACTIVE nur im aerial_threshold-Modus; im full_chem-
+                          Pfad (Referenz) UNUSED
+stochastic_develop_threshold
+                 ACTIVE   stochastic-Pfad (threshold + extract_edges)
+development_strength / development_correlation_nm
+                 ACTIVE   nur ON-Modus (stochastic_development)
+stochastic_ler_grid_y / stochastic_ler_estimator
+                 ACTIVE   (5.2B/5.2C-Pfad)
+rho_truncation   NUMERICAL (ler_estimate, Default ρ<0.05, cap 200)
+dose_to_energy_factor = 6.241509074e15
+                 HARDCODED pipeline Z.374 (auch Funktions-Default);
+                 Umrechnung mJ/cm²→eV/nm² — korrekt, aber ohne
+                 Config-Kontrolle
+photon_energy_eV DERIVED  aus wavelength via HC_EV_NM (pipeline)
+ml_* (50/2.8/4.1/Ru/2.5) ACTIVE (Reflektivität der Aerial-Berechnung)
+use_rcwa / absorber_taper_deg / mask_undercut_nm /
+mask_sidewall_roughness_nm
+                 DEAD im Referenzpfad (use_rcwa=False); ACTIVE nur
+                 mit use_rcwa=True
+focus_nm         PARTIALLY_ACTIVE (nur im Defokus-Pfad; Referenz 0.0)
+wavelength_nm, na, sigma, illumination_shape
+                 ACTIVE (Aerial); CONSTANT-artig in der Referenz
+grid, device, seed, n_realisations
+                 NUMERICAL/ACTIVE
+
+============================================================
+B. DEAD-CONFIG LIST (5)
+============================================================
+1. dill_A (0.5) — keine Funktion verwendet ihn
+2. dill_B (0.2) — keine Funktion verwendet ihn
+3. peb_D (5.0) — nie übergeben (sigma_diff ersetzt D)
+4. stochastic_quantum_efficiency (0.04) — validiert, nie verwendet;
+   der echte Q-Wert ist dill_Q
+5. mack_R_max / mack_R_min / mack_n — im Standardpfad wirkungslos
+   (nur M_th aktiv)
+Zusatz: use_rcwa-Maskenparameter (taper/undercut/sidewall) sind im
+Referenzpfad tot (nur bei use_rcwa=True aktiv).
+
+============================================================
+C. HARDCODED-PHYSICS LIST (3)
+============================================================
+1. absorption = 1.0 (stochastic.py:273) — kein Config-Feld; die
+   Dosis wird als vollständig absorbiert behandelt
+2. dose_to_energy_factor = 6.241509074e15 (pipeline Z.374) —
+   korrekt, aber fest verdrahtet
+3. stochastic_develop_threshold-Konvention: developed = (acid >
+   threshold) — Schwelle als Modellkonstante im Pfad (Config-setzbar,
+   aber Default 0.3 ohne Ableitung)
+
+============================================================
+D. DEFAULT-DISCREPANCY-MATRIX
+============================================================
+Parameter    Config   Funktion    Preset   AGENTS.md   Runtime   Konflikt
+dill_C       0.05     0.1         —        0.1 (CAR)   0.05      JA (3)
+dill_Q       1.0      0.04        —        0.01 (CAR)  1.0       JA (3)
+se_blur_nm   0.0      5.0 (sigma  5.0/2.5/ 5.0 (CAR)   Config    JA
+                      _blur)      3.0
+peb_D        5.0      0.0         —        —           0.0 (D)   JA
+peb_k        0.3      0.1         —        —           0.3       JA (2)
+peb_t_bake   60.0     10.0        —        —           60.0      JA (2)
+M_th         0.5      0.5/0.3     —        —           0.5       teilw.
+RESIST_PRESETS: AGENTS.md behauptet Dict mit resist_model/C/Q;
+Code: nur se_blur-Sigmas {CAR:5.0, nonCAR:2.5, HighNA:3.0} — JA
+Runtime-Regel: In der Pipeline gewinnt die Config (außer peb_D:
+Funktions-Default 0.0, da nie übergeben). Werte nicht eigenständig
+"korrigiert" — nur dokumentiert.
+
+============================================================
+E. PARAMETER → OBSERVABLE-MATRIX
+============================================================
+(+++ stark, ++ mittel, + schwach, 0 kein, ? unklar)
+Parameter      CD   NILS  LER  LWR  DtS  acid  aerial  rho(LER)
+se_blur_nm     ++   ++    +++  +++  ++   ++   0       +++
+absorption     0    0     +++  +++  ++   +++   0       +
+dill_C         ++   +     ++   ++   +++  +++   0       +
+dill_Q         ++   +     +++  +++  +++  +++   0       +
+dill_A/B       0    0     0    0    0    0     0       0 (DEAD)
+peb_D          0    0     0    0    0    0     0       0 (DEAD)
+peb_k, t, σ    ++   +     ++   ++   ++   ++    0       ++
+mack_M_th      +++  ++    +    +    +++  +     0       +
+mack R/n       (nur surface_advancement/wafer_fit)
+dev_strength  +(via  0     +++  +++  +    +     0       ++
+               Kanten-
+               bias)
+dev_corr_nm   0     0     ++   ++   0    0     0       +++
+stoch_dev_thr +     0     ++   ++   +    +     0       +
+dose          +++   ++    ++   ++   +++  +++   0       +
+wavelength/NA/σ/illum  +++ (Aerial-Form, CD/NILS)
+grid_y       0     0     +(SE) +(SE) 0    0     0       ++ (N_eff)
+seed/n_real.  0     0     +(SE) +(SE) 0    0     0       +(SE)
+
+============================================================
+F. IDENTIFIABILITY-MATRIX
+============================================================
+Paar                  Status              Begründung
+absorption ↔ dose     NON_IDENTIFIABLE    n_bar ∝ dose·absorption;
+                                          nur Produkt messbar
+absorption ↔ dill_Q   NON_IDENTIFIABLE    acid ∝ Q·(1-exp(-C·d_eff));
+                                          beide skalieren
+se_blur ↔ dev_strength  PARTIALLY         LER-Amplitude beide;
+                                          rho-Spektrum trennt
+                                          teilweise (20px vs 2px)
+se_blur ↔ dev_corr    PARTIALLY           CD/NILS trennt se_blur
+threshold ↔ dev_strength  PARTIALLY       CD (det.) trennt threshold
+threshold ↔ dose      IDENTIFIABLE        CD-Kurvenform (dose-Scan)
+PEB-Diff ↔ SE-Blur    PARTIALLY           CD-Form, Linienprofil
+Dill C ↔ dose         PARTIALLY           exp-Nichtlinearität
+Mack M_th ↔ threshold IDENTIFIABLE        getrennte Pfade (inhib vs
+                                          acid), aber gleiche Rolle
+Dill A/B: irrelevant (DEAD)
+
+============================================================
+G. MASKING-RISK-MATRIX
+============================================================
+Parameter   verdeckt fehlende Physik      trennende Observable
+se_blur     SE-PSF-Form, Energieabhängig- rho(LER)-Spektrum,
+            keit, Reichweitenverteilung    CD-Dosis-Form
+dev_strength Entwicklungszeit, Molekular- Dosisabhängigkeit der LER,
+            gewicht, Entwickler            rho-Spektrum
+dill_Q      Quantenausbeute/Verstärkung   DCT (acid ∝ Q)
+absorption  Dosisdefinition, Dicken-      Transmissionsmessung
+            Absorption                     (α-PMMA VORHANDEN!)
+threshold   Entwicklungs-Contrast, CD-    DCT-Form (γ), CD-Kurve
+            Definition
+PEB-Par.    Diffusionsphysik (D!)         Linienprofil, CD-Kurve
+Mack-Par.   Entwicklungszeit/-selektiv.   DCT-Form
+→ Eine Anpassung dieser Parameter OHNE zusätzliche Physik könnte
+die LER/LWR/CD-Lücke scheinbar schließen — verboten.
+
+============================================================
+H. PHYSICS-PATH DIAGRAM (dose → photon → SE → acid → PEB → dev → edge)
+============================================================
+dose_mj_cm2 (Config; behandelt als ABSORBIERTE Dosis, da
+ absorption=1.0 HARDCODED)
+   │
+   ▼
+aerial (λ, NA, σ, Illumination, ML, Maske) → dose_map
+   │
+   ├── DETERMINISTISCHER PFAD (CD/NILS):
+   │    gaussian_se_blur(dose_map, se_blur_nm)          ← Blur auf Dosis
+   │    → dose_to_acid(C=cfg.dill_C, Q=cfg.dill_Q, apply_blur=False)
+   │    → reaction_diffusion_analytical(k, t_bake, sigma_diff; D NIE)
+   │    → threshold_development(inhib, M_th)
+   │    → CD, NILS
+   │
+   └── STOCHASTISCHER PFAD (LER/LWR):
+        stoch_dose = tile/repeat(dose_map) [:grid_y]  (large_n)
+        photon_deposition_shot_noise(stoch_dose, se_blur_nm,
+          photon_energy_eV, f=6.2415e15 HARDCODED, absorption=1.0
+          HARDCODED)
+          → Poisson(n_bar = dose·A_voxel·f/E_ph·1.0)
+          → gaussian_se_blur(Ereignisse, se_blur)      ← Blur auf EVENTS
+        → dose_to_acid(C, Q, apply_blur=False) → acid_noisy
+        → stochastic_development(acid_noisy, 0.3, strength, corr)
+          ODER Threshold 0.3
+        → extract_edges(interp. auf acid_noisy)
+        → ler_estimate / extract_ler / extract_lwr → LER/LWR
+
+INKONSISTENZ (AMBIGUOUS): Der SE-Blur wirkt im deterministischen
+Pfad auf die Dosiskarte, im stochastischen Pfad auf die
+Poisson-Ereignisse. Wegen der Nichtlinearität acid = Q·(1-exp(-C·D))
+sind die effektiven Profile NICHT äquivalent (Jensen-Ungleichung:
+exp(blur(x)) ≠ blur(exp(x))). Der Kommentar in pipeline.py
+(Z.338-340) dokumentiert nur "kein zweiter Blur" — die
+KONSISTENZ der beiden Anwendungen wurde nie geprüft. Konsequenz:
+Die CD-Physik (det. Pfad) und die LER-Kantenlage (stoch. Pfad)
+können systematisch abweichen. Physikalisch korrekt ist die
+stochastische Anwendung (Energie wird pro Ereignis deponiert);
+der deterministische Pfad ist eine Näherung.
+
+============================================================
+I. EXPERIMENTALLY RESOLVABLE PARAMETERS (aus den Archiven)
+============================================================
+VORHANDEN (direkt aus den Quellen, READ-ONLY):
+- α(PMMA) = 4.9 ± 0.3 µm⁻¹ bei 13.5 nm (Transmission, Beer-Lambert,
+  Fig. 5; DIRECT_TEXT) → für 160 nm: Absorption ≈ 54 % — der
+  Simulator nutzt 1.0 (Faktor ~1.8 Diskrepanz in n_bar)
+- E0 = 25.1 ± 0.5 mJ/cm², γ = 5.3 ± 0.4 (PMMA-DCT)
+- DtS = 19.4-53.9 mJ/cm², LWRunb = 2.40-2.97 nm (PSI)
+- Dicke: 160 nm (PMMA), 20-30 nm (PSI-Guideline)
+- PAB: 180 °C / 60 s (PMMA)
+- Wellenlänge: 13.5 nm (beide)
+NICHT VORHANDEN (UNKNOWN):
+- SE-Blur/Blur-Informationen (keine Quelle liefert σ_SE)
+- dill_Q / Quantenausbeute (keine Quelle)
+- PEB-Details (PMMA: Nicht-CAR ohne PEB; PSI: nicht angegeben)
+- Entwickler-Konzentration/-Zeit (PSI: nicht angegeben)
+- Messlängen der LER/LWR (beide)
+→ absorption ist der EINZIGE Materialparameter mit vorhandenem
+experimentellem Wert (für PMMA) — als REFERENZ dokumentiert, NICHT
+als Kalibrierziel verwendet.
+
+============================================================
+J. PARAMETERS STILL UNKNOWN
+============================================================
+se_blur (kein experimenteller Wert), dill_Q, dill_A/B (für PMMA
+berechnbar aus α? Nein — A/B sind Dill-Absorptionsparameter des
+Modells, nicht direkt α), PEB (k, t, σ), Mack (R_max, R_min, n,
+M_th für reale Resists), dev_strength/dev_corr (Modellparameter),
+stoch. develop threshold, Messlängen.
+
+============================================================
+K. CODE/DOCUMENTATION DISCREPANCIES (neu in 5.3B)
+============================================================
+1. ZWEI SE-Blur-Anwendungen (Dosis vs. Ereignisse) — inkonsistent
+   wegen Nichtlinearität; nur "kein zweiter Blur" kommentiert
+2. dill_A/dill_B: DEAD_CONFIG (Config+CLI, keine Funktion)
+3. peb_D: DEAD_CONFIG (Config+CLI, nie übergeben)
+4. stochastic_quantum_efficiency: DEAD_CONFIG (validiert, nie genutzt)
+5. mack_R_max/R_min/n: im Standardpfad wirkungslos — die Aussage
+   "Mack steuert die Entwicklung" trifft nur für M_th zu
+6. AGENTS.md: Presets/Defaults/Tests (534 vs 622) — siehe 5.3A
+7. "absorption: Physically 0 < absorption <= 1" (Docstring) vs.
+   hartcodiert 1.0 ohne User-Zugriff
+
+============================================================
+L. SCIENTIFIC RISKS
+============================================================
+R1 (HOCH): Dosisdefinition — absorbierte (Sim, absorption=1.0) vs.
+   einfallende (Exp) Dosis; α-PMMA vorhanden (54 % bei 160 nm) →
+   systematischer Skalenfaktor ~1.8-2
+R2 (HOCH): dill_Q=1.0 — extreme Annahme, direkt in der LER-Skala
+R3 (HOCH): SE-Blur-Doppeldefinition (det. Dosis vs. stoch.
+   Ereignisse) — CD- und LER-Pfad sehen verschiedene Profile
+R4 (MITTEL): se_blur ↔ dev_strength Maskierung (LER-Amplitude)
+R5 (MITTEL): Messlängen UNKNOWN
+R6 (NIEDRIG): Kanten-Bias der Ereignis-Entwicklung (5.3, dokumentiert)
+
+============================================================
+M. REQUIRED NEXT STEPS (READ-ONLY-Reihenfolge)
+============================================================
+1. SE-Blur-Konsistenz prüfen: det. vs. stoch. Profilvergleich
+   (quantitativ, ohne Änderung) — AMBIGUOUS auflösen
+2. absorption als Config-Feld + α-Werte (PMMA 4.9±0.3 µm⁻¹) als
+   Referenzdokumentation
+3. dill_Q-Sensitivitätsanalyse (READ-ONLY) + Literaturbereich
+4. Tote Felder (dill_A/B, peb_D, stochastic_quantum_efficiency,
+   mack R/n im Standardpfad) entweder verdrahten oder als DEAD
+   dokumentieren
+5. AGENTS.md korrigieren
+6. Erst danach: erneuter Form-Vergleich; Absolutwerte erst nach
+   Skalen-Klärung
+
+============================================================
+N. STOP-CONDITIONS (geprüft)
+============================================================
+1. Mehrfacheffekt-Parameter nicht identifizierbar: JA (absorption/
+   dose, Q/absorption, se_blur) → markiert
+2. Kompensation möglich: JA → markiert (Interaktionsmatrix)
+3. Default als Konstante interpretierbar: JA (absorption=1.0,
+   Q=1.0) → markiert
+4. Validierung erfordert Kalibrierung ohne Physik: JA (Absolutwerte)
+5. Künstliche Wertebereichslimits: NEIN
+6. Code ≠ Dokumentation: JA (7 Diskrepanzen)
+7. STEP-5.3-Observable mit systematischem Bias: JA (Kanten-Bias)
+8. CD/NILS-Invarianz aus anderem Pfad: JA — plus NEU: die beiden
+   SE-Blur-Anwendungen machen die CD/LER-Pfad-Konsistenz AMBIGUOUS
+Kein Verstoß wurde durch Änderung "behoben" (READ-ONLY).
+
+============================================================
+O. GO / NO-GO
+============================================================
+QUANTITATIVER VERGLEICH: NO-GO
+- ungelöste Skalenfragen (absorption=1.0 vs. α-exp; Q=1.0)
+- SE-Blur-Doppeldefinition (AMBIGUOUS)
+- Messlängen UNKNOWN
+FORM-/TREND-VERGLEICH: GO (skaleninvariant: LER-Dosis-Exponent,
+CD-Dosis-Form, relative Trends; unabhängig von den Skalenproblemen)
+
+Bedingung für quantitatives GO: (1) absorption als Config-Feld mit
+α-Referenz, (2) dill_Q-Sensitivität, (3) SE-Blur-Konsistenzanalyse,
+(4) Messlängen-Klärung.
+
+============================================================
+ABSCHLUSS-STATUS
+============================================================
+STEP 5.3B: COMPLETE
+- EXECUTION-PATH MATRIX: 38 Parameter getraced
+- DEAD_CONFIG: 5 (+3 bedingt)
+- HARDCODED: 3
+- DEFAULT-DISCREPANCIES: 6 Gruppen
+- IDENTIFIABILITY: 5 NON-/PARTIALLY-IDENTIFIABLE Paare
+- MASKING RISKS: 7 Parameter
+- CODE/DOKU-DISKREPANZEN: 7
+- QUANTITATIVE VALIDATION: NO-GO (Form: GO)
+- IMPLEMENTATION CHANGES: NONE
+============================================================

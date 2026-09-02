@@ -1,0 +1,353 @@
+============================================================
+STEP 5.2C — FIRST EXPERIMENTAL VALIDATION (READ-ONLY)
+============================================================
+Datum: 2026-08-21
+Modell: DeepSeek V4 Flash
+Release: release-step-3.13 / db8c7a4718c5f4b54f130cfe0c27962e8cc3313d — IMMUTABLE
+KEINE Codeänderung, KEINE Kalibrierung, KEIN Commit, KEIN Tag.
+Experimentarchive: FROZEN, unverändert.
+
+============================================================
+1. EXECUTIVE SUMMARY
+============================================================
+Der erste out-of-sample Vergleich zeigt:
+
+- Die Simulator-LER (0.0686 ± 0.0009 nm) liegt um Faktor ~160 UNTER
+  der experimentellen PMMA-LER (~11 nm).
+- Die Simulator-LWR (0.0974 ± 0.0016 nm) liegt um Faktor ~25-30 UNTER
+  der experimentellen PSI-LWR (2.40-2.97 nm, CAR/MTR, HP 13-14 nm).
+- Die Simulator-Dose-to-Size (~6.7 mJ/cm², CD=32, 64-nm-Pitch) liegt
+  um Faktor 3-8 UNTER den experimentellen DtS-Werten (19.4-53.9
+  mJ/cm², HP 13-14 nm) und dem PMMA-E0 (25.1 mJ/cm²).
+- Der CD-Dosis-TREND ist qualitativ konsistent (CD sinkt monoton mit
+  Dosis in Experiment und Simulation).
+
+HAUPTURSACHE: Die Simulator-Observable ist die reine Photonen-SE-
+Kantenfluktuation. Experimentelle LER/LWR werden von
+ENTWICKLUNGSRAUIGKEIT dominiert, die im Modell fehlt (threshold
+development ist deterministisch). Das ist eine MODELLGRENZE
+(fehlende Physik), keine Kalibrierbarkeit.
+
+ABSCHLUSS-KLASSIFIKATION: C) NOT COMPARABLE
+(siehe Abschnitt 18 für die Begründung)
+
+============================================================
+2. VERWENDETE QUELLE (die EINE mit höchster Vergleichbarkeit)
+============================================================
+PRIMÄR: SOURCE 02 — Develioglu et al. 2023, Proc. SPIE 12498
+  (PSI/ASML, SLS EUV-Interferenzlitho), DOI 10.1117/12.2660859
+  - Resistchemie (CAR/MTR) am nächsten zum Dill-Mack-Modell
+  - Vollständige Tabellen 3/4 mit DtS + unbiased LWR (DIRECT_TABLE)
+  - Dosisbereich: 19.4-53.9 mJ/cm²
+
+SEKUNDÄR: SOURCE 01 — Kim et al. 2022, RSC Advances (PMMA),
+  DOI 10.1039/d1ra07291a
+  - einzige LER-Quelle (Priorität 1: Dose→LER)
+  - E0 = 25.1 ± 0.5 mJ/cm², γ = 5.3 ± 0.4 (DIRECT_TEXT)
+  - LER ≈ 11 nm (DIRECT_TEXT, Fig. 6(b)-Beschreibung)
+
+SOURCE 03 (32/64 nm): nicht verwendet (Volltext nicht frei —
+  INSUFFICIENT_DATA für quantitative Vergleiche)
+SOURCE 04 (UC Berkeley): nicht verwendet (PDF fehlt —
+  INSUFFICIENT_DATA)
+
+============================================================
+3. EXPERIMENTELLES SETUP (aus den Quellen)
+============================================================
+SOURCE 02 (PSI):
+- Tool: SLS EUV Interference Lithography, λ = 13.5 nm
+- Resists: 4 Vendor-Resists (3× CAR, 1× MTR), Dicke 20-30 nm
+  (Guideline-Table 2)
+- Pattern: HP 13 nm und HP 14 nm (26-28 nm Pitch), 1:1 L/S
+- Entwicklung/Prozess: nicht angegeben (NOT_AVAILABLE)
+- Metrologie: SEM; "unbiased LWR" (LWRunb) — Definition im Paper
+  (Fig. 2-Beschreibung); Messlänge NICHT angegeben (NOT_AVAILABLE)
+- Unsicherheiten der Tabellenwerte: nicht angegeben (NOT_AVAILABLE)
+
+SOURCE 01 (PMMA):
+- Tool: PLS-II Synchrotron, λ = 13.5 nm
+- Resist: PMMA, 160 nm dick (DCT/IL), 75 nm (Dicken-Serie)
+- Pattern: 250-nm-Pitch-Gitter, L/S > 50 nm
+- Prozess: PAB/Rinse abweichend von Fallica (Details NOT_AVAILABLE)
+- Metrologie: SEM + SuMMIT-Software; 5-12 Linien pro Bild;
+  Messlänge NOT_AVAILABLE
+- LER ~11 nm: Textaussage zu Fig. 6(b), E/E0 > 2.5;
+  Unsicherheit NOT_AVAILABLE
+
+============================================================
+4. EXTRAHIERTE EXPERIMENTELLE DATEN (mit Herkunft)
+============================================================
+PSI Table 3 (HP 14 nm) — DIRECT_TABLE (PDF, Proc. SPIE 12498,
+Seite 4-5, Table 3):
+
+| Vendor | DtS (mJ/cm²) | LWRunb (nm) | Z (×10⁻⁸ mJ·nm³) |
+|---|---|---|---|
+| A - CAR  | 53.85 | 2.51 | 0.96 |
+| B - CAR  | 38.9  | 2.63 | 0.73 |
+| C - MTR  | 19.40 | 2.72 | 0.40 |
+| D - CAR  | 36.95 | 2.40 | 0.60 |
+| Guideline| <60   | <1.4 | <0.46 |
+
+PSI Table 4 (HP 13 nm) — DIRECT_TABLE (PDF, Seite 5-6, Table 4):
+
+| Vendor | DtS (mJ/cm²) | LWRunb (nm) | Z (×10⁻⁸ mJ·nm³) |
+|---|---|---|---|
+| A - CAR  | 51.25 | 2.84 | 0.85 |
+| B - CAR  | 41.2  | 2.58 | 0.61 |
+| C - MTR  | 24.3  | 2.5  | 0.33 |
+| D - CAR  | 26.38 | 2.97 | 0.47 |
+| Guideline| <60   | <1.3 | <0.32 |
+
+PMMA (Kim 2022) — DIRECT_TEXT (PMC-HTML):
+- E0 (Sensitivity) = 25.1 ± 0.5 mJ/cm², γ = 5.3 ± 0.4
+  (160 nm PMMA, DCT-Fit, Fig. 3)
+- E0 (75 nm) = 8.6 ± 0.5 mJ/cm²
+- LER ≈ 11 nm (konvergiert, E/E0 > 2.5; SEM/SuMMIT, Fig. 6(b)-Text)
+- LER/CD ~35 % → ~20 % (Fig. 6(c)-Text)
+- CD/pitch vs E/E0: Fig. 6(a) — NICHT digitalisiert
+  (digitized_from_figure: ausstehend; Werte NICHT als exakt
+  behandelt)
+
+KEINE Werte wurden als DIGITIZED_FROM_FIGURE deklariert — alle
+verwendeten Zahlen stammen aus Text/Tabellen. Fig. 6(a)-Werte
+sind bewusst NICHT digitalisiert (keine überhöhte Präzision).
+
+============================================================
+5. DATENUNSICHERHEITEN (experimentell)
+============================================================
+- PSI LWR/DtS: keine ±-Angaben in den Tabellen (NOT_AVAILABLE);
+  Messlänge der SEM-LWR nicht angegeben (NOT_AVAILABLE)
+- PMMA E0: ±0.5 mJ/cm² (angegeben); LER ~11 nm: keine ±-Angabe
+  (NOT_AVAILABLE); Messlänge nicht angegeben (NOT_AVAILABLE)
+- Dosisdefinition: einfallende Dosis (üblich für IL-Exposures);
+  Absorption der Filme nicht angegeben (NOT_AVAILABLE)
+
+============================================================
+6. SIMULATOR-KONFIGURATION (Referenz, KEIN Fitting)
+============================================================
+se_blur_nm               = 5.0
+dose_mj_cm2              = 40.0
+stochastic_ler_grid_y    = 4096
+stochastic_ler_estimator = "large_n"
+period_nm                = 64.0   (Pipeline-Default)
+line_width_nm            = 32.0   (Pipeline-Default)
+resist_model             = "full_chem" (Dill C=0.05, Q=1.0,
+                                          PEB, Mack threshold)
+stochastic_develop_threshold = 0.3
+Zusätzlich: CD-Dosis-Kurve (deterministisch, Dosen 1-160 mJ/cm²)
+
+============================================================
+7. SEEDS / STATISTIK
+============================================================
+seed_count               = 10 (90000-90009), je 1 Realisation
+LER:  mean 0.0686 nm, SE 0.0009 nm, CI95 [0.0668, 0.0704]
+LWR:  mean 0.0974 nm, SE 0.0016 nm, CI95 [0.0943, 0.1005]
+N     = 4096 (Zeilen)
+N_eff = 60.6
+L_int = 8.49 nm
+estimator = large_n, edge = both
+
+============================================================
+8. SIMULATIONSERGEBNISSE
+============================================================
+LER = 0.0686 ± 0.0009 nm   (CI95 [0.0668, 0.0704])
+LWR = 0.0974 ± 0.0016 nm   (CI95 [0.0943, 0.1005])
+CD  = 17.50 nm             (dose=40, deterministisch)
+NILS= 5.91
+
+Dose-to-Size (CD=32 nm, 64-nm-Pitch): ~6.7 mJ/cm²
+(Interpolation: CD(6)=34.0, CD(8)=31.0)
+
+CD-Dosis-Kurve (deterministisch):
+  dose 1→160 mJ/cm²: CD 64→8 nm (monoton fallend)
+
+============================================================
+9. DIREKTER VERGLEICH (Tabellen)
+============================================================
+Tabelle A — Dose → LWR (PSI vs. Simulation)
+
+| Quantity | Experiment (PSI) | Simulation | Δabs | Δrel | Status |
+|---|---|---|---|---|---|
+| LWR (nm) | 2.40-2.97 (HP 13-14 nm, 4 Resists) | 0.0974 ± 0.0016 | ~2.3-2.9 | ~25-30× | NOT_COMPARABLE |
+
+Tabelle B — Dose → LER (PMMA vs. Simulation)
+
+| Quantity | Experiment (PMMA) | Simulation | Δabs | Δrel | Status |
+|---|---|---|---|---|---|
+| LER (nm) | ~11 (E/E0>2.5, SEM) | 0.0686 ± 0.0009 | ~10.9 | ~160× | NOT_COMPARABLE |
+
+Tabelle C — Dose (Dose-to-Size / Dose-to-Clear)
+
+| Quantity | Experiment | Simulation | Δrel | Status |
+|---|---|---|---|---|
+| DtS (mJ/cm²) | 19.4-53.9 (PSI, HP 13-14 nm) | ~6.7 (CD=32, 64 nm Pitch) | 3-8× niedriger | NOT_COMPARABLE (Dosisdefinition) |
+| E0 (mJ/cm²) | 25.1 ± 0.5 (PMMA, dose-to-clear) | — (keine E0-Observable im Modell) | — | NOT_COMPARABLE (andere Observable) |
+
+Tabelle D — CD-Dosis-Trend (qualitativ)
+
+| Quantity | Experiment | Simulation | Status |
+|---|---|---|---|
+| CD(Dosis) | PMMA Fig. 6(a): CD/pitch sinkt exponentiell mit E/E0 | CD 64→8 nm über 1→160 mJ/cm² | VALID_WITH_CAVEATS (nur Trend) |
+
+============================================================
+10. ABSOLUTE/RELATIVE ABWEICHUNG + UNSICHERHEITEN
+============================================================
+LWR:  Δabs ~2.3-2.9 nm, Δrel ~25-30×
+      Exp.-Unsicherheit: NOT_AVAILABLE; Sim.-Unsicherheit: ±1.6 %
+LER:  Δabs ~10.9 nm, Δrel ~160×
+      Exp.-Unsicherheit: NOT_AVAILABLE; Sim.-Unsicherheit: ±1.3 %
+DtS:  Δrel 3-8×
+      systematischer Dosisdefinitions-Unterschied (absorbierte vs.
+      einfallende Dosis; absorption=1.0 im Simulator)
+
+============================================================
+11. VERGLEICHBARKEIT DER OBSERVABLEN
+============================================================
+LER/LWR-Definition:
+- Experiment: SEM-basiert, "unbiased LWR", messlängenabhängig,
+  enthält Entwicklung + Metrologie-Rauschen + Photonenrauschen
+- Simulation: reine Modell-Kantenfluktuation (Photonen-SE-Rausch),
+  RMS über 4096 Zeilen (1024 nm Messlänge), KEINE Entwicklung
+→ Die Observablen sind NICHT äquivalent: Der experimentelle Wert
+  enthält einen dominanten Entwicklungsbeitrag, der im Modell fehlt.
+
+Messlänge:
+- Experiment: NOT_AVAILABLE (beide Quellen)
+- Simulation: 1024 nm
+→ Nicht sinnvoll vergleichbar (Messlängen-Effekt auf LER/LWR
+  unbekannt, aber NICHT der dominante Faktor — Faktor 25-160 ist
+  um Größenordnungen über dem Messlängen-Effekt von ~2-3×)
+
+LER vs LWR: strikt getrennt (Tabelle A = LWR, Tabelle B = LER).
+Kein LWR-Wert wurde als LER behandelt oder umgekehrt.
+
+============================================================
+12. BEKANNTE FEHLENDE PARAMETER (NOT_AVAILABLE)
+============================================================
+- SEM-Messlänge (PSI, PMMA)
+- ±-Unsicherheiten der PSI-Tabellenwerte
+- Entwicklungsprozess (Developer, Zeit, Temperatur) — beide Quellen
+- PAB/PEB-Bedingungen (PMMA: abweichend von Fallica, Details fehlen)
+- Absorbierte vs. einfallende Dosis (keine Absorptionsangaben)
+- PMMA-LER-±-Werte
+- Fig. 6(a)-Punkte (nicht digitalisiert — bewusst)
+
+============================================================
+13. MÖGLICHE URSACHEN DER ABWEICHUNGEN (kategorisiert)
+============================================================
+A) FEHLENDE PHYSIK (Hauptursache LER/LWR):
+   Entwicklungsstochastik fehlt im Modell (threshold development
+   deterministisch). Experimentelle LER/LWR (1-11 nm) wird von
+   der Entwicklung dominiert; der Simulator bildet nur den
+   Photonen-SE-Beitrag (~0.07 nm) ab. → Faktor 25-160.
+B) UNTERSCHIEDLICHE RESISTCHEMIE:
+   PMMA (Nicht-CAR), CAR/MTR-Vendors vs. idealisiertes Dill-Mack-
+   Modell.
+C) UNTERSCHIEDLICHE PROZESSBEDINGUNGEN:
+   PAB/PEB/Rinse/Entwicklung experimentell, Details unbekannt.
+D) UNTERSCHIEDLICHE METROLOGIE:
+   SEM/SuMMIT (messlängenabhängig, Pixelrauschen) vs. Modell-RMS.
+E) UNTERSCHIEDLICHE LER/LWR-DEFINITION:
+   "unbiased SEM-LWR" vs. Modell-RMS.
+F) UNTERSCHIEDLICHE MESSLÄNGE:
+   experimentell unbekannt; Simulation 1024 nm.
+G) FEHLENDE EXPERIMENTELLE PARAMETER:
+   siehe Abschnitt 12.
+H) MODELLGRENZE:
+   Die Observable "reine Photonen-SE-Kantenfluktuation" ist im
+   Experiment nicht isoliert messbar.
+I) EXPERIMENTELLE UNSICHERHEIT:
+   LER ~11 nm ohne ±; LWR ohne ±; Messlänge unbekannt.
+
+============================================================
+14. WISSENSCHAFTLICHE INTERPRETATION
+============================================================
+1. Der Faktor 25-160 in LER/LWR ist KEIN Kalibrierproblem: se_blur/
+   Dill/Threshold-Anpassung kann die Lücke nicht schließen, weil der
+   dominante physikalische Beitrag (Entwicklungsrauigkeit) im Modell
+   fehlt. Eine Kalibrierung JETZT wäre wissenschaftlich wertlos und
+   würde die fehlende Physik nur maskieren.
+2. Der Dosis-Faktor 3-8 ist plausibel erklärbar durch die
+   Dosisdefinition (absorption=1.0 → absorbierte Dosis) und
+   unterschiedliche Resistchemie/Geometrie — ohne Absorptionsdaten
+   der Experimente nicht auflösbar (NOT_AVAILABLE).
+3. Der CD-Dosis-TREND ist der einzige qualitativ konsistente
+   Befund: Beide zeigen monoton fallendes CD mit steigender Dosis
+   (gleiche funktionale Richtung).
+4. Die aktuelle Simulator-Observable (Photonen-SE-Rausch) ist
+   wissenschaftlich ehrlich: Sie quantifiziert NUR den stochastischen
+   Photonenbeitrag — ein sinnvoller Baustein, aber nicht die
+   vollständige LER/LWR.
+
+============================================================
+15. EMPFEHLUNG FÜR DEN NÄCHSTEN SCHRITT
+============================================================
+1. Entwicklungsstochastik ins Modell aufnehmen (stochastische
+   Entwicklung, z.B. Mack-Rate mit Poisson-Entwicklung oder
+   Gillette-Duan-Ansatz) — die PRIORITÄT 1 vor jedem weiteren
+   Experimentvergleich.
+2. Danach erneuter Vergleich: PSI-LWR (2.4-2.97 nm bei HP 13-14 nm)
+   als Zielbereich; PMMA-LER (~11 nm) als Nicht-CAR-Referenz.
+3. Dosisdefinition klären (absorption < 1.0 realitätsnah ODER
+   dokumentieren: dose_mj_cm2 = absorbierte Dosis).
+4. Fig. 6-Digitization (PSI LWR vs DtS) erst NACH Einführung der
+   Entwicklungsstochastik, mit dokumentierter Unsicherheit.
+5. Geometrie-angepasste Vergleichsläufe (period 28 nm für PSI-HP-14,
+   period 250 nm für PMMA) als SEPARATE Konfigurationen (kein Fit).
+
+============================================================
+16. STOP-CONDITIONS GEPRÜFT
+============================================================
+- quantitative Daten vorhanden? JA (PSI-Tabellen, PMMA-Text)
+- notwendige Parameter fehlen? JA (Messlänge, ±-Werte, Entwicklung,
+  Absorption) — dokumentiert, aber NICHT der entscheidende Grund
+- LER/LWR-Definitionen vergleichbar? NEIN (fehlende Entwicklungs-
+  stochastik macht die Observablen inäquivalent)
+- Vergleich nur durch unbelegte Annahmen möglich? JA — die Annahme
+  "Entwicklungsrauigkeit ist nicht dominant" wäre nötig und ist
+  WIDERLEGT (Faktor 25-160)
+→ STOP für quantitative Absolutvergleiche (korrekt eingehalten)
+→ Der CD-Trend-Vergleich (qualitativ) bleibt als einziger
+  VALID_WITH_CAVEATS-Befund
+
+============================================================
+17. CODE / GIT
+============================================================
+KEINE Codeänderung. KEIN Commit. KEIN Tag. KEIN Release.
+Working Tree unverändert (STEP-5.1/5.2B/5.2C-Prep-Änderungen
+stehen weiterhin uncommitted, wie freigegeben).
+Experimentarchive: unverändert (frozen).
+
+============================================================
+18. ABSCHLUSS-KLASSIFIKATION
+============================================================
+C) NOT COMPARABLE
+
+Begründung:
+1. Die Simulator-Observable (Photonen-SE-Kantenfluktuation,
+   LER=0.069 nm, LWR=0.097 nm) ist in den archivierten Experimenten
+   NICHT isoliert messbar — alle experimentellen LER/LWR
+   (2.4-2.97 nm PSI; ~11 nm PMMA) enthalten einen dominanten
+   Entwicklungsrauigkeits-Beitrag, den das Modell nicht abbildet.
+2. Ein Absolutvergleich wäre nur über die unbelegte Annahme möglich,
+   dass die Entwicklungsrauigkeit nicht dominant ist — diese Annahme
+   ist empirisch widerlegt (Faktor 25-160).
+3. Die Dosis-Skala ist wegen unterschiedlicher Dosisdefinition
+   (absorption=1.0 vs. einfallende Dosis) und fehlender
+   Absorptionsdaten nicht belastbar vergleichbar.
+4. Messlängen und ±-Unsicherheiten der Experimente sind
+   NOT_AVAILABLE.
+
+TEILBEFUND (nicht Teil der Klassifikation):
+Der CD-Dosis-TREND ist qualitativ konsistent
+(VALID_WITH_CAVEATS, nur Richtung, keine Absolutwerte).
+
+WICHTIG: "NOT COMPARABLE" ist hier das wissenschaftlich korrekte
+Ergebnis — es identifiziert eine Modellgrenze (fehlende
+Entwicklungsstochastik), die durch Kalibrierung nicht behebbar ist.
+Eine Kalibrierung vor Einführung der Entwicklungsstochastik würde
+die fehlende Physik maskieren und wäre wissenschaftlich irreführend.
+
+============================================================
+END STEP 5.2C
+============================================================

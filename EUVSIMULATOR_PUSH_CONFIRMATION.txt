@@ -1,0 +1,24 @@
+EUVSIMULATOR — PUSH RELEASE CONFIRMATION
+==========================================
+Date: 2026-08-31 11:29 CEST
+Repository: /Users/pi-server/Projekte/OpEnUV
+====================================================================
+
+Push erfolgreich abgeschlossen.
+
+  PUSH:       SUCCESS — 964139f..aef3d2d → origin/main
+  LOCAL HEAD: aef3d2d
+  REMOTE HEAD:aef3d2d
+  SYNC:       YES — HEAD == origin/main
+  WORKTREE:   Sauber (nur untracked Audit-Reports)
+  RELEASE:    AUSGELIEFERT
+
+Origin-Log (4 Commits seit rename):
+
+  aef3d2d  feat(stochastic): large-N LER estimator, development stoch., Option-C SE
+  1674481  fix(rcwa): correct TM eigenproblem and modal admittance
+  db8c7a4  release: freeze accepted circular SE-blur production state
+  964139f  rename: OpEnUV → euvsimulator (complete rename)
+
+====================================================================
+END OF CONFIRMATION

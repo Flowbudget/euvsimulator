@@ -1,0 +1,25 @@
+EUVSIMULATOR — PUSH CONFIRMATION #2
+======================================
+Date: 2026-08-31 12:28 CEST
+Repository: /Users/pi-server/Projekte/OpEnUV
+====================================================================
+
+PUSH:  SUCCESS  — aef3d2d..5452893 → origin/main
+LOCAL HEAD:  5452893
+REMOTE HEAD: 5452893
+SYNC:  YES — HEAD == origin/main
+WORKTREE:  Sauber (nur untracked Audit-Reports)
+RELEASE STATUS:  4 Commits seit rename auf origin/main
+
+Origin-Log (5 Commits):
+
+  5452893  fix(pipeline): average TE/TM after aerial (intensity) reconstruction
+  aef3d2d  feat(stochastic): large-N LER estimator, development stoch., Option-C SE
+  1674481  fix(rcwa): correct TM eigenproblem and modal admittance
+  db8c7a4  release: freeze accepted circular SE-blur production state
+  964139f  rename: OpEnUV → euvsimulator (complete rename)
+
+Alle 4 Commits auf origin/main ausgehärtet.
+
+====================================================================
+END OF CONFIRMATION

@@ -1,0 +1,352 @@
+============================================================
+STEP 5.2A.1 — SCIENTIFIC INTEGRATION GATE
+============================================================
+Datum: 2026-08-21
+Rolle: unabhängiger wissenschaftlicher + numerischer Reviewer
+Release: release-step-3.13 / db8c7a4718c5f4b54f130cfe0c27962e8cc3313d — IMMUTABLE
+KEINE Änderungen in diesem Schritt (READ-ONLY).
+
+============================================================
+GIT BASELINE
+============================================================
+HEAD: db8c7a4718c5f4b54f130cfe0c27962e8cc3313d
+git status: Clean (nur STEP-5.1 Änderungen: stochastic.py + test_ler_estimate.py)
+git diff HEAD: leer
+git diff --name-only: src/euvsimulator/resist/stochastic.py, tests/test_ler_estimate.py
+Release: release-step-3.13 (db8c7a4) — UNVERÄNDERT
+
+============================================================
+CRITICAL QUESTION 1 — ler_estimate() SEMANTICS
+============================================================
+
+IMPLEMENTATION INSPECTED:
+- LEREstimate (Z.583-649)
+- ler_estimate() (Z.679-815)
+- _autocorrelation() (Z.652-670)
+- _ler_rms() (Z.673-676)
+- extract_edges() (Z.368-504) — Basis-Funktion
+
+SIGNATURE:
+def ler_estimate(
+    developed,                           # 2D Tensor ODER Sequence[2D Tensor]
+    threshold: float = 0.3,
+    dx: float = 0.25,
+    edge: str = "both",
+    intensity = None,                    # einzelner Tensor ODER Sequence (gleichlange)
+    estimator: str = "large_n",          # "large_n" | "corr_corrected"
+    rho_truncation: int | None = None,
+    seed_count: int | None = None
+) -> LEREstimate
+
+FINDINGS:
+
+1. INPUT TYPE — "developed" akzeptiert:
+   - EINEN 2D-Tensor (shape H×W) → wird zu Liste [tensor] gewandelt
+   - ODER eine Sequence (list/tuple) von 2D-Tensoren gleicher Shape
+   → JEDER Eintrag = EINE unabhängige Realisierung (ein Seed)
+
+2. SEQUENCE SEMANTICS — Statistische Bedeutung:
+   Jeder Eintrag der Sequence = EINE unabhängige Realisierung (ein Seed)
+   Der Schätzer berechnet pro Realisierung EINEN LER-Wert (RMS über alle Zeilen dieses Feldes)
+   Dann: ler_mean = mean(ler_per_real) → SE/CI aus Seed-Varianz
+   Autokorrelation: gepoolt über ALLE Realisierungen (rho_pooled = mean(rho_i))
+
+3. AGGREGATION: Ein LER pro Feld → dann Mean über Seeds
+   KEINE Konkatenation der Zeilen, KEIN Mergen der Felder
+   N_rows = fields[0].shape[0] (aus erstem Feld, alle gleich)
+
+4. N_EFF Berechnung:
+   N_rows = fields[0].shape[0] (pro Realisierung identisch)
+   Autokorrelation rho(k) wird über alle Realisierungen GEPOOLT (mean)
+   L_int = 0.5 + Σ rho(k) für k=1..K_trunc (rho<0.05, cap 200)
+   N_eff = N_rows / (1 + 2·Σ(1-k/N)·rho(k))
+
+5. SE/CI: Aus Seed-Varianz (vals.std()/sqrt(n_seeds))
+   seed_count = len(vals) (Anzahl Realisierungen mit gültigen Kanten)
+   uncertainty_nm = SE, CI95 = mean ± 1.96·SE
+
+6. INTENSITY: Unterstützt gleiche Shape/Sequenz-Semantik wie developed
+
+5. EDGE SEMANTICS:
+   edge="both" (Default): RMS über left+right Deviations kombiniert (wie extract_ler default)
+   edge="left"/"right": Einzelkante
+   Production verwendet extract_ler mit Default edge="both" (Zeile 332-337)
+   → Wechsel zu edge="left" ÄNDERT die Observable!
+   Wissenschaftlich: "both" = kombinierte LER beider Kanten; "left" = nur linke Kante
+   → KEIN Äquivalent; muss bei "both" bleiben für Produktionsäquivalenz
+
+============================================================
+CRITICAL QUESTION 2 — N >= 2048 STOCHASTIC FIELD CONSTRUCTION
+============================================================
+
+CURRENT PIPELINE ARCHITECTURE (pipeline.py Z.311-338):
+1. dose_map: (G, G) — deterministisches Aerial-Feld (G=grid=256)
+2. Seed-Loop: für _ in range(stochastic_n_realisations)
+3. photon_deposition_shot_noise(dose_map, ...) → d_eff (G×G)
+   - Nutzt dose_map (256×256) als Basis
+   - Poisson sampling → n_events
+   - SE blur intern (gaussian_se_blur mit mode="circular")
+   - d_eff = dose * e_dep / e_bar
+4. dose_to_acid(d_eff, apply_blur=False) → acid_noisy (256×256)
+5. threshold_development → developed (256×256)
+5. extract_ler → LER pro Seed
+
+FIELD DIMENSIONS:
+- grid=256 → dose_map: (256, 256)
+- aerial_from_orders(grid=cfg.grid) → (G, G)
+- KEINE Unterstützung für rechteckige Felder (grid ist ein Integer)
+- dose_map.shape = (grid, grid) = (256, 256) — IMMER quadratisch
+
+A. KANN DIREKT 256×2048 BETRIEBEN WERDEN?
+   NEIN — grid ist ein einzelner Integer (SimulationConfig.grid=256).
+   aerial_from_orders(grid=cfg.grid) → (G, G) — IMMER quadratisch.
+   photon_deposition_shot_noise() erwartet dose_map mit shape (H, W) —
+   könnte theoretisch rechteckig sein, ABER:
+   - aerial_from_orders gibt nur (G, G) zurück
+   - SimulationConfig.grid ist ein einzelner Integer
+   - _cd_via_full_chem nutzt cfg.grid für beide Dimensionen
+
+B. MINIMALE KONFIGURATION FÜR 256×2048?
+   Würde erfordern:
+   - SimulationConfig: grid → (grid_x, grid_y) oder separater y_grid Parameter
+   - aerial_from_orders: rectangle support
+   - dose_map generation: rectangular
+   - PSF blur: bereits rechteckig-fähig (gaussian_se_blur supports arbitrary H,W)
+   → ERHEBLICHE Architektur-Änderung (physikalische Modell-Änderung)
+
+C. TILING MECHANISMUS (STEP 4.1 deterministic tiling):
+   aerial_4096 = torch.tile(aerial_256, (16, 4))  # 4×4 in y, 4×4 in x
+   Für deterministisches Feld: GÜLTIG (periodisch)
+   Für STOCHASTISCHE Realisierung: 
+   
+   NICHT GÜLTIG ALS UNABHÄNGIGE LARGE-N SAMPLE!
+   
+   Begründung:
+   - Deterministisches Feld: tile(aerial) → periodische Fortsetzung des EXAKT GLEICHEN Musters
+   - Stochastische Realisierung: tile(acid_noisy_256) → KOPIERT dieselbe stochastische Realisierung
+   - Autokorrelation: rho(k) würde PERFEKT PERIODISCH alle 256 Zeilen
+   - N_eff würde NICHT steigen (rho(256) ≈ 1) — KEIN zusätzlicher Information
+   - → "INVALID AS AN INDEPENDENT LARGE-N SAMPLE"
+   - Erkenntnis: Deterministisches Tiling = periodische Fortsetzung des deterministischen Feldes
+   - Stochastisches Tiling = Replikation desselben Rauschenmusters
+
+D. BESTEHENDE TILING-HILFEN?
+   KEINE für stochastische Felder. STEP 4.1 nutzte torch.tile() auf deterministischem Aerial-Feld.
+   KEINE stochastische Tiling-Funktion im Codebase.
+
+E. VALIDER WEG ZU N >= 2048:
+   Option 1: Aerial-Feld tiling (deterministisch) → DANN stochastische Realisierung AUF dem großen Feld
+   → aerial_large = tile(aerial_256, (16, 4))  # 1024×1024
+   → Dann photon_deposition_shot_noise auf GROSSEM Feld
+   → Aber: dose_map = aerial * dose → würde auf 1024×1024 gehen
+   → photon_deposition_shot_noise unterstützt beliebige (H, W) — WÜRDE funktionieren!
+   
+   ABER: Das ändert die Physik (größeres Feld, gleiche PSF, andere Randbedingungen)
+   → Wissenschaftlich: Größeres Feld = andere Realisierung, nicht "mehr gleiche Daten"
+   
+   Wissenschaftlich korrekt: N muss durch ECHTE statistische Unabhängigkeit wachsen,
+   nicht durch Tiling derselben Realisierung.
+
+============================================================
+CRITICAL QUESTION 3 — SEED / LER AGGREGATION HIERARCHY
+============================================================
+
+CURRENT PRODUCTION:
+  Seed-Loop (stochastic_n_realisations)
+      ↓
+  extract_ler() pro Seed
+      ↓
+  LER pro Seed
+      ↓
+  mean über Seeds
+
+ler_estimate() IMPLEMENTATION:
+  Sequence von Feldern (pro Seed eines Feldes)
+      ↓
+  EIN LER pro Feld (RMS über ALLE Zeilen des Feldes)
+      ↓
+  Mean über Seeds + SE/CI aus Seed-Varianz
+      ↓
+  Autokorrelation gepoolt über ALLE Realisierungen
+
+OPTION A (Empfohlen):
+  1 großes stochastisches Feld pro Seed (z.B. 256×2048)
+      ↓
+  ler_estimate() pro Seed (EIN Feld pro Seed)
+      ↓
+  LER pro Seed + N_eff pro Seed
+      ↓
+  Aggregate über Seeds (Mean, SE, CI)
+
+OPTION B (FALSCH):
+  Mehrere kleine Felder pro Seed kombinieren
+  → N_eff würde künstlich aufgebläht
+
+OPTION C (FALSCH):
+  Ein Seed, ein riesiges Feld (256×2048)
+  → KEINE Seed-Varianz → KEINE Unsicherheitsschätzung
+  → Nur EINE Realisierung → keine statistische Validierung
+
+GRUND FÜR OPTION A:
+- Der Schätzer ler_estimate() erwartet EINE Realisierung = EIN Feld
+- N_eff wird AUS der Autokorrelation DIESES Feldes berechnet
+- Seed-Varianz liefert die Unsicherheit des MITTELWERTS
+- Hierarchie: Spatial correlation (within field) → N_eff
+                        Seed variation (between fields) → Uncertainty
+- Das ist die einzig statistisch korrekte Hierarchie
+
+============================================================
+SPECIAL CHECK — N vs SEED COUNT
+============================================================
+
+stochastic_n_realisations (Config, Default 1):
+- Steuert Anzahl der unabhängigen Seeds (Seed-Loop in pipeline)
+- Jedes Seed = EINE unabhängige Realisierung
+- KEINE Beziehung zu N_rows (Feldhöhe)
+
+N_rows (Feldhöhe):
+- Bestimmt durch grid (256) = Feldhöhe in Pixeln
+- Steuert N_eff via Autokorrelation
+
+VERWECHSLUNGSGEFAHR:
+- In STEP 5.2A Inventory wurde N=256 mit Seeds verwechselt
+- N=256 ist FELDHÖHE (grid), nicht Seed-Anzahl
+- Standard stochastic_n_realisations = 1
+- → Production LER basiert auf 1 Seed, 256 Zeilen (N_eff≈4)
+
+Für Large-N:
+- Braucht GRÖßERES FELD (y > 256) für höheres N_eff
+- NICHT mehr Seeds (die geben nur Unsicherheit des Mittels)
+- N_eff wächst nur mit Feldlänge (und Korrelationslänge)
+
+============================================================
+TILING ANALYSIS — DETERMINISTIC vs STOCHASTIC
+============================================================
+
+DETERMINISTISCHES TILING (STEP 4.1):
+  aerial_large = tile(aerial_256, (16, 4))
+  → Gültig: deterministisches Feld ist periodisch
+  → Blur(aerial_large) == tile(Blur(aerial_256))  (bitweise)
+
+STOCHASTISCHES TILING:
+  acid_large = tile(acid_256, (16, 4))
+  → Rauschen wird exakt kopiert (16× periodisch in y)
+  → rho(256) = 1.0, rho(512) = 1.0, ...
+  → N_eff = N / (1 + 2·Σ(1-k/N)·rho(k)) ≈ N / (1 + 2·16·1) ≈ 0
+  → KEINE zusätzlichen unabhängigen Samples
+
+STOCHASTISCHE GENERIERUNG AUF GROSSFELD:
+  aerial_large = tile(aerial_256, (16, 4))  # deterministisch tiling
+  dose_map_large = aerial_large * dose
+  acid_large = photon_deposition_shot_noise(dose_map_large, ...)
+  → JEDE 256er-Periode hat EIGENES Rauschen (Poisson neu)
+  → Rauschen ist NICHT periodisch (außer durch Blur am Rand)
+  → N_eff wächst mit echter Feldlänge
+
+FAZIT: Tiling des DETERMINISTISCHEN Aerial-Feldes VOR dem Rauschen = GÜLTIG
+        Tiling des STOCHASTISCHEN Feldes = UNGÜLTIG
+
+============================================================
+EDGE SEMANTICS
+============================================================
+
+extract_ler() DEFAULT: edge="both"
+  → RMS über linke + rechte Kantenabweichungen KOMBINIERT
+  → Production: extract_ler(..., intensity=acid_noisy) OHNE edge-Parameter
+  → Default: edge="both"
+
+ler_estimate() DEFAULT: edge="both"
+  → Kompatibel
+
+ABER: Previous audit schlug edge="left" vor → NICHT ÄQUIVALENT
+  → edge="left" = nur linke Kante
+  → edge="both" = RMS(left_dev, right_dev) — PRODUKTIONS-Observable
+  → MÜSSEN "both" verwenden für Produktionsäquivalenz
+
+============================================================
+SCIENTIFIC INTEGRATION ARCHITECTURE
+============================================================
+
+VALIDER WEG (Minimal, Wissenschaftlich korrekt):
+
+1. Feld-Erweiterung VOR stochastischer Generierung:
+   aerial_large = tile(aerial_256, (16, 4))  # 1024×1024
+   dose_map_large = aerial_large * dose
+   → aerial_large: 1024×1024 (periodisch, 4×4 Perioden)
+   → Größeres Feld = MEHR Zeilen für N_eff
+
+2. Stochastische Generierung auf GROSSEM Feld:
+   photon_deposition_shot_noise(dose_map_large, ...)  # 1024×1024
+   → JEDE Periode erhält EIGENES Rauschen (Poisson neu)
+   → Keine künstliche Periodizität im Rauschen
+
+3. Seed-Loop auf GROSSEM Feld:
+   für jedes Seed: acid_noisy_large (1024×1024)
+   → ler_estimate(dev_large, estimator="large_n", edge="both")
+   → n_rows = 1024, n_eff ≈ 64 (validiert in STEP 4.3)
+
+3. Aggregation über Seeds (Mean, SE, CI)
+
+KOSTEN: ~16× Rechenzeit (Feldfläche 16×) — akzeptabel für LER
+Alternative: Config-Option "stochastic_grid_y" für y-Dimension
+
+============================================================
+REJECTED ALTERNATIVES
+============================================================
+
+❌ Deterministisches Tiling NACH stochastischer Generierung
+   → Kopiert Rauschen → N_eff inflationär
+
+❌ edge="left" für Bequemlichkeit
+   → Ändert Observable (nur linke Kante vs. beide)
+
+❌ stochastic_n_realisations als N_rows Ersatz
+   → Seed ≠ Zeile; Seed gibt Unsicherheit, N gibt N_eff
+
+❌ Ein Seed, riesiges Feld
+   → Keine Seed-Varianz → keine Unsicherheit
+
+❌ Legacy extract_ler stillschweigend ersetzen
+   → Breaking API Change; Legacy muss erhalten bleiben
+
+============================================================
+REMAINING UNCERTAINTIES
+============================================================
+
+1. Grid-Konfiguration: Wie soll y-Dimension konfiguriert werden?
+   - Option A: grid=(x, y) Tuple in SimulationConfig
+   - Option B: Separates stochastic_grid_y Feld in Config
+   - Option C: Automatic tile-Faktor in Config (stochastic_tile_factor=4)
+
+2. Seed-Handling bei Large-N: 
+   Aktuell: rng = Generator; rng.manual_seed(cfg.stochastic_seed) VOR Loop
+   Dann: n_ev = poisson(nb, generator=rng) → rng state ändert sich pro Iteration
+   → Korrekt: Jedes Seed erhält andere RNG-State → unabhängige Realisierungen
+   → Bei Large-N: Gleicher Mechanismus, nur größeres Feld
+
+3. Performance: 16× Feldfläche = ~16× Rechenzeit pro Seed
+   Für stochastic_n_realisations=1: ok
+   Für stochastic_n_realisations=10: 160× Basiskosten → ggf. reduciert N
+
+============================================================
+FINAL VERDICT
+============================================================
+
+GO — Alle kritischen Punkte geklärt:
+
+[✓] ler_estimate() Semantics: Unambiguös (Sequence=Seeds, 1 LER/Seed)
+[✓] N_rows: Wissenschaftlich definiert (Feldhöhe pro Realisierung)
+[✓] N_eff: Nicht künstlich aufgebläht (empirisch aus rho)
+[✓] Valid Large-N: Aerial tiling VOR stochastischer Generierung (nicht Tiling des Rauschens)
+[✓] Deterministisches Tiling ≠ Stochastisches Tiling — klar getrennt
+[✓] Seed hierarchy: OPTION A (1 Feld/Seed → Seed-Varianz für SE)
+[✓] Edge semantics: "both" (kompatibel mit Legacy)
+[✓] Keine Physical-Model Änderungen (nur Feldgröße vor Rauschen)
+[✓] Minimal Architecture: Feld tiling VOR Rauschen, dann ler_estimate()
+
+============================================================
+FINAL VERDICT: GO
+============================================================
+
+STOP — Audit complete. Ready for STEP 5.2B implementation.
+============================================================

@@ -1,0 +1,208 @@
+============================================================
+STEP 5.2C PREPARATION / AUDIT CLEANUP — IMPLEMENTATION REPORT
+============================================================
+Datum: 2026-08-21
+Modell: DeepSeek V4 Flash
+Release: release-step-3.13 / db8c7a4718c5f4b54f130cfe0c27962e8cc3313d — IMMUTABLE
+KEIN Commit, KEIN Tag, KEINE Experimentdaten-Kalibrierung.
+
+============================================================
+1. GEÄNDERTE DATEIEN
+============================================================
+a) src/euvsimulator/pipeline.py:
+   - _cd_via_full_chem(): tile(grid_y//256) + 256-Vielfachheits-
+     ValueError ERSETZT durch repeat+trim:
+         repetitions = ceil(grid_y / 256)
+         stoch_dose = torch.tile(dose_map, (repetitions, 1))[:grid_y]
+     → beliebiges positives grid_y (256, 300, 1024, 2048, 3000, ...)
+   - Kommentarblock REFERENCE CONFIGURATION FOR SCIENTIFIC LER
+     VALIDATION bei den stochastic_ler-Feldern (Teil G)
+
+b) tests/test_ler_production_integration.py (+11 Tests):
+   - test_arbitrary_n_rows (parametrisiert: 256/300/1024/2048/3000/
+     4096/6144/61440)
+   - test_aerial_y_invariance (Teil B)
+   - test_stochastic_integrity_3000 (Teil D)
+   - test_deterministic_observables_unchanged_3000 (Teil F)
+   - test_no_artificial_upper_limit: 3000-ValueError entfernt
+     (3000 ist jetzt gültig); nur grid_y=0/Estimator-Validierung
+   - test_dose_scaling_consistent: Zielbereich [-0.85, -0.65]
+     statt |Δ legacy| ≤ 0.25 (Teil H); slope_legacy entfernt
+
+============================================================
+2. BEGRÜNDUNG DER ÄNDERUNGEN
+============================================================
+Audit 5.2B.1 (Q7): Die 256-Vielfachheits-Anforderung ist KEINE
+physikalische Notwendigkeit — das Aerial-Feld ist exakt y-invariant
+(max|aerial[y+1]-aerial[y]| = 0, bitweise). Die Einschränkung stammte
+ausschließlich aus der tile-Konstruktion (ganzzahliger Faktor).
+
+Neue Konstruktion (repeat + trim): Für jedes N wird der
+deterministische dose_map auf ceil(N/256) Kacheln erweitert und auf
+N Zeilen abgeschnitten. Mathematisch gerechtfertigt, weil alle Zeilen
+bitweise identisch sind → der Y-circular-Blur-Wrap verbindet für
+JEDES N konsistent identische Zeilen (kein künstlicher Rand).
+
+Das Rauschen wird NIE getiled/wiederholt: Poisson wird auf dem
+erweiterten deterministischen Feld generiert (jede Zeile eigenes
+unabhängiges Rauschen).
+
+============================================================
+3. VORHER/NACHHER SEMANTIK grid_y
+============================================================
+VORHER:  grid_y % 256 == 0 erforderlich, sonst ValueError.
+         Nur Vielfache von 256 (2048, 4096, 6144, ...).
+NACHHER: Jedes positive grid_y (256, 300, 1024, 3000, ...).
+         Kein Clamping, kein Padding, kein Fallback auf 256.
+         grid_y=0 → ValueError (Validierung, transparent).
+         Keine Obergrenze (61440 verifiziert).
+
+============================================================
+4. TESTERGEBNISSE
+============================================================
+Fokussiert: tests/test_ler_production_integration.py → 32/32 PASS
+VOLLE REGRESSION: pytest tests/ → 603/603 PASS (592 + 11 neue)
+
+Neue Tests im Detail:
+- test_arbitrary_n_rows[256/300/1024/2048/3000/4096/6144/61440]:
+  n_rows == N, LER > 0, n_eff > 0 — KEINE stille N-Änderung
+- test_aerial_y_invariance: max|diff| == 0.0 (exakt)
+- test_stochastic_integrity_3000:
+  * same seed → LER/LWR bitweise identisch, n_rows==3000
+  * diff seed → Poisson-Diff-Rate > 0.05
+  * rho(256) < 0.3 (keine künstliche 256-Periodizität)
+  * acid-Blöcke 0-255 vs 256-511: Diff-Rate > 0.5 (keine
+    Rauschblock-Wiederholung; Test auf kontinuierlichem acid-Feld —
+    das binarisierte dev-Feld ist dafür ungeeignet, weil nur
+    Pixel an der Kante rauschabhängig kippen)
+- test_deterministic_observables_unchanged_3000: CD/NILS bitweise
+  identisch zum deterministischen Pfad
+
+============================================================
+5. PERFORMANCE (1 Realisation, MPS, inkl. Aerial ~1 s)
+============================================================
+  N= 3000:   768,000 px   LER=0.12393  n_eff= 46.6   0.19 s
+  N= 4096: 1,048,576 px   LER=0.12051  n_eff= 60.6   0.33 s
+  N=61440: 15,728,640 px  LER=0.12436  n_eff=876.7   6.79 s
+
+- Lineare Skalierung, keine neue O(N²)-Operation
+- Keine künstliche Obergrenze hinzugefügt
+- Charakteristik unverändert gegenüber STEP 5.2B
+
+============================================================
+6. LEGACY-GOLDEN-CHECK (Teil E)
+============================================================
+stochastic_ler_estimator="legacy" (se_blur=5, seed=42, 1 Realisation):
+  LER = 0.0925884545  (erwartet: 0.0925884545)  ✅ EXAKT
+  LWR = 0.1459884644  (erwartet: 0.1459884644)  ✅ EXAKT
+Der Legacy-Pfad ist unverändert (stoch_dose = dose_map).
+
+============================================================
+7. ARBITRARY-N-ERGEBNISSE (Teil C)
+============================================================
+N=256   → n_rows=256   (1 Kachel, trim wirkt nicht)
+N=300   → n_rows=300   (2 Kacheln, auf 300 getrimmt)
+N=1024  → n_rows=1024
+N=2048  → n_rows=2048
+N=3000  → n_rows=3000  ✅ (Kern-Anforderung)
+N=4096  → n_rows=4096  (Produktions-Default)
+N=6144  → n_rows=6144
+N=61440 → n_rows=61440
+Alle ohne Clamping/Padding/Fallback; LER>0, n_eff>0.
+
+============================================================
+8. N=3000 ERGEBNIS (Teil D)
+============================================================
+- Same seed: LER bitweise identisch (Determinismus intakt)
+- Different seed: Poisson-Diff-Rate 24 % (unabhängige Realisationen)
+- rho(256) ≈ 0.03 (keine künstliche 256-Periodizität)
+- acid-Blöcke verschieden (keine Rauschblock-Wiederholung)
+- n_eff = 46.6 (konsistent mit N/(2·L_int) ≈ 3000/64)
+- CD/NILS bitweise identisch zum deterministischen Pfad
+
+============================================================
+9. N=61440 ERGEBNIS (Teil C/J)
+============================================================
+- n_rows = 61440, LER = 0.12436, n_eff = 876.7
+- 15.7M px in 6.79 s (linear)
+- Konvergenz: 61440 vs 4096 (0.12436 vs 0.12051) — Restdifferenz
+  3.2 % im 1-Seed-Vergleich (Schätzrauschen; 10-Seed-Mittel in
+  5.2A.2: 0.0686→0.0707-Bereich konsistent)
+
+============================================================
+10. DOSE-SLOPE (Teil H)
+============================================================
+large_n slope = -0.7848 (3 Seeds, Dosen 20/40/80)
+Zielbereich [-0.85, -0.65] → ✅ PASS
+- Etablierter Bereich: -0.75 ± 0.05 (STEP 5.1)
+- Legacy-Slope ist KEINE Referenz (dosisabhängiger N_eff-Bias)
+- Kein Parameter-Fit an experimentelle Daten (nur Plausibilität)
+
+============================================================
+11. REFERENZKONFIGURATION (Teil G)
+============================================================
+In pipeline.py dokumentiert:
+
+  REFERENCE CONFIGURATION FOR SCIENTIFIC LER VALIDATION:
+    se_blur_nm               = 5.0
+    dose_mj_cm2              = 40.0
+    stochastic_ler_grid_y    = 4096
+    stochastic_ler_estimator = "large_n"
+
+  Note: the software default se_blur_nm=0.0 is technically valid
+  (white noise -> N_eff = N) but is NOT the scientific reference.
+  The reference configuration was used for the internal LER audits
+  (N_eff ~= 59, LER ~= 0.07 nm at 40 mJ/cm2); it is a reference for
+  internal scientific validation, NOT yet experimentally validated.
+
+Software-Default (se_blur=0) wurde NICHT geändert.
+
+============================================================
+12. BESTÄTIGUNG
+============================================================
+"No experimental data used for calibration."
+
+Die archivierten Quellen unter references/euv_experimental/ wurden
+in diesem Schritt NICHT verwendet (kein Fit, keine Parameter-
+anpassung, kein Vergleich). Sie bleiben frozen für einen späteren
+expliziten Validation-Step.
+
+============================================================
+13. VERBLEIBENDE UNSICHERHEITEN
+============================================================
+1. y-Invarianz-Annahme: gilt für das aktuelle Aerial-Modell
+   (1D-Maske, dünnfilm-analytisch). Bei Einführung eines echten
+   2D-Masken-/RCWA-Feldes (nicht y-invariant) muss die beliebige-N-
+   Konstruktion erneut geprüft werden (test_aerial_y_invariance
+   schlägt dann an — beabsichtigt).
+2. N=3000 vs N=4096: n_eff=46.6 vs 60.6 — für N_eff≥30-Ziel sind
+   beide ausreichend; die Referenz bleibt 4096 (Marge 2×).
+3. 1-Seed-LER-Vergleiche (z.B. 61440 vs 4096: 3.2 %) sind
+   Schätzrauschen — Konvergenzaussagen über Seeds mitteln.
+4. Dose-Slope-Test mit 3 Seeds: Plausibilitätsbereich [-0.85,-0.65]
+   hat ausreichende Marge (gemessen -0.785); kein Parameter-Tuning.
+5. Experimentelle Validierung: weiterhin vollständig offen
+   (bewusst, siehe Archiv).
+
+============================================================
+STOP-BEDINGUNGEN GEPRÜFT (keine ausgelöst)
+============================================================
+1. Aerial nicht y-invariant? NEIN (exakt invariant, Test grün)
+2. Beliebiges N verändert Physik? NEIN (CD/NILS bitweise)
+3. Legacy-Golden geändert? NEIN (exakt erhalten)
+4. RNG-Semantik geändert? NEIN (same-seed bitwise)
+5. CD/NILS geändert? NEIN
+6. Versteckter 256-Fallback? NEIN
+7. Neues künstliches N-Limit? NEIN
+8. Dose-Slope nur per Parameteränderung erreichbar? NEIN
+   (keine Parameteränderung vorgenommen)
+
+============================================================
+FINAL: STEP 5.2C PREPARATION COMPLETE
+============================================================
+TXT:  /Users/pi-server/Projekte/OpEnUV/STEP_5.2C_PREPARATION_REPORT.txt
+TESTS: 603/603 PASS (32 fokussierte + volle Regression)
+LEGACY-GOLDEN: exakt erhalten
+VERDICT: GO für STEP 5.2C (keine Blocker)
+KEIN Commit, KEIN Tag, KEIN Release.
+============================================================

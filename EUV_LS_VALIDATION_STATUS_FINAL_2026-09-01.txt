@@ -1,0 +1,305 @@
+================================================================================
+ABSCHLUSS  L/S-IMAGING-BENCHMARK + VALIDIERUNGSSTATUS
+euvsimulator
+2026-09-01
+NO CODE CHANGES. Kein Feature. Keine Grafikablesung. Keine erfundenen Zahlen.
+================================================================================
+
+1. FINAL VERDICT
+--------------------------------------------------------------------------------
+Der 64 nm L/S-Fall (NA 0.33, conventional, sigma 0.8, thin-mask,
+aerial_threshold) ist intern reproduzierbar und nach der Mack-NILS-
+Korrektur softwareseitig regressionssicher.
+
+Er ist NICHT durch eine unabhängige öffentliche Primärquelle
+numerisch validiert.
+
+NILS = 4.9685 ist ein reproduzierbarer, intern getesteter
+Simulatorwert, aber kein extern validierter Literaturwert.
+
+Optical CD = 27.50 nm ist intern reproduziert, nicht extern
+numerisch validiert.
+
+STOP. Kein Code ändern.
+
+
+2. VALIDATION MATRIX
+--------------------------------------------------------------------------------
+Gegenstand                         Kategorie
+--------------------------------------------------------------
+Wellenlänge 13.5 nm                A  numerisch direkt validiert
+                                   (CXRO n,k + TMM vs CXRO-Rechner
+                                   am gematchten Si/Mo-Stack;
+                                   Imaging-Endprodukt davon unabhängig)
+
+NA 0.33                            C  nur indirekt gestützt
+                                   (Standard Low-NA EUV-Scannerklasse
+                                   in gelesener Literatur genannt;
+                                   kein Gate-Datensatz mit unserer
+                                   übrigen Geometrie)
+
+sigma 0.8 conventional             D  nicht validiert
+                                   (kein OA-L/S-Datensatz mit
+                                   conventional + sigma=0.8 + 64 nm
+                                   + NILS/Optical-CD)
+
+64 nm pitch / 32 nm line           D  nicht validiert
+                                   (kein DIRECT MATCH)
+
+Optical CD = 27.50 nm              D  nicht validiert
+                                   (intern reproduziert; keine
+                                   vergleichbare Optical-CD in
+                                   gelesener Literatur)
+
+NILS = 4.9685                      D  nicht validiert
+                                   (kein DIRECT MATCH, keine
+                                   CONDITIONAL-Zahl)
+
+Mack-Definition                    B  qualitativ/physikalisch gestützt
+                                   (Kazazis 2024 Eq. 2: NILS =
+                                   CD * d(ln I)/dx an einer Kante;
+                                   Kante dort designed pattern,
+                                   nicht printed threshold)
+
+Threshold-edge-Auswertung          E  nicht sinnvoll vergleichbar
+                                   mit designed-edge-NILS
+                                   (Kazazis) bzw. resist-edge-NILS
+                                   (Tsubaki)
+
+Zwei-Kanten-Mittelwert             D  nicht validiert
+                                   (Literatur spezifiziert das
+                                   für unseren Fall nicht)
+
+interpolierte Threshold-Kante      A  numerisch direkt validiert
+                                   NUR als Software/Analytik
+                                   (Trapez-Tests). Nicht als
+                                   Literatur-Physik.
+
+
+Kategorien:
+  A = numerisch direkt validiert
+  B = qualitativ/physikalisch gestützt
+  C = nur indirekt gestützt
+  D = nicht validiert
+  E = nicht sinnvoll vergleichbar
+
+Keine "typischen NILS 2-5"-Werte in dieser Matrix.
+
+
+3. LITERATURE STATUS
+--------------------------------------------------------------------------------
+Quelle                                          Kennzeichnung
+----------------------------------------------------------------------
+Erdmann et al. 2019
+DOI 10.1117/12.2515678                          NO DATA
+PAYWALL. OpenAlex: is_oa=false,
+kein Repository-Volltext. Abstract leer.
+Trace-back der 27 Zitationen: keine
+reproduzierte Zahl aus A.
+
+Evanschitzky & Erdmann 2017
+DOI 10.1117/1.jmm.16.4.041005                   NO DATA
+PAYWALL. OpenAlex: is_oa=false.
+Trace-back der 22 Zitationen: keine
+reproduzierte Zahl aus B.
+
+Erdmann et al. AOT 2017
+DOI 10.1515/aot-2017-0019                       NEAR MATCH
+SAME GROUP / RELATED.
+NA=0.33 EXACT, lambda=13.5 EXACT.
+sigma circular 0.7 (nicht 0.8),
+target 22 nm (nicht 32),
+pitch 100 nm wafer (88/400 mask),
+3D-Maske vs thin-mask,
+NILS nur in Figuren
+(GRAPHIC ONLY — nicht extrahiert).
+NOT COMPARABLE als numerisches Gate.
+
+Tsubaki et al. 2013
+JPST 26, 599                                    NOT COMPARABLE
+Quantitative NILS im Text (2.8-2.9),
+aber Kontaktloecher, 0.25/0.33 NA,
+sigma 0.81/0.90, NILS an der
+Resistkante. Kein 32/64 L/S.
+
+Sekiguchi 2011
+DOI 10.5772/23533                               QUALITATIVE SUPPORT
+13.5 nm / NA 0.3 / sigma 0.8 / 32 nm L&S.
+Keine NILS, keine Optical-CD.
+"resolved to 32 nm" ist keine CD=32 nm
+und keine CD=27.50 nm.
+
+Kazazis et al. 2024
+DOI 10.1038/s43586-024-00361-z                  QUALITATIVE SUPPORT
+Mack-Form der NILS-Definition (Eq. 2)
+an der designed-pattern-Kante.
+Kein 64 nm / 0.33 / sigma 0.8 Datensatz.
+NOT COMPARABLE fuer den Zahlenwert.
+
+Keine der Quellen ist DIRECT MATCH.
+Keine ist CONDITIONAL MATCH mit einer
+haltbaren NILS- oder Optical-CD-Zahl.
+Keine Quelle ist numerische Bestaetigung
+von 4.9685.
+
+
+4. SOFTWARE VS PHYSICS VALIDATION
+--------------------------------------------------------------------------------
+Drei getrennte Fragen:
+
+(1) Ist die NILS-Implementierung mathematisch konsistent mit der
+    implementierten Mack-Definition?
+
+    JA, als Software.
+
+    Belege: analytisches Trapez mit geschlossener Formel
+    NILS = CD * |slope| / I_edge; Symmetrie; Threshold-Verschiebung;
+    Asymmetrie nicht am globalen argmax(|dI/dx|);
+    Pipeline-CD unveraendert 27.50 nm;
+    pytest 756 -> 761, 0 Regressionen.
+
+    Unit-Tests ersetzen keine Literaturvalidierung.
+
+(2) Ist NILS = 4.9685 durch unabhängige Literatur numerisch validiert?
+
+    NEIN.
+
+    Es gibt aktuell keine belastbare öffentliche Primärquelle,
+    die unter ausreichend gleichen Imaging-Bedingungen eine
+    direkt vergleichbare NILS-Zahl liefert.
+
+(3) Ist der Aerial-Image-/Masken-Stack physikalisch realistisch
+    fuer 13.5 nm / NA 0.33 / sigma 0.8 L/S?
+
+    NUR TEILWEISE / NICHT VOLLSTAENDIG EXTERN VALIDIERT.
+
+    Gestuetzt: lambda 13.5 (CXRO/TMM Gate A/B der vorherigen
+    Physikvalidierung). NA 0.33 als Geraeteklasse (Low-NA EUV)
+    in gelesener Literatur erwaehnt.
+    Nicht extern belegt fuer diesen Fall: conventional sigma 0.8,
+    thin-mask Fourier vs 3D, aerial_threshold 0.5*mean,
+    Optical CD 27.50, NILS 4.9685.
+
+
+5. KNOWN LIMITATIONS
+--------------------------------------------------------------------------------
+- Optical CD (pixel, 27.50 nm) und NILS-CD (interpoliert, ~27.62 nm)
+  sind absichtlich verschieden. Nicht vereinheitlichen.
+- Simulator-NILS an gedruckter Threshold-Kante; Kazazis-NILS an
+  designed edge; Tsubaki-NILS an Resistkante.
+  NOT DIRECTLY COMPARABLE.
+- Thin-mask Default; RCWA/3D-Maskeneffekt (Ratio ~0.76) ist ein
+  anderer Pfad und hier nicht das Gate.
+- Erdmann 2019 / JM3 041005 koennen den fehlenden Datensatz
+  enthalten. Das ist unbekannt, nicht widerlegt.
+  Trace-back 2026-09-01: NO TRACE in OA-Zitaten.
+- 32 nm L&S bei Sekiguchi nicht als Pitch=64 nm deklariert
+  (UNKNOWN, nicht EXACT).
+- Keine Resist-CD, Mask-CD, Optical-CD gleichgesetzt.
+
+
+6. FINAL BENCHMARK STATEMENT
+--------------------------------------------------------------------------------
+Fixierter Fall (working tree, 2026-09-01):
+
+  wavelength       = 13.5 nm
+  NA               = 0.33
+  illumination     = conventional
+  sigma            = 0.8
+  pitch            = 64 nm
+  mask CD          = 32 nm
+  absorber         = Ta
+  absorber height  = ~60 nm
+  mask model       = thin-mask Fourier
+  resist model     = aerial_threshold
+  dose             = 20
+  threshold        = 0.5 * mean(aerial)
+  Optical CD       = 27.50 nm
+  NILS             = 4.9685
+
+Software:
+  vorher 756 passed, nachher 761 passed, Regressionen 0.
+  NILS-Tests: Trapez, Symmetrie, Threshold-Shift, Asymmetrie,
+  Pipeline-CD unveraendert, Blur senkt NILS.
+
+Physik:
+  NILS = 4.9685 ist aktuell ein reproduzierbarer,
+  intern getesteter Simulatorwert, aber kein extern validierter
+  Literaturwert.
+
+  Es gibt aktuell keine belastbare öffentliche Primärquelle,
+  die unter ausreichend gleichen Imaging-Bedingungen eine
+  direkt vergleichbare NILS-Zahl liefert.
+
+  CD = 27.50 nm: intern reproduziert/regression-getestet,
+  nicht extern numerisch validiert.
+  Nicht aus "32 nm resolved" auf 32 nm Optical-CD schliessen.
+
+Nicht behauptet:
+  4.9685 sei typisch.
+  4.9685 sei realistisch, weil NILS oft 2-5 sei.
+  4.9685 stimme ungefaehr mit Literatur ueberein.
+
+
+7. NEXT ACTION
+--------------------------------------------------------------------------------
+STOP / kein Code ändern.
+
+Begruendung:
+  Der oeffentliche Literaturraum liefert derzeit keinen belastbaren
+  quantitativen Gate-Datensatz fuer diesen Benchmark.
+
+Einziger spaeterer Validierungsschritt mit Erkenntnisgewinn:
+  Volltext Erdmann 2019 (10.1117/12.2515678) und/oder
+  JM3 16.4.041005 (10.1117/1.jmm.16.4.041005),
+  oder ein experimenteller Datensatz mit expliziter Imaging-Metrik
+  und vollstaendigen Parametern.
+
+Kein Feature aus dieser Recherche ableiten.
+
+
+================================================================================
+8. FROZEN REFERENCE CASE  (verifiziert 2026-09-01, kein Code)
+================================================================================
+
+Status: FROZEN REFERENCE CASE
+        SOFTWARE-REPRODUCIBLE
+        PHYSICALLY PARTIALLY SUPPORTED
+        EXTERNALLY NUMERICALLY UNVALIDATED
+
+Importpfad = working tree:
+  abbe.py     SHA256 prefix e3614f5a057d7d2f
+  pipeline.py SHA256 prefix eb28c3e1669c88a8
+  git HEAD    0861872  (working tree NICHT gleich HEAD)
+
+SOFTWARE VALIDATION
+  Mack-NILS an der gedruckten Threshold-Kante.
+  pytest 761 passed, 0 regressions (erneut 2026-09-01).
+  NILS-Tests: Trapez, Symmetrie, Threshold-Shift, Asymmetrie,
+  Pipeline-CD unveraendert, Blur senkt NILS.
+
+PHYSICS VALIDATION
+  teilweise gestuetzt (lambda 13.5 CXRO/TMM), aber kein externer
+  numerischer NILS-Gate-Datensatz.
+
+LITERATURE VALIDATION
+  kein DIRECT MATCH.
+
+NILS = 4.9685 is a reproducible, internally tested simulator value,
+but not an externally validated literature value.
+
+Optical CD = 27.50 nm is internally reproduced/regression-tested,
+but not externally numerically validated.
+
+Working-tree Trennung (dieser Freeze aendert nichts):
+  A) NILS-Task: nils() in abbe.py, zwei nils()-Aufrufe in pipeline.py,
+     tests/test_nils_mack.py, Mack-Referenz in test_reference_nils.py
+  B) vorher dirty, NICHT Teil dieses Freeze:
+     TCC / illumination shapes / Defocus in abbe.py,
+     RCWA / TMM / geometry, LER-Golden-Tests.
+
+STOP.
+
+================================================================================
+ENDE
+================================================================================

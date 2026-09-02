@@ -1,0 +1,89 @@
+================================================================================
+BENCHMARK FREEZE  NILS / L-S REFERENZFALL
+euvsimulator  2026-09-01
+KEINE Physik. KEINE Literatur. KEIN Feature.
+================================================================================
+
+WORKING-TREE SCOPE
+--------------------------------------------------------------------------------
+git HEAD: 0861872
+Import = working tree (SHA match):
+  abbe.py     e3614f5a057d7d2f
+  pipeline.py eb28c3e1669c88a8
+
+A) NILS-Task (dieser Freeze dokumentiert, aendert nichts):
+   src/euvsimulator/aerial/abbe.py          Funktion nils()
+   src/euvsimulator/pipeline.py             zwei nils()-Aufrufe
+   tests/test_nils_mack.py                  neu, untracked
+   tests/test_reference_nils.py             Mack-Referenz + Blur-Test
+
+B) vorher dirty, NICHT Teil dieses Freeze, NICHT zurueckgesetzt:
+   TCC / illumination shapes / Defocus in abbe.py
+   RCWA, TMM, geometry.py
+   LER-Golden-Tests (test_ler_production_integration,
+   test_development_stochasticity, test_full_chem_config)
+   tests/test_hopkins.py, test_rcwa.py, test_tmm.py
+
+NILS-VERTRAG  (gelesen, unveraendert)
+--------------------------------------------------------------------------------
+nils(): Mack, I_edge=threshold, lineare Kreuzung, Segmentsteigung,
+CD = Abstand der Kreuzungen, Mittelwert beider Kanten.
+Kein argmax(|dI/dx|). Kein (Imin+Imax)/2.
+threshold explizit; None -> 0.5*mean(cut).
+
+Pipeline:
+  _cd_via_aerial_threshold: nils(..., threshold=threshold_val)
+  _cd_via_full_chem:        nils(..., threshold=threshold_val)
+  CD-Formel unangetastet (pixel run).
+
+TESTS
+--------------------------------------------------------------------------------
+NILS-Tests: 8/8 passed
+  test_analytic_symmetric_trapezoid
+  test_symmetric_left_right_equal
+  test_threshold_shift_moves_evaluation_point
+  test_asymmetric_not_global_argmax_gradient
+  test_pipeline_cd_unchanged_nils_at_threshold
+  test_nils_blur_zero
+  test_nils_blur_10nm
+  test_nils_blur_reduces_nils
+
+pytest -q: 761 passed, 0 regressions
+
+BENCHMARK VALUES  (erneut gemessen)
+--------------------------------------------------------------------------------
+wavelength 13.5 nm, NA 0.33, conventional, sigma 0.8
+pitch 64 nm, mask CD 32 nm, Ta ~60 nm, thin-mask Fourier
+aerial_threshold, dose 20, threshold 0.5*mean(aerial)
+
+Optical CD = 27.50 nm
+NILS       = 4.968507748811488
+
+internally reproduced / regression tested
+externally numerically unvalidated
+
+NILS DEFINITION
+--------------------------------------------------------------------------------
+NILS = CD * |dI/dx| / I_edge
+I_edge = Optical-CD-Threshold
+x_edge = lineare Threshold-Kreuzung
+beide Kanten gemittelt
+
+EXTERNAL VALIDATION
+--------------------------------------------------------------------------------
+kein DIRECT MATCH
+Erdmann 2019 / JM3 2017: NO DATA / PAYWALL
+AOT 2017: NEAR MATCH / NOT COMPARABLE
+Tsubaki 2013: NOT COMPARABLE
+Sekiguchi 2011 / Kazazis 2024: QUALITATIVE SUPPORT
+
+FILES CHANGED IN THIS TASK
+--------------------------------------------------------------------------------
+EUV_LS_VALIDATION_STATUS_FINAL_2026-09-01.txt  (Abschnitt 8 Freeze)
+NILS_LS_BENCHMARK_FREEZE_2026-09-01.txt        (dieser Bericht)
+Kein src/, kein Test-Code.
+
+FINAL STATUS: FROZEN / STOP
+================================================================================
+ENDE
+================================================================================

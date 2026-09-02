@@ -1,0 +1,419 @@
+MATHEMATICAL ANALYSIS: source.py Shapes and TCC Integration
+===========================================================
+Date: 2026-09-01
+Files analyzed:
+  - src/euvsimulator/aerial/source.py (193 lines)
+  - src/euvsimulator/aerial/abbe.py lines 80-225, 437-507 (_compute_tcc_matrix)
+  - src/euvsimulator/pipeline.py (illumination_shape dispatch)
+  - src/euvsimulator/opc/openilt_bridge.py (abbe_image + conventional)
+
+======================================================================
+1. EXACT MATHEMATICAL DEFINITION OF EACH SOURCE SHAPE
+======================================================================
+
+1.1 Grid System (source.py _meshgrid)
+--------------------------------------
+  coordinates = linspace(-1.0, 1.0, grid)  →  step = 2/(grid-1)
+  FX, FY = meshgrid(x, x, indexing="ij")   →  (grid × grid)
+
+The coordinates are normalized so that the pupil boundary is |r| = 1.
+A source point at σ means it lies at normalized distance σ from the
+optical axis in pupil coordinates.
+
+1.2 conventional(grid, sigma)
+------------------------------
+  mask = (FX² + FY² <= sigma²)   (uniform disk, binary mask)
+  src = mask.float64
+  return src / src.sum()         (sum = 1)
+
+Mathematics:
+  S(fx, fy) = 1/pi·sigma²   for |f| <= sigma
+  S(fx, fy) = 0              otherwise
+
+This is a uniform (top-hat) disk. The binary mask has area ≈ pi·sigma²
+(number of grid points within the disk). Normalization to sum=1 makes
+the discrete sum of intensities = 1, NOT the integral.
+
+1.3 annular(grid, sigma_in, sigma_out)
+---------------------------------------
+  mask = (r² <= sigma_out²) & (r² >= sigma_in²)   (annular ring)
+  src = mask.float64
+  return src / src.sum()
+
+Mathematics:
+  S(f) = 1/(pi·(sigma_out² - sigma_in²))   for sigma_in <= |f| <= sigma_out
+  S(f) = 0                                   otherwise
+
+Uniform intensity annular ring. The ring is binary (0 or 1) before
+normalization.
+
+1.4 dipole_x(grid, sigma, sigma_out, separation)
+--------------------------------------------------
+  half = separation / 2
+  pole_r = (FX - half)² + FY² <= sigma²    (right pole)
+  pole_l = (FX + half)² + FY² <= sigma²    (left pole)
+  mask = (pole_r | pole_l) & (r² <= sigma_out²)
+  src = mask.float64
+  return src / src.sum()
+
+Mathematics: two uniform disks of radius sigma, centered at
+(±separation/2, 0). Both disks are clipped to the outer circle of
+radius sigma_out (the outer sigma limit).
+
+1.5 dipole_y(grid, sigma, sigma_out, separation)
+--------------------------------------------------
+  half = separation / 2
+  pole_u = FX² + (FY - half)² <= sigma²    (upper pole)
+  pole_d = FX² + (FY + half)² <= sigma²    (lower pole)
+  mask = (pole_u | pole_d) & (r² <= sigma_out²)
+  Same as dipole_x but on the y-axis.
+
+1.6 quasar(grid, sigma, sigma_out, opening_angle_deg)
+-------------------------------------------------------
+  centres = [(0.5, 0.5), (-0.5, 0.5), (-0.5, -0.5), (0.5, -0.5)]
+  for cx, cy in centres:
+    pole = (FX - cx*sigma)² + (FY - cy*sigma)² <= sigma²
+  mask = mask & (r² <= sigma_out²)
+
+CRITICAL OBSERVATION: The parameter `opening_angle_deg` is DEFINED in
+the function signature but NEVER USED in the implementation. The
+quasar implementation produces four overlapping disks at (±σ/2, ±σ/2)
+each of radius σ, clipped to σ_out. For typical parameters (σ=0.2,
+σ_out=0.8), the four disks at (±0.1, ±0.1) with radius 0.2 overlap
+into a single contiguous X-shaped blob — NOT four separated poles.
+
+1.7 custom(intensity_map)
+--------------------------
+  src = intensity_map.float64.clamp(min=0)
+  return src / src.sum()
+
+Free-form: user provides intensity distribution, which is clamped to
+non-negative and normalized to sum=1.
+
+======================================================================
+2. NORMALIZATION ANALYSIS
+======================================================================
+
+2.1 source.py normalization
+----------------------------
+ALL shapes are normalized to sum=1:
+
+    src = mask.float64  →  binary (0 or 1)
+    return src / src.sum()
+
+This means the discrete SUM of source intensities equals 1. For a
+continuous source with area A, the effective average intensity per
+pixel is 1/(number of illuminated pixels).
+
+2.2 TCC formula normalization (current)
+-----------------------------------------
+Current _compute_tcc_matrix:
+    S = (r² <= sigma²).to(float64)       # binary mask, NOT normalized
+    S_sum = S.sum()                       # ~pi·sigma²·(grid/4)²
+    TCC = (P_flat * S_weighted[None,:]) @ P_flat.T
+    TCC = TCC / S_sum
+
+The current S is BINARY (0 or 1). S_sum ≈ number of pixels inside the
+disk. The division by S_sum normalizes the TCC to dimensionless
+intensity ratio.
+
+2.3 Compatibility check
+------------------------
+If source.py tensor (sum=1) is plugged into _compute_tcc_matrix:
+  - S_weighted will contain normalized values (e.g., 1/N where N =
+    number of illuminated pixels), not 0/1
+  - S_sum will be 1.0 (since source.sum() = 1)
+  - TCC = TCC / 1.0 = TCC  (division is a no-op)
+
+Result: The normalization IS compatible IF the source is already
+sum=1. The existing S_sum division becomes harmless (dividing by 1).
+
+However: for DIPOLE/QUASAR sources with the same sigma_out as the
+conventional sigma, the effective intensity per pixel will be HIGHER
+(same total intensity concentrated in fewer pixels). This means:
+  - TCC values for dipoles/quasars will be larger in the pole regions
+  - This is PHYSICALLY CORRECT: dipole illumination concentrates
+    energy into specific source directions
+
+WARNING: The current TCC for conventional illumination uses a uniform
+(intensity=1) binary mask. source.py returns sum=1 with non-binary
+values (1/N_per_pixel). Switching changes the ABSOLUTE TCC values,
+but the RELATIVE weighting between TCC entries remains proportional to
+source intensity. This is the correct physical behavior.
+
+======================================================================
+3. COORDINATE SYSTEM MISMATCH (CRITICAL)
+======================================================================
+
+3.1 source.py coordinate system
+--------------------------------
+  _meshgrid(grid): linspace(-1.0, 1.0, grid)  →  step = 2/(grid-1)
+  Range: [-1, 1] in both fx and fy
+
+The source is defined ON the pupil coordinate system. The pupil is a
+unit disk |f| <= 1. The source occupies |f| <= sigma (for
+conventional). So source.py's range [-1, 1] naturally covers the
+source for sigma <= 1.
+
+3.2 _compute_tcc_matrix coordinate system
+------------------------------------------
+  f = linspace(-2.0, 2.0, grid)  →  step = 4/(grid-1)
+  Range: [-2, 2] in both fx and fy
+
+The integration grid extends to ±2 to accommodate the SHIFTED pupil:
+  - The unshifted pupil occupies |f| <= 1
+  - The source occupies |f| <= sigma (sigma ≤ 1 typically)
+  - A shifted pupil P(fx+fi, fy) occupies |fx+fi| <= 1, i.e.
+    fx in [-1-fi, 1-fi]
+  - For first diffraction order |fi| ≈ λ/(Λ·NA): if Λ=64nm, λ=13.5nm,
+    NA=0.33, then |fi| = 0.64
+  - So the shifted pupil extends to -1-fi = -1.64 to 1+|fi| = 1.64
+  - The source extends to ±sigma ≤ ±1
+  - The integration domain needed: [-max(sigma, 1+|fi|), max(sigma, 1+|fi|)]
+  - With [-2, 2] this covers all cases with |fi| ≤ 1 and sigma ≤ 1
+
+3.3 Direct pluggability (THE KEY QUESTION)
+-------------------------------------------
+NO — source.py tensors CANNOT be directly plugged into
+_compute_tcc_matrix as-is. Reason:
+
+The source.py shapes are sampled on a [-1, 1] grid with step
+2/(grid-1). The TCC grid is [-2, 2] with step 4/(grid-1). The
+physical source radius sigma scales with the coordinate system.
+
+If a source.py tensor (sampled on [-1, 1]) is used directly in
+_compute_tcc_matrix (which interprets coordinates on [-2, 2]):
+
+  - A conventional disk of sigma=0.8 on [-1,1] would appear as a
+    disk of sigma=0.4 on [-2,2] — HALF the intended size
+  - The source would only occupy the inner quarter of the TCC grid
+  - TCC values would be wrong because the source fills only 1/4 of
+    its intended area
+
+REMEDY: The source tensor must be RE-SAMPLED (resized/interpolated)
+onto the [-2, 2] grid used by _compute_tcc_matrix, OR the
+_compute_tcc_matrix function must be refactored to accept a source
+tensor on its natural [-1, 1] grid and handle the coordinate mapping
+internally.
+
+======================================================================
+4. GRID RANGE SUFFICIENCY ANALYSIS
+======================================================================
+
+4.1 Current grid: [-2, 2] with grid × grid points
+---------------------------------------------------
+  - Covers source radius sigma ≤ 2 fully
+  - Covers shifted pupil for orders with |fi| ≤ 1
+
+4.2 Sufficiency for sigma ≤ 1 (all standard shapes)
+-----------------------------------------------------
+YES — fully sufficient.
+  - Source: occupies |f| ≤ sigma ≤ 1  ⊂ [-2, 2]
+  - Shifted pupil for order at pupil edge (|fi| ≤ 1):
+    occupies up to |f| = 1 + |fi| ≤ 2  ⊂ [-2, 2]
+  - The full integration domain is covered
+
+4.3 Sufficiency for sigma > 1
+-------------------------------
+For sigma = 1.5:
+  - Source: |f| ≤ 1.5  ⊂ [-2, 2]  ✓
+  - Shifted pupil at |fi| ≈ 0.64: max |f| = 1 + 0.64 = 1.64  ✓
+  - Shifted pupil at |fi| ≈ 1 (higher order): max |f| = 2  ✓
+  Result: sigma up to 1.5 works if max |fi| + 1 ≤ 2.
+
+For sigma = 2.0:
+  - Source just fits (|f| ≤ 2)
+  - Shifted pupil at |fi| = 0.64: max |f| = 1.64  ✓
+  Result: sigma = 2 works for the source itself but leaves no room
+  for the shifted pupil extent if sigma > 2.
+
+For sigma > 2:
+  - Source is CLIPPED by the grid boundary
+  - The TCC integral is truncated → wrong results
+
+LIMIT: The current [-2, 2] grid handles sigma ≤ 2 (generous), but
+sigma values > 1.5 start losing shifted-pupil coverage for the
+highest orders.
+
+4.4 Source shapes with sigma > 1
+----------------------------------
+Standard shapes typically have sigma ≤ 1 (sigma_out for annular,
+dipole, quasar). Extended sources (used in some High-NA scenarios)
+can use sigma up to ~1.5. The [-2, 2] grid is sufficient for all
+practical cases.
+
+======================================================================
+5. EDGE CASE ANALYSIS
+======================================================================
+
+5.1 annular with sigma_in = 0 → reduces to conventional?
+----------------------------------------------------------
+YES — mathematically exact:
+    mask = (r² <= sigma_out²) & (r² >= 0)
+         = (r² <= sigma_out²)
+This is exactly the conventional disk.
+
+5.2 dipole with separation = 0 → reduces to conventional?
+-----------------------------------------------------------
+PARTIALLY:
+  - pole_r = (FX-0)² + FY² <= sigma²  → disk of radius sigma
+  - pole_l = (FX+0)² + FY² <= sigma²  → same disk
+  - mask = (pole_r | pole_l) & (r² <= sigma_out²)
+         = (r² <= sigma²) & (r² <= sigma_out²)
+         = (r² <= min(sigma, sigma_out)²)
+
+Result: a conventional disk of radius min(sigma, sigma_out). This is
+NOT the same as conventional(sigma_out) — it uses the POLE RADIUS,
+not the outer limit. If σ=0.2, σ_out=0.8, separation=0 → disk of
+radius 0.2, NOT 0.8. This may surprise users who expect the dipole
+outer diameter.
+
+5.3 sigma = 0 (all shapes)
+----------------------------
+source.py conventional(grid, sigma=0):
+    mask = (r² <= 0) = empty
+    src.sum() = 0 → Division by zero returns NaN via PyTorch
+    Runtime: produces NaN tensor (no guard)
+
+_compute_tcc_matrix:
+    S_sum < 1e-30 → returns ones(M, M)  (coherent limit)
+    This is HANDLED correctly.
+
+FIX: source.py needs a guard for sigma=0 (or sum=0) analogous to
+_compute_tcc_matrix.
+
+5.4 annular with sigma_in = sigma_out
+---------------------------------------
+    mask = (r² <= σ²) & (r² >= σ²) = empty
+    src.sum() = 0 → NaN
+    FIX: needs guard.
+
+5.5 dipole with separation too large
+---------------------------------------
+Pole centers at ±separation/2. The outer mask clips at r ≤ sigma_out.
+The poles are visible if |separation/2| - sigma <= sigma_out.
+If separation/2 - sigma > sigma_out, BOTH poles are entirely outside
+the outer limit → empty mask → NaN.
+
+Example: sigma=0.2, sigma_out=0.8, separation=2.0:
+    half = 1.0, pole centers at (±1.0, 0)
+    pole extends from 1.0-0.2=0.8 to 1.0+0.2=1.2
+    outer mask clips at r=0.8
+    → poles are at the outer edge, only inner edge visible
+    → if separation > 2*(sigma_out+sigma), source is empty → NaN
+
+5.6 quasar opening_angle_deg silently ignored (BUG)
+-------------------------------------------------------
+The parameter `opening_angle_deg` appears in the function signature
+and docstring but is NEVER REFERENCED in the implementation body.
+The quasar shape uses only σ and σ_out, placing four overlapping
+disks at (±σ/2, ±σ/2) with radius σ.
+
+For typical parameters (σ=0.2, σ_out=0.8):
+  - Center 1: (0.1, 0.1) with radius 0.2
+  - Center 2: (-0.1, 0.1) with radius 0.2
+  - Center 3: (-0.1, -0.1) with radius 0.2
+  - Center 4: (0.1, -0.1) with radius 0.2
+These four disks OVERLAP significantly into a single X-shaped blob
+with no separation between poles. The intended quasar/CQuad shape has
+four distinct poles at 45° intervals, each with a defined angular
+extent (controlled by opening_angle_deg).
+
+This is a BUG in source.py — the quasar function does not implement
+the advertised shape.
+
+5.7 source.py shape with sigma > sigma_out
+--------------------------------------------
+conventional(grid, sigma=1.2) when the pupil ends at sigma=1:
+  - The source extends beyond the unit circle
+  - But source.py coordinates are [-1, 1], so sigma=1.2 would be
+    CLIPPED by the grid
+  - The source would appear as a full disk (r ≤ 1.0) with the
+    clipping producing a square boundary at the corners
+  - The normalization to sum=1 would still work, but the shape is
+    wrong (clipped by grid, not by physical pupil)
+
+This is a DESIGN LIMIT of source.py: the [-1, 1] grid accommodates
+sigma ≤ 1 only. For sigma > 1, the grid must be widened.
+
+======================================================================
+6. RECOMMENDATION FOR EXTENSION
+======================================================================
+
+To extend _compute_tcc_matrix for multiple illumination shapes, the
+cleanest approach is:
+
+Option A (Recommended — minimal refactoring):
+  1. Keep _compute_tcc_matrix's [-2, 2] integration grid unchanged
+  2. Add a `source_tensor` parameter to _compute_tcc_matrix
+  3. If source_tensor is provided, re-sample it from the source.py
+     [-1, 1] grid onto the TCC [-2, 2] grid via:
+       - torch.nn.functional.interpolate (for up/down sampling)
+       - Embed the source at the center of the TCC grid (the source
+         occupies [-sigma, sigma] ⊂ [-2, 2], so it fits in the inner
+         [-1, 1] region of the [-2, 2] grid)
+  4. Skip the S_sum normalization when source_tensor is provided
+     (since source.py already returns sum=1)
+
+Option B (Cleaner — separate source generation from TCC):
+  1. Create a new function `build_source_tcc(source_fn, sigma_params,
+     grid, ...)` that:
+     - Generates the source on [-1, 1] grid using source.py functions
+     - Embeds/pads it onto [-2, 2] for the TCC integration
+     - Passes the padded source to _compute_tcc_matrix
+  2. The pipeline dispatches the shape string to source.py, then
+     calls the TCC with the generated source tensor.
+
+Option C (Full refactor):
+  1. Change _compute_tcc_matrix to work on [-1, 1] grid (source
+     coordinate system) and handle the shifted-pupil range internally
+     by adjusting the shifted pupil mask to a larger padded grid
+  2. This is invasive and touches core Hopkins physics — NOT recommended
+
+======================================================================
+7. SUMMARY OF FINDINGS
+======================================================================
+
+| Aspect | Finding |
+|--------|---------|
+| Normalization | Compatible. source.py sum=1. Dividing by S_sum=1 is no-op. |
+| Coordinate system | INCOMPATIBLE. source.py [-1,1], TCC [-2,2]. Direct plugging gives half-size source. |
+| Re-sampling required | YES — source must be interpolated/embedded from [-1,1] to [-2,2]. |
+| Grid range [-2,2] for sigma≤1 | FULLY SUFFICIENT — covers source + shifted pupils. |
+| Grid range for sigma>1 | Works up to sigma≈2. Practical limit ≈1.5 before shifted-pupil clipping. |
+| annular(sigma_in=0) | Correctly reduces to conventional disk. |
+| dipole(separation=0) | Reduces to conventional disk of radius min(sigma,sigma_out), NOT sigma_out. |
+| sigma=0 (all shapes) | CRASH — source.py divides by zero (NaN). TCC has guard. |
+| annular(sigma_in=sigma_out) | CRASH — empty mask, NaN. |
+| Large dipole separation | Can produce empty mask → NaN. |
+| quasar opening_angle_deg | **BUG** — parameter accepted but completely ignored. |
+| sigma > 1 in source.py | Grid [-1,1] clips sigma>1. Source shape is wrong. |
+| Source.py shapes directly reusable? | NO — coordinate grid mismatch. Re-sampling/interpolation required. |
+
+======================================================================
+8. ACTIONABLE RECOMMENDATIONS
+======================================================================
+
+Priority 1 (required for multi-shape TCC):
+  - Fix quasar implementation: actually use opening_angle_deg with
+    polar coordinate masking.
+  - Add grid range parameter to source.py functions (or a new
+    function that generates on an arbitrary range) so the source can
+    be created on [-2, 2] directly.
+  - Add sigma=0 and empty-mask guards to source.py.
+
+Priority 2 (robustness):
+  - Document the coordinate system convention clearly in both modules.
+  - Handle the case where source.py source is used in TCC by either
+    (a) resizing via interpolation, or (b) padding with zeros.
+
+Priority 3 (physics accuracy):
+  - The current `aerial_from_orders()` in abbe.py accepts
+    `illumination_shape` but only `_compute_tcc_matrix` actually
+    handles it — and even that only uses sigma for conventional disk.
+    The shape selection logic at lines 150-158 computes an
+    `inner_coherence` value for annular but NEVER passes it to the
+    TCC. This means `illumination_shape` has NO EFFECT on the
+    computed aerial image.
+  - The `inner_coherence` variable on line 153 is dead code — it is
+    computed but never used.

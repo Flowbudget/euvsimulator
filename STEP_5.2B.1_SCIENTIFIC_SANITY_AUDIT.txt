@@ -1,0 +1,352 @@
+============================================================
+STEP 5.2B.1 — SCIENTIFIC SANITY / OBSERVABLE CONSISTENCY AUDIT
+============================================================
+Datum: 2026-08-21
+Modell: DeepSeek V4 Flash
+Rolle: unabhängiger wissenschaftlicher, numerischer, statistischer Reviewer
+Release: release-step-3.13 / db8c7a4718c5f4b54f130cfe0c27962e8cc3313d — IMMUTABLE
+READ-ONLY. KEINE Änderungen. KEIN Commit. KEIN Tag.
+
+============================================================
+GIT BASELINE
+============================================================
+HEAD: db8c7a4718c5f4b54f130cfe0c27962e8cc3313d
+Working Tree: STEP-5.1 + STEP-5.2B Änderungen (uncommitted):
+  stochastic.py, pipeline.py, test_ler_estimate.py,
+  test_ler_production_integration.py
+Release: unverändert.
+
+============================================================
+Q1 — LEGACY vs LARGE-N: WARUM 0.093 vs 0.124?
+============================================================
+BEFUND: Der Unterschied ist der etablierte N-Schätzbias — KEIN
+Implementierungsfehler, KEINE unterschiedliche Observable.
+
+VERIFIZIERT (dasselbe Feld, gleiche Realisierung):
+  extract_ler(dev[:256])      = 0.102593
+  ler_estimate(dev[:256], edge="both") = 0.102593
+  relative Differenz          = 0.00e+00  (EXAKT 0, nicht nur 1e-6)
+
+Die Mathematik ist code-identisch:
+  extract_ler edge="both":  left_dev = left_fin - left_fin.mean()
+                            right_dev = right_fin - right_fin.mean()
+                            all_dev = cat([left_dev, right_dev])
+                            LER = sqrt(mean(all_dev²))
+  ler_estimate edge="both": exakt dieselben Schritte (Z.758-762)
+  finite-Maske, NaN-Behandlung, threshold, dx, intensity: identisch
+
+Der Unterschied (0.0926 vs 0.1205; Faktor 0.769 im 10-Seed-Mittel)
+ist der in STEP 4.1-4.3 quantifizierte Korrelations-Bias:
+  N=256 → N_eff ≈ 4-7 → sqrt(bias) ≈ 0.77
+  STEP 4.3-Werte: LER(256)=0.0547, LER(4096)=0.0707 → Faktor 0.774
+  → ÜBEREINSTIMMUNG mit dem etablierten Bias-Faktor.
+
+ANMERKUNG: Die hier gemessenen 1-Seed-Zahlen (Faktor 0.851) weichen
+vom 10-Seed-Mittel (0.774) ab — Schätzrauschen der LER bei
+N_eff≈7.5 (1-Seed-N-Scan ist NICHT monoton: 1024: 0.1227, 2048:
+0.1176, 4096: 0.1205 — klassisches Schätzrauschen; Konvergenz muss
+über Seeds gemittelt werden, wie in STEP 4.3/5.2A.2 mit 10 Seeds).
+
+ZUSATZ: Der "Golden legacy" (0.0926, Pipeline) vs. mein Feld-Ausschnitt
+(0.1026): Beide sind 256-Zeilen-LER desselben Seeds, aber die
+Realisationen der Randzeilen unterscheiden sich (256er-Feld: Y-Wrap
+bei 256; 4096er-Feld: echte Nachbarzeilen 256-315 im Blur). Gleiche
+Verteilung, verschiedene Realisation — kein Fehler.
+
+============================================================
+Q2 — EDGE="BOTH" ÄQUIVALENZ
+============================================================
+BEFUND: MATHEMATISCH identisch, nicht nur numerisch.
+- Gleiche Kantenextraktion (extract_edges, gleiche Parameter)
+- left/right exakt gleich behandelt (getrennte Mittelwerte,
+  kombinierte Deviations)
+- RMS NACH der Kombination (sqrt(mean(dev²)) über cat([dev_l, dev_r]))
+- NaN-Behandlung identisch (finite = ~(isnan(left)|isnan(right)),
+  beide Kanten müssen gültig sein)
+- threshold/dx/intensity identisch durchgereicht
+- rel diff auf dem getesteten Feld: 0.00e+00 (exakt)
+Die Äquivalenz gilt allgemein (Code-Identität), nicht nur für den
+getesteten Datensatz.
+
+============================================================
+Q3 — SPATIAL N vs SEED N
+============================================================
+Hierarchie: 1 Seed → 1 großes Feld → 1 LER (spatial N_eff) →
+mehrere Seeds → Mean + SE + CI (Seed-Varianz).
+
+BEWERTUNG: Statistisch korrekt.
+- Spatial N_eff: Schätzgenauigkeit der Fluktuation INNERHALB einer
+  Realisation (korrelierte Zeilen → N_eff unabhängige Samples)
+- Seed-Varianz: Streuung der LER-Schätzungen über unabhängige
+  Realisationen → korrekte Unsicherheit des Mittelwerts
+- Orthogonal: keine Doppelzählung (die beiden Ebenen messen
+  verschiedene Dinge: innerhalb-Feld-Schätzung vs. zwischen-Feld-
+  Streuung)
+- CI95 = mean ± 1.96·SE: approximativ korrekt (Gauß-Näherung);
+  bei kleinem n_seeds wäre die t-Verteilung strenger — dokumentiert,
+  nicht kritisch (Konvention in der Statistik-Praxis)
+- seed_count=1 → uncertainty/CI = NaN: KORREKT (eine Realisation
+  erlaubt keine Streuungsschätzung); klar dokumentiert
+- KLEINE FEINHEIT: N_eff referenziert N Zeilen, aber der RMS bei
+  edge="both" nutzt 2N Kantenpositionen → die effektive Samplezahl
+  der kombinierten Schätzung ist ~2·N_eff (bei unabhängigen Kanten).
+  N_eff ist damit KONSERVATIV — kein Fehler, aber in der
+  Dokumentation erwähnen.
+
+============================================================
+Q4 — N_eff DEFINITION
+============================================================
+Formel: N_eff = N / (1 + 2·Σ_{k=1..K} (1-k/N)·ρ(k))
+- finite-sample-Gewicht (1-k/N): KORREKT (exakte Varianzformel des
+  Mittelwerts einer korrelierten Folge)
+- Mittelwertsubtraktion: korrekt (xc = x - mean)
+- pooled rho über Seeds: korrekt (gleich gewichtetes Mittel)
+- Truncation: erstes k mit rho<0.05, cap 200 — vorab festgelegt
+  (STEP 5.0), konsistent
+- KEINE untere/obere Begrenzung von N_eff: Bei negativem rho kann
+  N_eff > N entstehen (Anticorrelation) — mathematisch korrekt für
+  die Mittelwert-Varianz; für die Varianz-Schätzung konservativ.
+  Kein Fehler, dokumentieren.
+- Autokorrelation: biased-Nenner (c0 = mean(xc²), 1/N) + unbiased-
+  Zähler (1/(N-k)) — kleine Mischung: rho wird bei großen Lags leicht
+  überschätzt (gemessen: Lag 1: 2.4e-4, Lag 100: 1.9e-3). Einfluss
+  auf L_int < 0.5 % (Truncation + (1-k/N)-Gewicht dämpfen) — NICHT
+  kritisch, aber als Sauberkeitspunkt notieren.
+
+VERIFIZIERTE GRENZFÄLLE:
+- Weißes Rauschen (se_blur=0): rho(k)≈0 → N_eff = N ✓ (4096)
+- Stark korreliert (se_blur=5): N_eff ≈ N/(2·L_int) = 4096/(2×33.8)
+  ≈ 60.6 ✓ — exakt konsistent mit der Theorie
+- se_blur=5, N=4096: N_eff=60.6 (gemessen); 10-Seed-Mittel 58.7;
+  STEP 4.3 (edge=left, D=40): 64.4 — konsistenter Bereich
+
+============================================================
+Q5 — LARGE-N FELDKONSTRUKTION
+============================================================
+Zentrale Frage: Zusätzliche räumliche Information oder nur andere
+Darstellung desselben periodischen Systems?
+
+ANTWORT: ECHTE zusätzliche Information.
+- Deterministischer Teil: periodisch (y-invariant, s. Q7) — aber
+  das ist der ERWARTUNGSWERT, nicht die Statistik
+- Die stochastische Realisation: Jede der N Zeilen trägt ein
+  UNABHÄNGIGES Poisson-Rauschen (torch.poisson pro Pixel, RNG-
+  Fortschritt normal); der SE-Blur korreliert nur über L_int≈31 px
+- Die Kantenfluktuation x(y) über N Zeilen ist eine echte N-Punkte-
+  Zeitreihe mit Korrelationslänge L_int — die Schätzung der
+  Fluktuations-Std konvergiert mit N_eff (empirisch: N_eff skaliert
+  LINEAR mit N: 4.2 → 16.2 → 60.6 für 256/1024/4096)
+- Keine künstliche Periodizität: rho(256) = 0.035 (gemessen)
+- Kachel-Diff-Rate 24.62 % ≈ unabhängige Seeds 24.96 % ≈
+  Poisson-Theorie 24.76 % — Kacheln sind unabhängige Realisationen
+- Tile VOR dem Rauschen (deterministische dose_map), nie danach:
+  bestätigt (Code: stoch_dose = tile(dose_map, ...))
+
+============================================================
+Q6 — SEHR GROSSE N (ZUKUNFT)
+============================================================
+Bewertung für N=1e5 / 1e6 / 1e7:
+- Mathematik: keine Grenze (alle Operationen O(N) oder O(N·K))
+- Physik: keine Grenze (mehr Zeilen = mehr Samples derselben Physik)
+- Numerik: N_eff-Formel stabil (Summe über ≤200 Lags); rho-Schätzung
+  wird mit N sogar genauer
+- Speicher: N×256 float32 → N=1e6: 1 GB (machbar auf großen
+  Maschinen); MemoryError wäre transparent (kein künstliches Limit)
+- Laufzeit: linear (gemessen: 0.2 s bei 0.5M px → 7.6 s bei 15.7M px)
+- KEIN O(N²), keine versteckte Duplikation
+- ENGpass bei extremem N: _autocorrelation berechnet 200 Lags in
+  einer Python-Schleife (200 torch-Aufrufe à O(N)) — bei N=1e7:
+  ~2G Operationen, Sekunden bis Minuten. ZUKÜNFTIGE OPTIMIERUNG:
+  FFT-basierte Autokorrelation. Kein Limit-Grund.
+
+============================================================
+Q7 — N mod 256 ANFORDERUNG
+============================================================
+WICHTIGER BEFUND: Das Aerial-Feld ist EXAKT y-invariant:
+  max|aerial[y+1] - aerial[y]| = 0.000e+00
+  (und natürlich 256-periodisch: max|aerial[y]-aerial[y+256]| = 0)
+
+Konsequenz: Der deterministische Teil ist bei BELIEBIGEM N konsistent
+(alle Zeilen identisch → der Y-circular-Wrap verbindet identische
+Zeilen → kein Boundary-Artefakt, auch bei N=3000).
+
+BEWERTUNG:
+  A) 256-divisible mathematisch zwingend: NEIN (widerlegt durch
+     y-Invarianz)
+  B) nur Implementierungsvereinfachung: TEILWEISE (tile() benötigt
+     einen ganzzahligen Faktor; repeat(N,1) oder tile+trim wäre
+     allgemeiner)
+  C) für die aktuelle tile-Methode nötig, allgemeinere Lösung
+     möglich: JA — dies ist die korrekte Kategorie
+
+EMPFEHLUNG (für 5.2C entscheiden):
+  1. Kurzfristig: Anforderung dokumentieren als "Konsistenz-
+     Bedingung der periodischen Y-Erweiterung via tile; N muss
+     Vielfaches der x-Periodengröße (grid) sein" — ehrlich und
+     transparent (kein ValueError ohne Begründung)
+  2. Mittelfristig: Lockerung via repeat-Konstruktion (beliebiges
+     N), sofern die y-Invarianz des Aerial-Feldes gilt; bei
+     zukünftigen 2D-Masken (RCWA-2D, nicht y-invariante Felder)
+     neu bewerten — dann wäre die Vielfachheits-Bedingung wieder
+     physikalisch begründet
+  KEINE künstliche Obergrenze einführen (bleibt: keine).
+
+============================================================
+Q8 — LWR
+============================================================
+extract_lwr: width = right - left pro Zeile;
+lwr = torch.std(width, unbiased=False) (Population-std, biased).
+
+Im Large-N-Modus auf 4096 Zeilen: gleiche Observable, mehr
+räumliche Samples. Wissenschaftlich sinnvoll:
+- LWR hat denselben N-Bias wie LER (korrelierte Zeilen); bei
+  4096 Zeilen Rest-Bias < 1 % (N_eff≈60)
+- Die Behandlung ist KONSISTENT mit LER (gleiche Feldgröße,
+  gleiche Observable-Definition, keine stille Änderung)
+- Legacy-LWR (256 Zeilen) bleibt über den Legacy-Modus verfügbar
+- ZUKÜNFTIG (nicht in 5.2C): ein separater LWR-Estimator mit
+  N_eff/korrelations-Korrektur wäre konsistent zur LER-Behandlung —
+  aber der Rest-Bias bei N=4096 ist klein, kein akuter Bedarf
+
+============================================================
+Q9 — DEFAULT se_blur_nm=0
+============================================================
+- se_blur=0: kein SE-Blur → weißes Poisson-Rauschen → keine
+  räumliche Korrelation → N_eff=N (verifiziert). Technisch gültig,
+  für EUV-Resists aber unphysikalisch (SE-Streuung typisch 2-10 nm)
+- se_blur=5: CAR-typisch; ALLE wissenschaftlichen LER-Audits
+  (STEP 3.x-5.x) nutzten se_blur=5 (N_eff≈60, LER≈0.07 bei 40 mJ)
+- Der Software-Default (0) ist NICHT die wissenschaftliche
+  Referenzkonfiguration
+- EMPFEHLUNG (Dokumentation, kein Default-Wechsel): In den
+  wissenschaftlichen Reports die Referenzkonfiguration explizit
+  festhalten: "LER-Referenz: se_blur_nm=5.0, dose_mj_cm2=40.0,
+  stochastic_ler_grid_y=4096, stochastic_ler_estimator=large_n"
+- Validierung mit Default=0 (N_eff=N) ist technisch korrekt, aber
+  Aussagen über LER-Werte beziehen sich auf die Referenzkonfiguration
+
+============================================================
+Q10 — DOSE SCALING
+============================================================
+large_n slope = -0.785; legacy slope = -0.917 (Dosen 20/40/80).
+- Erwartungswerte: Shot-Noise-only: -0.5 (STEP 3.1: -0.498,
+  se_blur=0, uniform); mit Dill-Nichtlinearität steiler; etabliert
+  aus STEP 5.1: Large-N-Slope -0.751 (edge=left, Dosen 20-160)
+- large_n -0.785: KONSISTENT mit dem etablierten Bereich
+  (-0.75 ± 0.05; kleine Abweichung durch edge="both" und
+  Dosisbereich 20-80)
+- legacy -0.917: durch den dosisabhängigen N_eff-Bias verzerrt —
+  die Korrelationslänge/Profilsteigung ändert sich mit der Dosis,
+  der N-Bias (Faktor ~0.77 bei N=256) variiert daher über die
+  Dosen → der naive Slope wird verzerrt. Das ist ein bekannter
+  Schätzer-Artefakt, KEINE Physik-Differenz
+- Der Test (|Δ| ≤ 0.25) ist großzügig, aber die Anforderung
+  "konsistent mit dem etablierten Pipeline-Verhalten" ist erfüllt.
+  EHRLICHE BEWERTUNG: Der eigentliche Referenz-Test ist der
+  Large-N-Bereich (-0.75±0.05); die Legacy-Slope ist als Referenz
+  ungeeignet (bias-verzerrt). Test-Erwartung präzisieren: statt
+  |Δ|≤0.25 → Large-N-Slope ∈ [-0.85, -0.65] (das entspricht dem
+  etablierten Bereich mit Marge)
+
+============================================================
+Q11 — PHYSICAL MODEL PRESERVATION
+============================================================
+- CD/NILS auf dem 256er-deterministischen Pfad: wissenschaftlich
+  sinnvoll — CD/NILS sind deterministische Observablen des
+  optischen Systems (1 Periode ausreichend, konvergiert); die
+  stochastische LER benötigt mehr räumliche Samples (N_eff)
+- Verifiziert: CD/NILS bitweise identisch mit/ohne stochastic
+  (Test 20: cd=23.0, nils=5.9079)
+- Aerial, dose map, Poisson, PSF, Dill, resist, threshold:
+  unverändert (Diff-Inspektion + Tests)
+- Die Trennung (deterministische Observablen auf 256er,
+  stochastische auf 4096er) ist sauber und dokumentiert
+
+============================================================
+Q12 — STATISTISCHE HIERARCHIE (Dokumentationsformulierung)
+============================================================
+- Zeile: eine y-Position des 2D-Feldes (x: 256 Spalten = 1 Periode)
+- Statistischer Sample: die Kantenposition (links/rechts) einer
+  Zeile — eine Beobachtung der Fluktuation
+- N: Anzahl physischer Zeilen (stochastic_ler_grid_y)
+- N_eff: Anzahl statistisch unabhängiger Samples (korrelations-
+  korrigiert; empirisch aus rho(k), L_int)
+- Seed: eine unabhängige Realisation des stochastischen Prozesses
+  (vollständiges Feld mit eigenem Rauschen)
+- LER eines Seeds: RMS der Kantenabweichungen über die N_eff
+  unabhängigen Samples des Feldes (spatiale Fluktuations-Std)
+- Finaler LER: Mittel der Seed-LERs (Ensemble-Mittel)
+- CI95: mean ± 1.96·SE der Seed-Streuung — die Unsicherheit des
+  Mittelwerts über Realisationen (nicht die räumliche Streuung)
+- Die beiden Ebenen (spatial: Genauigkeit der Fluktuations-
+  Schätzung; ensemble: Streuung zwischen Realisationen) sind
+  getrennt und orthogonal
+
+============================================================
+Q13 — 61440 UND ZUKUNFTSFÄHIGKEIT
+============================================================
+- Skalierung: linear (0.5M px → 0.2 s; 15.7M px → 7.6 s) — plausibel
+- Kein O(N²): separable Blur O(N·K), Autokorrelation O(200·N),
+  Kantenextraktion O(N)
+- Keine versteckte Speicherduplikation (tile erzeugt eine Kopie
+  der dose_map: N×256×4 Byte; bei N=1e6: 1 GB — transparent)
+- Autokorrelationskosten: Python-Loop über 200 Lags → bei sehr
+  großem N der erste Engpass; FFT-Optimierung als zukünftige
+  Engineering-Aufgabe markiert (KEIN Limit-Grund)
+- Tensor-Operationen: conv2d bei 1e7×256 (2.5G px) würde GPU/CPU
+  fordern — Hardwaregrenze, kein Softwarelimit
+- Performance-Probleme: bewusst kein Grund für künstliche Limits
+
+============================================================
+ADVERSARIAL FINDINGS
+============================================================
+KRITISCHE FEHLER: KEINE.
+
+Dokumentierte Kleinigkeiten (kein Handlungsbedarf in 5.2C):
+1. Autokorrelation: biased-Nenner/unbiased-Zähler-Mischung
+   (rho bis 1.9e-3 überschätzt bei Lag 100) — Einfluss < 0.5 %
+2. N_eff referenziert N, RMS nutzt 2N Kanten (edge="both") —
+   N_eff konservativ, kein Fehler
+3. CI95 mit 1.96 (Gauß) statt t-Verteilung bei kleinem n_seeds —
+   Konvention, dokumentiert
+4. 1-Seed-N-Scan nicht monoton — Schätzrauschen (über Seeds
+   mitteln, wie in 4.3/5.2A.2)
+
+GEPRÜFT OHNE BEFUND:
+- verstecktes N=256: keins; verstecktes Clamping: keins
+- falsche Aggregation/RMS-Reihenfolge: keine (exakt identisch)
+- edge="both"-Semantik: korrekt; Seed/Spatial-Verwechslung: keine
+- künstliche Periodizität: keine (rho(256)=0.035)
+- Boundary-Artefakte: keine (y-invariant, block-äquivalent)
+- CD/NILS-Änderung: keine (bitweise); LWR-Verfälschung: keine
+- numerische Instabilität bei großem N: keine (linear, stabil)
+
+============================================================
+ENTSCHEIDUNG
+============================================================
+CONDITIONAL GO
+
+Die Implementierung ist mathematisch/statistisch/physikalisch
+tragfähig — KEIN fundamentaler Fehler. Drei konkrete Punkte müssen
+vor STEP 5.2C geklärt/dokumentiert werden:
+
+1. N mod 256 (Q7): Die Einschränkung ist NICHT physikalisch
+   zwingend (Aerial y-invariant, bewiesen). Entscheidung: (a)
+   Lockerung via repeat-Konstruktion für beliebige N, oder (b)
+   explizite Dokumentation als Konsistenz-Bedingung der tile-
+   Methode (gültig für y-invariante Felder; bei 2D-Masken neu
+   bewerten).
+2. Referenzkonfiguration (Q9): Die wissenschaftlichen LER-Audits
+   beziehen sich auf se_blur=5.0/dose=40; der Software-Default
+   (se_blur=0) ist technisch korrekt (N_eff=N), aber nicht die
+   wissenschaftliche Referenz — explizit dokumentieren.
+3. Dosis-Slope-Erwartung (Q10): Test-Erwartung präzisieren —
+   Referenz ist der Large-N-Bereich (-0.75±0.05), nicht der
+   bias-verzerrte Legacy-Slope.
+
+KEINE BLOCKER. Release unverändert. Kein Commit, kein Tag,
+keine Implementierung.
+
+============================================================
+END STEP 5.2B.1
+============================================================

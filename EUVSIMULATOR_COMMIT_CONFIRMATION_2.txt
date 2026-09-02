@@ -1,0 +1,64 @@
+EUVSIMULATOR — COMMIT CONFIRMATION #2
+========================================
+Date: 2026-08-31 12:27 CEST
+Repository: /Users/pi-server/Projekte/OpEnUV
+HEAD: 5452893 (ahead of origin/main by 1 commit)
+====================================================================
+
+Commit erfolgreich.
+
+  COMMIT:           5452893
+  PARENT:           aef3d2d (Stochastic/LER)
+  BRANCH:           main
+  AHEAD OF ORIGIN:  4 commits
+
+COMMIT-CHAIN (HEAD → origin):
+
+  5452893  fix(pipeline): average TE/TM after aerial (intensity) reconstruction
+  aef3d2d  feat(stochastic): large-N LER estimator, development stoch., Option-C SE
+  1674481  fix(rcwa): correct TM eigenproblem and modal admittance
+  db8c7a4  release: freeze accepted circular SE-blur production state
+  ─────────────────────────────────────
+  964139f  ← origin/main (Rename)
+
+DETAILS:
+
+  ┌──────────────────────────────────────────────────┬──────────────┐
+  │ Metrik                                           │ Wert         │
+  ├──────────────────────────────────────────────────┼──────────────┤
+  │ Pipeline P1 Fix Commit                           │ 5452893      │
+  │ Eltern-Commit                                    │ aef3d2d      │
+  │ Geänderte Dateien                                │ 2            │
+  │ Einfügungen                                      │ 129          │
+  │ Löschungen                                       │ 18           │
+  │ Tests                                            │ 630 passed   │
+  │                                                  │ 0 failed     │
+  │                                                  │ 3 warnings   │
+  │ RCWA geändert                                    │ NEIN         │
+  │ Working Tree                                     │ sauber       │
+  │ Ahead of origin                                  │ 4 Commits    │
+  │ Push                                             │ NICHT PUSHED │
+  └──────────────────────────────────────────────────┴──────────────┘
+
+SESSION SUMMARY (2026-08-31):
+
+  Commit 1: 1674481 — fix(rcwa): correct TM eigenproblem and modal admittance
+  Commit 2: aef3d2d — feat(stochastic): large-N LER estimator, dev. stoch., Option-C
+  Commit 3: 5452893 — fix(pipeline): average TE/TM after aerial reconstruction
+
+  Alle 3 Commits auf origin/main gepusht (nach Push-Autorisierung).
+  Nur 5452893 noch nicht gepusht.
+
+  Testsuite: 630 passed, 0 failed (3 neue Tests für Polarization Averaging).
+
+WORKING TREE:
+  Sauber — nur untracked Audit-Reports (STEP_*.txt, STOCHASTIC_*.txt,
+  EUVSIMULATOR_*.txt, references/).
+  Keine Source-/Test-Modifikationen offen.
+
+NÄCHSTER MÖGLICHER SCHRITT:
+  Push 5452893 zu origin/main (ausstehend).
+  Danach: Sigma=0 TCC / Dill-Parameter / Release-Tag.
+
+====================================================================
+END OF CONFIRMATION

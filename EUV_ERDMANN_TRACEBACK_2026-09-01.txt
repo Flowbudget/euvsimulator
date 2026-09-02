@@ -1,0 +1,188 @@
+================================================================================
+TRACE-BACK  ERDMANN / EVANSCHITZKY  GESCHLOSSENE PAPERS
+2026-09-01 13:30 CEST
+NO CODE CHANGES. Keine Grafikablesung. Keine erfundenen Zahlen.
+================================================================================
+
+DECISION: NO TRACE
+
+Keine frei zugaengliche Quelle gibt eine quantitative Imaging-/NILS-/CD-
+Zahl aus Paper A oder Paper B wieder, und kein nachweisbarer
+Datenstamm (gleiche Simulation, gleiche Tabelle) wurde oeffentlich
+gefunden.
+
+Simulator NILS 4.9685 remains UNVALIDATED.
+
+
+ZIELPAPIERE
+--------------------------------------------------------------------------------
+Paper A
+  Erdmann, Evanschitzky, Bottiglieri, van Setten, Fliervoet
+  "3D mask effects in high NA EUV imaging"
+  Proc. SPIE 10957 (2019)
+  DOI 10.1117/12.2515678
+  OpenAlex W2922506810  cited_by_count=27
+  is_oa=false  any_repository_has_fulltext=false
+  frei: NEIN
+
+Paper B
+  Evanschitzky, Erdmann
+  "Advanced EUV mask and imaging modeling"
+  JM3 16(4) 041005 (2017)
+  DOI 10.1117/1.jmm.16.4.041005
+  OpenAlex W2747465853  cited_by_count=22
+  is_oa=false  any_repository_has_fulltext=false
+  frei: NEIN
+
+Dissertationen der Autoren (OpenAlex type=dissertation):
+  Erdmann: 0
+  Evanschitzky: 1 (2002 Speckle-Interferometrie, TUM) — UNRELATED
+  Dongbo Xu / Hazem Mesilhy / Gerardo Bottiglieri: keine EUV-Dissertation
+    mit Volltext gefunden. FAU OPUS Bot-Wall.
+  RIT Thesis 2026 "Imaging Performance Analysis of EUV Mask Stacks":
+    HTTP 403, nicht gelesen.
+
+
+MAXIMAL 5 FUNDSTELLEN
+--------------------------------------------------------------------------------
+
+1) Thakare, Delabie, Philipsen
+   "Optimizing extreme ultraviolet lithography imaging metrics as a
+   function of absorber thickness and illumination source"
+   J. Micro/Nanopattern. Mater. Metrol. 22(3) 033201 (2023)
+   DOI 10.1117/1.jmm.22.3.033201
+   URL https://lirias.kuleuven.be/retrieve/9790b71d-0d0b-49bd-a6c0-e44c31e37da0
+   Dokumenttyp: Journal article, OA-PDF gelesen
+   frei: JA
+   Beziehung zu A/B: CITING PAPER ONLY
+     Paper A = Referenz [7]. Im Fliesstext wird A nicht mit einer Zahl
+     zitiert. Die methodische Empfehlung "multiple objectives such as
+     NILS, DoF, TCE" bezieht sich auf [5] (Attenuated PSM 2018,
+     10.1117/12.2299648), NICHT auf A.
+   Daten: eigene High-NA Simulation, target trench 10 nm, pitch 20-40 nm,
+     dipole TS-PS. NICHT der A/B-Datensatz.
+   NILS: eigene, GRAPHIC + "NILS value larger than 2 is regarded as
+     acceptable" [18] — nicht aus A/B.
+
+2) Lee, Franke, Philipsen, Ronse et al.
+   "Study on Next-Generation EUV Lithography Technology: Hyper NA..."
+   ACS Appl. Mater. Interfaces (2025)
+   DOI 10.1021/acsami.5c11891
+   URL https://lirias.kuleuven.be/retrieve/eba01715-a0ce-4e98-9227-045faa3b855e
+   Dokumenttyp: manuscript PDF gelesen
+   frei: JA
+   Beziehung zu A/B: CITING PAPER ONLY
+     Paper A = Ref. [19]. Im Text zu Fig. 13: "compiles several figures
+     extracted from Erdmann's publication37" — das ist Ref. [37],
+     SPIE 2016 Mask-induced best-focus shifts, NICHT Paper A.
+     Paper A wird bibliographisch genannt, ohne reproduzierte Tabelle.
+   Daten: Hyper-NA / 6.7 nm / pitch 12 nm. MISMATCH zum 13.5/64/0.33
+     Benchmark. Keine Zahl aus A/B.
+
+3) Tanabe, Jinguji, Takahashi
+   "Weakly guiding approximation of a three-dimensional waveguide
+   model for extreme ultraviolet lithography simulation"
+   JOSA A 41, 1491 (2024)
+   DOI 10.1364/josaa.516610
+   URL http://t2r2.star.titech.ac.jp/rrws/file/CTT100917505/ATD100000413/josaa-41-8-1491.pdf
+   Dokumenttyp: OA PDF gelesen
+   frei: JA
+   Beziehung zu A/B: CITING PAPER ONLY
+     Paper A = Ref. [2], nur fuer "mask 3D effects (HV CD difference,
+     focus-dependent pattern shift)".
+   Eigene Simulation: lambda 13.5 nm, NA 0.33, Ta 60 nm,
+     dipole sigma_out/in = 0.9/0.55, line 14 nm wafer (56 nm mask),
+     imec N3 metal, NICHT 32/64 conventional sigma 0.8.
+   "minimum size of the mask pattern will be 64 nm" in der Einleitung
+     ist Rayleigh k1=0.4 * 13.5 / 0.33, KEINE gemessene/simulierte
+     NILS/CD aus A/B und KEINE Optical-CD 27.50.
+   Keine NILS-Zahl im Text.
+   SAME GROUP / RELATED SIMULATION? NEIN — andere Autoren, andere Maske,
+     dipole. Nicht der A/B-Stamm.
+
+4) Erdmann, Xu, Evanschitzky, Philipsen, Luong, Hendrickx
+   "Characterization and mitigation of 3D mask effects in extreme
+   ultraviolet lithography"
+   Adv. Opt. Technol. 6, 187 (2017)
+   DOI 10.1515/aot-2017-0019
+   URL https://www.degruyterbrill.com/document/doi/10.1515/aot-2017-0019/html
+   Dokumenttyp: HTML Volltext (vorherige Session)
+   frei: JA (HTML)
+   Beziehung zu A/B: SAME GROUP / RELATED SIMULATION
+     Dieselbe Fraunhofer-IISB-Gruppe, 3D-Masken-Imaging, NA 0.33.
+     Paper B ist 2017 JM3 modeling; AOT ist 2017 review/analysis.
+     Paper A (2019 high-NA) zitiert B (OpenAlex: A cites B).
+     KEIN Nachweis, dass AOT-Figuren identisch mit A- oder B-Tabellen
+     sind. AOT Fig. 5: circular sigma=0.7, target 22 nm, pitch
+     100 nm wafer (88/400 mask). A ist "high NA" (typisch 0.55-Klasse
+     im Titel) — ohne Volltext von A nicht als SAME STUDY belegbar.
+   NILS: nur Figuren, GRAPHIC ONLY — DO NOT EXTRACT.
+   Definition: "normalized local contrast (NILS)"; BF = Fokus mit
+     groesstem NILS. Nicht Mack printed-edge.
+   NOT DIRECTLY COMPARABLE zum Simulator.
+
+5) OpenAlex citing corpus A (26) und B (22)
+   Dokumenttyp: bibliometrische Spur, keine Zahlen
+   frei: Metadaten JA, Volltexte der meisten SPIE/JM3 NEIN
+   Beziehung: CITING PAPER ONLY (Menge)
+   Same-group Nachfolger, die A und B zitieren:
+     Erdmann/Mesilhy/Evanschitzky JM3 19.4.041001 (2020) — Unpaywall
+       gold/bronze PDF auf SPIE; curl/Browser Captcha, Volltext
+       in dieser Session NICHT gelesen. Ohne gelesenen Text:
+       PAYWALL/CAPTCHA — NO DATA fuer Zahlen aus A/B.
+     Mesilhy/Evanschitzky JM3 20.2.021004 (2021) — gleiches SPIE-PDF-
+       Captcha.
+     Erdmann/Mesilhy/Evanschitzky JM3 21.2.020901 (2022) — is_oa=false.
+   Keine dieser Nachfolger-Arbeiten wurde als Volltext geoeffnet.
+   Deshalb kein DIRECT REPRODUCTION.
+
+
+NILS SPEZIELL
+--------------------------------------------------------------------------------
+In keiner geoeffneten Citing-Quelle steht eine NILS-Zahl, die auf
+A oder B zurueckgefuehrt ist.
+
+Simulator-Definition bleibt:
+  NILS = CD * |dI/dx| / I_edge
+  Threshold-Kante, I_edge = threshold, beide Kanten, Optical/Aerial CD.
+
+Nichts aus A/B dagegen haltbar.
+
+
+WAS NICHT GETAN WURDE
+--------------------------------------------------------------------------------
+Keine Grafikablesung (AOT, Thakare Fig. 5).
+Keine Gleichsetzung 14 nm N3-dipole (Tanabe) mit 32/64 conventional.
+Keine Annahme, AOT 2017 == Paper A 2019.
+Keine 32 nm L/S = 64 nm Pitch.
+Keine 0.3 = 0.33 EXACT, 0.7 = 0.8 EXACT.
+Keine Codeaenderung.
+
+
+SUCHPROTOKOLL
+--------------------------------------------------------------------------------
+OpenAlex cites:A  26 Treffer, alle Titel/OA-Status geprueft.
+OpenAlex cites:B  22 Treffer.
+OA-PDFs gelesen: Thakare 2023, Lee 2025, Tanabe 2024, AOT 2017 HTML.
+Dissertationen OpenAlex: Erdmann 0, Evanschitzky 2002 unrelated.
+FAU OPUS / Fraunhofer Publica: Bot-Wall.
+RIT Thesis 2026: HTTP 403.
+SSRN 4103184: 403.
+SPIE JM3 19.4.041001: hCaptcha im Browser.
+
+
+Sources
+--------------------------------------------------------------------------------
+[1] https://api.openalex.org/works/doi:10.1117/12.2515678
+[2] https://api.openalex.org/works/doi:10.1117/1.jmm.16.4.041005
+[3] https://lirias.kuleuven.be/retrieve/9790b71d-0d0b-49bd-a6c0-e44c31e37da0
+[4] https://lirias.kuleuven.be/retrieve/eba01715-a0ce-4e98-9227-045faa3b855e
+[5] http://t2r2.star.titech.ac.jp/rrws/file/CTT100917505/ATD100000413/josaa-41-8-1491.pdf
+[6] https://www.degruyterbrill.com/document/doi/10.1515/aot-2017-0019/html
+[7] https://doi.org/10.1117/12.2515678
+[8] https://doi.org/10.1117/1.jmm.16.4.041005
+
+STOP.
+================================================================================
+ENDE
+================================================================================

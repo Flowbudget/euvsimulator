@@ -1,0 +1,241 @@
+============================================================
+PREPARATION — FIRST INDEPENDENT EXPERIMENTAL VALIDATION
+============================================================
+Datum: 2026-08-21
+Modell: DeepSeek V4 Flash
+Rolle: unabhängiger wissenschaftlicher Reviewer
+Release: release-step-3.13 / db8c7a4 — IMMUTABLE
+READ-ONLY. KEINE Simulation in diesem Schritt. KEINE Kalibrierung.
+KEIN Commit/Tag/Release. Experimentarchive FROZEN.
+
+============================================================
+1. QUELLEN-PRIORISIERUNG (für den ERSTEN quantitativen Vergleich)
+============================================================
+PRIORITÄT 1: PMMA — Kim et al. 2022, RSC Advances,
+  DOI 10.1039/d1ra07291a (source_01_pmma_euv/)
+  Begründung: einzige LER-Quelle (Priorität A: Dose→LER);
+  E0 mit ±-Unsicherheit (25.1 ± 0.5 mJ/cm²); Volltext frei.
+  EINSCHRÄNKUNG: Nicht-CAR-Resist, 250-nm-Pitch, LER nur als
+  Textaussage (~11 nm, Fig. 6(b)), Messlänge UNKNOWN.
+
+PRIORITÄT 2: PSI — Develioglu et al. 2023, Proc. SPIE 12498,
+  DOI 10.1117/12.2660859 (source_02_psi_resist_screening/)
+  Begründung: vollständige Tabellen 3/4 (DtS + unbiased LWR,
+  DIRECT_TABLE); CAR/MTR (Modell-nächste Resistchemie).
+  EINSCHRÄNKUNG: HP 13-14 nm (26-28 nm Pitch — Geometrie-Mismatch
+  zum 64-nm-Simulator-Pitch); keine ±-Unsicherheiten; Messlänge
+  UNKNOWN.
+
+PRIORITÄT 3: UC Berkeley Dissertation (Bhattarai 2017,
+  source_04_uc_reference/) — LER + SE-Interaktionen (thematisch
+  sehr relevant), aber PDF nicht archiviert (nur Wayback-HTML mit
+  Metadaten) → derzeit INSUFFICIENT_DATA. NÄCHSTER SCHRITT für
+  diese Quelle: PDF manuell nachladen (URL im README).
+
+PRIORITÄT 4: ScienceDirect 32/64 nm (source_03_...) — nur
+  Abstract-HTML, Volltext hinter Paywall → INSUFFICIENT_DATA.
+
+============================================================
+2. VERFÜGBARE EXPERIMENTELLE ZAHLEN
+============================================================
+PMMA (DIRECT_TEXT, PMC-HTML):
+- E0 (Sensitivity) = 25.1 ± 0.5 mJ/cm² (160 nm PMMA, DCT-Fit)
+- γ (Contrast) = 5.3 ± 0.4
+- E0 (75 nm) = 8.6 ± 0.5 mJ/cm²
+- LER ≈ 11 nm (E/E0 > 2.5, SEM/SuMMIT, Fig. 6(b)-Text; 1σ-Annahme,
+  nicht explizit deklariert → UNKNOWN bezüglich σ-Definition)
+- LER/CD ~35 % → ~20 % (Fig. 6(c)-Text)
+- CD/pitch vs. E/E0: nur in Fig. 6(a) → DIGITIZED erforderlich
+
+PSI (DIRECT_TABLE, PDF-Seiten 4-6):
+- HP 14 nm (Table 3): DtS = 53.85/38.9/19.40/36.95 mJ/cm²;
+  LWRunb = 2.51/2.63/2.72/2.40 nm; Z = 0.96/0.73/0.40/0.60 ×10⁻⁸
+- HP 13 nm (Table 4): DtS = 51.25/41.2/24.3/26.38 mJ/cm²;
+  LWRunb = 2.84/2.58/2.5/2.97 nm; Z = 0.85/0.61/0.33/0.47 ×10⁻⁸
+- Guidelines: DtS < 60, LWR < 1.4/1.3 nm, Z < 0.46/0.32
+
+UC Berkeley: keine quantitativen Werte extrahiert (PDF fehlt).
+
+============================================================
+3. NOCH ZU EXTRAHIERENDE ZAHLEN
+============================================================
+- PMMA Fig. 6(a): CD/pitch vs. E/E0 — DIGITIZED erforderlich
+  (mit geschätzter Digitalisierungsunsicherheit)
+- PMMA Fig. 6(b): LER-Punkte vs. E/E0 (die ~11 nm sind die
+  Text-Konvergenzaussage; die Punkte bei E/E0 < 2.5 sind Figur)
+- PSI Fig. 6: LWRunb vs. DtS (5 Vendors, 14/13 nm HP) —
+  DIGITIZED erforderlich
+- UC Berkeley: PDF nachladen, dann Kapitel/Tabellen sichten
+
+============================================================
+4. SIMULATORGRÖSSEN (Entsprechungen)
+============================================================
+| Experimentelle Größe | Simulator-Entsprechung | Status |
+|---|---|---|
+| E0 (dose-to-clear, PMMA) | KEINE direkte Observable (Modell hat keine DCT/Entwicklung) | NOT_COMPARABLE |
+| γ (Contrast) | KEINE direkte Observable (keine Entwicklungs-Response) | NOT_COMPARABLE |
+| LER (PMMA, SEM) | ler_nm (large_n, edge=both) | NOT_COMPARABLE (fehlende Entwicklungsstochastik) |
+| LWRunb (PSI) | lwr_nm (4096 Zeilen) | NOT_COMPARABLE (dito) |
+| DtS (dose-to-size, CD-Ziel) | CD-Dosis-Kurve → Dosis für CD=32 | NOT_COMPARABLE (Dosisdefinition absorbiert vs. einfallend) |
+| CD/pitch vs. E/E0 (PMMA) | CD/pitch vs. Dosis (normiert) | QUALITATIV vergleichbar (Trend) nach E0-Zuordnung; quantitativ nur mit Annahmen |
+| CD-Dosis-Trend | CD-Dosis-Kurve (deterministisch) | VERGLEICHBAR (qualitativ, VALID_WITH_CAVEATS) |
+| LER-Dosis-Trend (PMMA: sinkt, sättigt) | LER ∝ Dosis^-0.75 (Large-N) | QUALITATIV konsistent (Richtung) |
+
+============================================================
+5. NICHT VERGLEICHBARE GRÖSSEN (explizit)
+============================================================
+1. LER-Absolutwerte (PMMA ~11 nm vs. Sim 0.069 nm): NOT_COMPARABLE —
+   Modellgrenze (keine Entwicklungsstochastik; die Observable
+   "reine Photonen-SE-Fluktuation" existiert im Experiment nicht
+   isoliert). Bewiesen in STEP 5.2C (Faktor ~160).
+2. LWR-Absolutwerte (PSI 2.4-2.97 nm vs. Sim 0.097 nm):
+   NOT_COMPARABLE — gleiche Modellgrenze (Faktor ~25-30).
+3. E0/γ (PMMA): NOT_COMPARABLE — keine DCT-Observable im Modell.
+4. DtS-Absolutwerte: NOT_COMPARABLE — Dosisdefinition
+   (absorption=1.0 → absorbierte Dosis) vs. einfallende Dosis;
+   keine Absorptionsdaten in den Quellen (UNKNOWN).
+5. σ-Definition: PMMA-LER 1σ/3σ nicht explizit deklariert → als
+   UNKNOWN behandelt; keine Umrechnung ohne Beleg.
+
+============================================================
+6. FEHLENDE PARAMETER (UNKNOWN / NOT_AVAILABLE)
+============================================================
+- SEM-Messlänge (PMMA, PSI) — für LER/LWR-Vergleich relevant
+- ±-Unsicherheiten der PSI-Tabellen (DtS/LWR)
+- PMMA-LER-±-Werte; 1σ/3σ-Deklaration
+- Entwicklungsbedingungen (Developer, Zeit, Temperatur) — beide
+- PAB/PEB/Rinse-Details (PMMA)
+- Absorbierte vs. einfallende Dosis; Film-Absorption (beide)
+- UC-Dissertation: kompletter Inhalt (PDF fehlt)
+
+============================================================
+7. VALIDATION-MATRIX (pro Quelle/Observable)
+============================================================
+Quelle | Observable | Exp.-Definition | Sim.-Definition | Dosisbereich | Geometrie | Resist | Messlänge | Unsicherheit | Vergleich? | Fehlende Parameter
+---|---|---|---|---|---|---|---|---|---|---
+PMMA | LER | SEM/SuMMIT, ~11 nm, 1σ? | large_n RMS, 0.069 nm | E/E0>2.5 (~63+ mJ) | 250 nm Pitch | PMMA 160 nm | UNKNOWN | UNKNOWN | NOT_COMPARABLE | Messlänge, σ-Def., Entwicklungsstochastik
+PMMA | CD/pitch | Fig. 6(a), DIGITIZED nötig | CD/pitch-Dosis-Kurve | E/E0 1-3.5 | 250 nm Pitch | PMMA | — | ±-Balken in Figur | QUALITATIV | E0-Zuordnung, Digitization
+PMMA | E0 | DCT, 25.1±0.5 | — (keine DCT) | — | — | PMMA | — | angegeben | NOT_COMPARABLE | DCT-Observable
+PMMA | γ | 5.3±0.4 | — | — | — | PMMA | — | angegeben | NOT_COMPARABLE | Entwicklungs-Response
+PSI | LWRunb | SEM "unbiased", 2.4-2.97 | lwr RMS, 0.097 | DtS 19-54 mJ | HP 13-14 nm | CAR/MTR 20-30 nm | UNKNOWN | UNKNOWN | NOT_COMPARABLE | Messlänge, Entwicklungsstochastik
+PSI | DtS | dose-to-size, 19.4-53.9 | CD-Dosis (CD=32: ~6.7) | gegeben | HP 13-14 nm | CAR/MTR | — | UNKNOWN | NOT_COMPARABLE | Dosisdefinition, Geometrie
+PSI | Z-Faktor | CD³·LWR²·DtS | — (kein Z-Faktor) | — | — | — | — | UNKNOWN | NOT_COMPARABLE | Z-Observable fehlt
+PSI | CD-Dosis-Trend | Fig. 6-Kontext | CD-Dosis-Kurve | 19-54 | HP 13-14 | CAR/MTR | — | — | QUALITATIV | —
+UC | LER/SE | — (PDF fehlt) | — | — | — | — | — | — | INSUFFICIENT_DATA | PDF
+SciDirect | CD/LER/LWR | — (Paywall) | — | — | 32/64 nm | — | — | — | INSUFFICIENT_DATA | Volltext
+
+Kennzeichnung: EXTRACTED (PMMA-Text, PSI-Tabellen) · DIGITIZED
+(Fig. 6a/b erforderlich, noch nicht durchgeführt) · UNKNOWN
+(Messlänge, σ-Definition, Absorption) · NOT_COMPARABLE (s. o.)
+
+KEIN Wert wurde als VERIFIED deklariert — die experimentellen
+Unsicherheiten sind unvollständig dokumentiert.
+
+============================================================
+8. STOP-BEDINGUNGEN GEPRÜFT
+============================================================
+- LER/LWR-Definition unklar? TEILWEISE (Messlänge UNKNOWN;
+  PMMA-σ UNKNOWN) → STOP für quantitative LER/LWR
+- 1σ/3σ nicht eindeutig? PMMA: UNKNOWN → STOP
+- Messlänge fehlt und relevant? JA (LER/LWR) → STOP
+- Dosis nicht eindeutig zuordenbar? JA (absorbiert vs. einfallend)
+  → STOP für DtS-Absolutwerte
+- Observable inkompatibel? JA (Entwicklungsstochastik fehlt)
+  → STOP für LER/LWR-Absolutwerte
+- Vergleich nur durch willkürliche Parameteranpassung möglich?
+  JA, für Absolutwerte → STOP
+
+KONSEQUENZ: Kein quantitativer Absolutvergleich ist JETZT
+wissenschaftlich zulässig. Der qualitativ zulässige Vergleich
+(CD-Dosis-Trend) ist bereits in STEP 5.2C dokumentiert
+(VALID_WITH_CAVEATS).
+
+============================================================
+9. ERSTER WISSENSCHAFTLICH SAUBERER VERGLEICH (definiert)
+============================================================
+Der einzige JETZT saubere Vergleich ist QUALITATIV (Kategorie C):
+  CD-Dosis-Trend und LER-Dosis-Richtung
+  - Experiment: CD sinkt monoton mit Dosis (PMMA Fig. 6a);
+    LER sinkt mit Dosis bis Sättigung (~11 nm)
+  - Simulation: CD sinkt monoton (64→8 nm über 1-160 mJ/cm²);
+    LER ∝ Dosis^-0.75
+  - Status: VALID_WITH_CAVEATS (nur Richtung/Form, keine
+    Absolutwerte)
+
+Der erste QUANTITATIVE Vergleich ist erst nach Einführung der
+Entwicklungsstochastik möglich. Seine Definition (für später):
+  A) Sim-LWR vs. PSI-LWRunb (2.40-2.97 nm, HP 13-14 nm) —
+     Zielbereich; Simulation auf period_nm=28 (HP 14 nm) als
+     SEPARATE Konfiguration (kein Fit)
+  B) Sim-LER vs. PMMA-LER (~11 nm) — Nicht-CAR-Referenz;
+     Simulation auf period_nm=250 als SEPARATE Konfiguration
+  C) Sim-DtS vs. PSI-DtS nach Dosisdefinitions-Klärung
+     (absorption-Parameter realitätsnah ODER Dokumentation
+     "absorbierte Dosis")
+  D) Sim-CD/pitch vs. PMMA-Fig. 6(a) — nach DIGITIZATION mit
+     Unsicherheitsangabe und E0-Zuordnung
+
+============================================================
+10. ZU BERICHTENDE UNSICHERHEITEN (beim späteren Vergleich)
+============================================================
+- Simulation: SE/CI95 über Seeds (10+), N_eff, L_int, Estimator
+- Experiment: ±-Werte wo angegeben (PMMA-E0); sonst UNKNOWN
+- DIGITIZED-Werte: Digitalisierungsunsicherheit (geschätzt, z.B.
+  ±0.1-0.3 nm für LWR-Punkte) — NIE als exakte Werte behandeln
+- Messlängen-Effekt: als UNKNOWN dokumentieren (kann LER/LWR um
+  Faktor 2-3 beeinflussen — untergeordnet gegenüber Faktor 25-160)
+- Dosisdefinition: systematische Unsicherheit (Faktor 2-5 möglich)
+
+============================================================
+11. SIMULATIONEN FÜR DEN SPÄTEREN VERGLEICH (Aufstellung, NICHT jetzt)
+============================================================
+Nach Entwicklungsstochastik-Implementierung (separater Schritt):
+1. PSI-Vergleich: period_nm=28, line_width_nm=14, se_blur=5,
+   Dosen 15-60 mJ/cm² (6 Punkte), grid_y=4096, large_n,
+   10-20 Seeds → LWR + LER + CD pro Dosis
+2. PMMA-Vergleich: period_nm=250, line_width_nm=125 (L/S > 50),
+   se_blur=5, Dosen 10-90 mJ/cm² (E/E0 0.4-3.5, E0=25.1),
+   10-20 Seeds → LER + CD/pitch
+3. Dosis-Skala: identische Läufe mit absorption<1.0 (falls
+   dokumentiert) ODER dokumentierte absorbierte-Dosis-Norm
+4. CD/pitch-Digitization (PMMA Fig. 6a) VOR dem Vergleich
+5. PSI Fig. 6-Digitization (LWRunb vs. DtS) für Punkt-zu-Punkt-
+   Vergleich
+JETZT: KEINE dieser Simulationen (dieser Schritt ist Preparation).
+
+============================================================
+12. GO / NO-GO FÜR DEN ERSTEN VERGLEICH
+============================================================
+QUANTITATIVER ERSTVERGLEICH (LER/LWR/CD/DtS-Absolutwerte):
+  NO-GO
+  Begründung: STOP-Bedingungen 1-6 greifen (Messlänge UNKNOWN,
+  σ-Definition UNKNOWN, Dosisdefinition inkompatibel, Observable
+  inkompatibel wegen fehlender Entwicklungsstochastik). Ein
+  quantitativer Vergleich wäre nur durch unbelegte Annahmen oder
+  willkürliche Parameteranpassung möglich — wissenschaftlich
+  unzulässig.
+
+QUALITATIVER VERGLEICH (CD-Dosis-Trend, Kategorie C):
+  GO
+  Bereits dokumentiert (STEP 5.2C, VALID_WITH_CAVEATS): CD sinkt
+  monoton mit Dosis in Experiment und Simulation; LER-Dosis-
+  Richtung konsistent (sinkt, Experiment mit Sättigung).
+
+BEDINGUNG FÜR DEN QUANTITATIVEN VERGLEICH (später):
+  Einführung der Entwicklungsstochastik im Modell → danach
+  NO-GO → GO für die definierten Vergleiche A-D (Abschnitt 9/11).
+
+============================================================
+13. BESTÄTIGUNGEN
+============================================================
+- KEINE Kalibrierung, KEINE Parameteranpassung
+- KEINE Simulation in diesem Schritt (nur Preparation)
+- Experimentdaten frozen, unverändert
+- KEIN Commit/Tag/Release
+- Keine Figur-Werte als exakte Daten (DIGITIZED ausstehend, nie
+  VERIFIED)
+- LER/LWR strikt getrennt; 1σ/3σ nicht umgerechnet (UNKNOWN)
+
+============================================================
+END PREPARATION REPORT
+============================================================

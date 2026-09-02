@@ -1,0 +1,235 @@
+EUVSIMULATOR — POST-RCWA WORKTREE FORENSIC / STOCHASTIC-LER AUDIT
+==================================================================
+Date: 2026-08-31 11:03 CEST
+Repository: /Users/pi-server/Projekte/OpEnUV
+Mode: READ-ONLY FORENSIC — NO CHANGES, NO COMMITS, NO RESET
+====================================================================
+
+
+1. GLOBAL SITUATION
+====================================================================
+
+  HEAD:           1674481  — fix(rcwa): correct TM eigenproblem and modal admittance
+  Origin/main:    964139f  — rename: OpEnUV → euvsimulator (BEIDEN, 2 Commits behind)
+  Branch:         main (only branch, no stash, no other refs)
+  Ahead/behind:   ahead of origin/main by 2 commits (db8c7a4 + 1674481 = RCWA fix)
+
+  Committed (2 commits ahead of origin):
+    - db8c7a4 — release: freeze accepted circular SE-blur production state
+    - 1674481 — fix(rcwa): correct TM eigenproblem and modal admittance
+
+  Uncommitted (4 modified + 3 untracked test files):
+    - pipeline.py Detached, not released to origin
+
+
+2. UNCOMMITTED FILES — DETAILED ANALYSIS
+====================================================================
+
+  2.1 src/euvsimulator/pipeline.py
+  ================================
+    HEAD base:  db8c7a4 — "release: freeze accepted circular SE-blur production state"
+    Diff size:  125 lines changed (+119/−6)
+    File mtime: Aug 21 10:28
+
+    Changes:
+    A) Import: +stochastic_development, +ler_estimate
+    B) SimulationResult: +ler_metadata field
+    C) SimulationConfig: +stochastic_ler_grid_y, +stochastic_ler_estimator,
+       +development_stochasticity, +development_strength, +development_correlation_nm
+    D) _cd_via_full_chem: complete rewrite of stochastic loop
+       - tilable stoch_dose for arbitrary grid_y
+       - large-N path: collect dev+acid fields per seed → ler_estimate()
+       - legacy path: unchanged extract_ler per seed → nanmean
+       - development_stochasticity toggle: stochastic vs threshold dev
+       - return 6 values (was 5)
+    E) run_simulation: unpack 6 return values (was 5)
+
+    Provenance: STEP 5.2B (Large-Field pipeline integration) + STEP 5.3 (Development Stoch.)
+    Dependencies: REQUIRES ler_estimate (stochastic.py), stochastic_development (develop.py)
+
+  2.2 src/euvsimulator/resist/develop.py
+  =======================================
+    HEAD base:  964139f — "rename: OpEnUV → euvsimulator" (unchanged at release)
+    Diff size:  96 lines added (1 new function)
+    File mtime: Aug 21 10:28
+
+    Changes:
+    - New function: stochastic_development() — event-based dissolution
+      model with Poisson rate = strength × drive, Gaussian correlation kernel
+
+    Provenance: STEP 5.3 — Development stochasticity
+    Dependencies: NONE (only euvsimulator.resist.exposure.gaussian_se_blur)
+
+  2.3 src/euvsimulator/resist/stochastic.py
+  ==========================================
+    HEAD base:  db8c7a4 — "release: freeze accepted circular SE-blur production state"
+    Diff size:  253 lines changed (+247/−6)
+    File mtime: Aug 21 11:39
+
+    Changes:
+    A) photon_deposition_shot_noise (Option C):
+       - Import gaussian_se_blur moved outside if-block (fixes NameError at se=0)
+       - blur_dose = gaussian_se_blur(dose, sigma, dx)
+       - d_eff = blur_dose * e_dep / e_bar (was: dose * e_dep / e_bar)
+       - Added import math
+    B) New class LEREstimate with full statistical metadata
+    C) New function _autocorrelation() — empirical autocorrelation rho(k)
+    D) New function _ler_rms() — RMS deviation helper
+    E) New function ler_estimate() — correlation-aware LER estimator
+
+    Provenance: STEP 5.1 (LER estimator), STEP 5.3E–5.3I (Option C)
+    Dependencies: None (self-contained changes)
+
+  2.4 tests/test_photon_deposition.py
+  =====================================
+    HEAD base:  db8c7a4 — "release: freeze accepted circular SE-blur production state"
+    Diff size:  33 lines (+29/−4)
+    File mtime: Aug 21 11:42
+
+    Changes:
+    A) test_unbiased_with_spatial_pattern: test reference updated to blur(dose)
+    B) test_mixed_zero_and_positive_dose: border assertion relaxed (SE transport)
+
+    Provenance: STEP 5.3E–5.3I — Option C path consistency
+    Dependencies: MUST accompany stochastic.py change (tests the Option C formula)
+
+
+3. UNTRACKED TEST FILES
+====================================================================
+
+  3.1 tests/test_development_stochasticity.py (236 lines, 13 tests)
+       STEP 5.3 — Event-based development stochasticity.
+       Tests: OFF mode, ON mode, seed reproducibility, grid_y, invariance.
+
+  3.2 tests/test_ler_estimate.py (162 lines, 11 tests)
+       STEP 5.1 — Correlation-aware LER estimator.
+       Tests: legacy compat, large-N, correlation correction, truncation, SE/CI.
+
+  3.3 tests/test_ler_production_integration.py (489 lines, 25+ tests)
+       STEP 5.2B — LER production integration.
+       Tests: legacy mode, N_eff≥30, convergence ≤1%, edge=both, metadata, dose scaling.
+
+  All three are PARAMETERIZED → pytest collects 62 tests (not 13+11+25=49 dectest).
+  All three pass with the uncommitted pipeline/stochastic/develop changes.
+
+  These files must be included in any commit that touches pipeline.py/stochastic.py/develop.py.
+
+
+4. PROVENANCE MAP
+====================================================================
+
+  All uncommitted changes belong to a SINGLE coherent development cycle:
+
+  Step  Identifier    Files Touched              Status
+  ─────  ──────────   ──────────────             ──────
+  5.1    LER Estim.   stochastic.py (B,C,D,E)    ✓ implemented
+                      test_ler_estimate.py       ✓ tested
+  5.2B   Pipeline     pipeline.py (A,B,C,D,E)    ✓ implemented
+                      test_ler_prod_integration  ✓ tested
+  5.2C   Experim.Val  untracked reports only     ✓ NOT COMPARABLE
+  5.3    Dev.Stoch.   develop.py (A)             ✓ implemented
+                      pipeline.py (D)            ✓ integrated
+                      test_dev_stochasticity.py  ✓ tested
+  5.3E-I  Opt.C SE    stochastic.py (A)          ✓ implemented
+                      test_photon_deposition.py  ✓ updated
+
+  Key finding: NO file has AUFERHALB dieser Steps.
+               All 4 modified + 3 untracked files = EIN logisches Paket.
+               Der Worktree kann NICHT sauber getrennt werden.
+
+
+5. COMMIT HISTORY OF THE AFFECTED FILES
+====================================================================
+
+  File                    Last Commit Before Edits
+  ────────────            ────────────────────────────
+  pipeline.py             db8c7a4 — release (21 Aug)
+  stochastic.py           db8c7a4 — release (21 Aug)
+  test_photon_deposition  db8c7a4 — release (21 Aug)
+  develop.py              964139f — rename (17 Aug, untouched at release)
+
+  → Alle Änderungen sind NACH dem letzten Release (db8c7a4) entstanden.
+  → Keine älteren uncommitteten Arbeiten, keine Konflikte.
+  → origin/main ist 2 Commits zurück (sowohl RCWA als auch Stochastic fehlen).
+
+
+6. TEST STATUS
+====================================================================
+
+  Tracked tests (--ignore untracked):  565 passed, 3 warnings, 0 failed
+  Untracked tests (3 files):            62 passed, 0 warnings, 0 failed
+  Total:                                627 passed, 3 warnings, 0 failed
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ KEIN EINZIGER TEST FEHLT — auch mit den uncommitteten   │
+  │ Pipeline-Änderungen. Der gesamte Worktree ist funktional.│
+  └─────────────────────────────────────────────────────────┘
+
+
+7. ENTSCHEIDUNG — CASE A
+====================================================================
+
+  CASE A — alles bekannte, absichtliche, aktuelle Arbeit
+
+  Alle uncommitteten Änderungen stammen aus den dokumentierten
+  Stochastic/LER Steps 5.1–5.3I (Session 2026-08-19 bis 2026-08-21).
+  Es gibt keine älteren Geister-Änderungen, keine Stash-Reste,
+  keine anderen Branches, keine Konflikte mit dem RCWA-Commit.
+
+
+8. EMPFEHLUNGEN
+====================================================================
+
+  8.1 COMMIT-EMPFOHLENE GRUPPE (kleinste sinnvolle Einheit):
+
+       Modified:
+         src/euvsimulator/pipeline.py
+         src/euvsimulator/resist/develop.py
+         src/euvsimulator/resist/stochastic.py
+         tests/test_photon_deposition.py
+
+       Untracked (müssen addiert werden):
+         tests/test_development_stochasticity.py
+         tests/test_ler_estimate.py
+         tests/test_ler_production_integration.py
+
+       Alle 7 Dateien bilden EINE untrennbare logische Einheit.
+
+  8.2 EMPFOHLENE COMMIT-MESSAGE:
+
+       feat(stochastic): large-N LER estimator, development stoch., Option-C SE
+
+       • STEP 5.1: Correlation-aware large-N LER estimator (ler_estimate)
+       • STEP 5.2B: Pipeline integration (stochastic_ler_grid_y, tile, metadata)
+       • STEP 5.3: Event-based stochastic development (stochastic_development)
+       • STEP 5.3I: Option-C SE-blur path consistency (d_eff = blur(dose) * e_dep / e_bar)
+
+  8.3 WAS NICHT ANFASSEN:
+
+       • src/euvsimulator/mask3d/rcwa_torch.py — bereits committed (1674481)
+       • tests/test_rcwa.py — bereits committed
+       • tests/test_benchmarks.py — bereits committed
+       • pipeline.py — NICHT einzeln committen (Abhängigkeiten!)
+       • Alle STEP_*.txt / STOCHASTIC_*.txt / EUVSIMULATOR_*.txt —
+         Audit-Reports, können als untracked bleiben oder separat archiviert
+
+  8.4 VOR EINEM COMMIT NOTWENDIG:
+
+       • python -m pytest tests/ -q   → 627 passed
+         (bereits bestätigt — siehe oben)
+
+       • ggf. STOCHASTIC_REVALIDATION_STEP5_2A_INVENTORY.txt konsultieren
+         für vollständige Checkliste
+
+  8.5 EMPFEHLUNG ZUM WEITEREN VORGEHEN:
+
+       Commit jetzt oder später — aber NICHT REBASE/SQUASH mit dem RCWA-Commit.
+       Beide sind unabhängige Arbeiten (TM-Physics vs Stochastic/LER-Modeling)
+       und sollten als separate Commits im Log erhalten bleiben.
+
+       Ein Push zu origin ist erst sinnvoll, wenn der Commit der
+       Stochastic/LER-Arbeit vorhanden ist — origin hat derzeit nur
+       den Rename-Commit (964139f), dem sowohl RCWA als auch Stochastic fehlen.
+
+====================================================================
+END OF FORENSIC REPORT

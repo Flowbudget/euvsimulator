@@ -1,0 +1,135 @@
+================================================================================
+NILS AN DER PRODUKTIONS-THRESHOLD-KANTE
+2026-09-01
+Scope: nur NILS-Metrik. Keine CD-/Resist-/TCC-/RCWA-Aenderung.
+================================================================================
+
+1. ROOT CAUSE
+--------------------------------------------------------------------------------
+nils() wertete ILS am globalen argmax(|dI/dx|) aus und multiplizierte
+mit einer zweiten CD aus (Imin+Imax)/2.
+
+Die Pipeline-CD kommt aus _cd_via_aerial_threshold():
+  threshold = resist_threshold_norm * mean(aerial) * (20 / dose)
+  Default: 0.5 * mean(aerial)
+
+Beim Standardbenchmark:
+  ILS am falschen Ort (steilster Gradient, I~6.80) * CD_nils=40 nm
+  -> nils_value ~ 4.12
+
+  Mack an der gedruckten Kante (I=threshold~2.387, CD_optisch=27.5 nm)
+  -> ~4.95
+
+Die Aerial-Physik war nicht der Fehler. Die Kantendefinition war
+inkompatibel mit der Optical-CD.
+
+
+2. AENDERUNG
+--------------------------------------------------------------------------------
+src/euvsimulator/aerial/abbe.py
+  Funktion nils(..., threshold=None)
+  Mack: NILS = mean( NILS_left, NILS_right )
+  NILS_edge = CD_interp * |dI/dx|_segment / I_edge
+  I_edge = threshold
+  x_edge = lineare Interpolation zwischen benachbarten Pixeln
+  CD_interp = Abstand der beiden Kreuzungen der laengsten
+              below-threshold-Spanne (sub-pixel)
+
+  Default threshold=None -> 0.5*mean(cut)
+  Das trifft den Default-Optical-CD-Anker (norm=0.5, dose=20).
+  Call-Sites, die schon einen CD-Threshold haben, MUESSEN ihn
+  uebergeben.
+
+src/euvsimulator/pipeline.py
+  _cd_via_aerial_threshold: nils(..., threshold=threshold_val)
+  _cd_via_full_chem: derselbe Optical-CD-Threshold auf dem
+  geblurrten dose_map (NILS bleibt Bildqualitaet, CD bleibt
+  Mack-Resist-CD). CD-Formel unangetastet.
+
+tests/test_nils_mack.py  (neu)
+  analytisches Trapez, Symmetrie, Threshold-Verschiebung,
+  Asymmetrie (nicht argmax), Pipeline CD-Regression
+
+tests/test_reference_nils.py
+  numpy-Referenz auf dieselbe Mack-Definition umgestellt
+  (unabhaengig, kein Import von euvsimulator.nils in der Formel)
+  Range-Assertion 1.5-4.0 entfernt: gehoerte zur alten Heuristik.
+  Ersetzt durch: Blur senkt NILS.
+
+
+3. PHYSIK
+--------------------------------------------------------------------------------
+NILS = CD * |dI/dx| / I_edge
+
+x_edge: I(x) kreuzt threshold; lineare Interpolation
+  x = i + (thr - I_i) / (I_{i+1} - I_i)
+
+dI/dx: Steigung des Segments, das die Kreuzung enthaelt
+  (exakt fuer stueckweise lineares I)
+
+Zwei Kanten: NILS = (NILS_left + NILS_right) / 2
+Asymmetrisch: nicht stillschweigend die steilere Kante.
+
+I_edge = threshold (Mack: Intensitaet an der gedruckten Kante).
+
+
+4. TESTS (neu / geaendert)
+--------------------------------------------------------------------------------
+NEU tests/test_nils_mack.py
+  test_analytic_symmetric_trapezoid
+  test_symmetric_left_right_equal
+  test_threshold_shift_moves_evaluation_point
+  test_asymmetric_not_global_argmax_gradient
+  test_pipeline_cd_unchanged_nils_at_threshold
+
+GEAENDERT tests/test_reference_nils.py
+  nils_from_image_ref = Mack-Numpy
+  test_nils_realistic_range -> test_nils_blur_reduces_nils
+
+metro.compute_nils unangetastet (andere API, eigene Tests).
+
+
+5. ERGEBNISSE
+--------------------------------------------------------------------------------
+Standardbenchmark
+  wavelength 13.5 nm, pitch 64 nm, mask CD 32 nm
+  NA 0.33, sigma 0.8, grid 256
+  use_rcwa=False, aerial_threshold, dose 20, se_blur 0
+
+  CD vorher:   27.50 nm
+  CD nachher:  27.50 nm     unveraendert
+
+  NILS vorher: 4.12
+  NILS nachher: 4.9685
+  Check ~4.95: ja (interpolierte Kante, nicht 27.5*0.1799 Pixel-Naeherung)
+
+pytest
+  before: 756 passed
+  after:  761 passed  (+5 neue Mack-Tests)
+  regressions: 0
+
+
+6. DIFF-SCOPE (dieser Task)
+--------------------------------------------------------------------------------
+  src/euvsimulator/aerial/abbe.py      nils()
+  src/euvsimulator/pipeline.py         zwei nils()-Aufrufe + Threshold
+  tests/test_nils_mack.py              neu
+  tests/test_reference_nils.py         Mack-Referenz
+
+Nicht in diesem Task (schon vorher dirty im working tree):
+  TCC, illumination shapes, RCWA, TMM, Defocus, Golden LER-Werte.
+
+
+7. OFFENE PUNKTE
+--------------------------------------------------------------------------------
+- Default threshold=None = 0.5*mean gilt nur fuer den Default-Anker
+  (norm=0.5, dose=20). Andere Configs muessen threshold uebergeben.
+  Die Pipeline tut das.
+- Optical-CD bleibt integer-pixel (27.50 nm); NILS nutzt interpolierte
+  CD (~27.62 nm) in der Mack-Formel. Absichtlich: CD-Pfad unveraendert.
+- NILS ist Optical-NILS, nicht Resist-developed-NILS.
+- test_pipeline.test_nils_realistic (1.5-4.0 bei se_blur=10, full_chem)
+  bleibt gruenen — andere Szene, nicht aufgeweicht.
+
+STOP. Kein naechster Feature-Schritt.
+================================================================================
