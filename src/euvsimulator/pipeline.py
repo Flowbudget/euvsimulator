@@ -141,23 +141,84 @@ class SimulationConfig:
     grid: int = 256
     device: str = "auto"
 
-    # Dill ABC exposure parameters
-    dill_A: float = 0.5  # Bleachable absorption coefficient [1/µm]
-    dill_B: float = 0.2  # Non-bleachable absorption coefficient [1/µm]
-    dill_C: float = 0.05  # Photo-rate constant [cm²/mJ]
+    # Dill ABC exposure parameters.
+    #
+    # LITERATURE REFERENCE (2026-09-02 research pass, see
+    # docs/claude_code_arbeitslog.md and audit/ for the full trail):
+    # Fallica, R.; Stowers, J. K.; Grenville, A.; Frommhold, A.; Robinson,
+    # A. P. G.; Ekinci, Y. "Dynamic absorption coefficients of chemically
+    # amplified resists and nonchemically amplified resists at extreme
+    # ultraviolet." J. Micro/Nanolith. MEMS MOEMS 15(3), 033506 (2016).
+    # doi:10.1117/1.JMM.15.3.033506 — directly measured Dill A/B/C for
+    # several EUV-specific CAR platforms ("EUV 1/2/3/3+S" in the paper,
+    # organic, undisclosed manufacturer; Fig. 6 there).
+    #
+    # Measured ranges for EUV-specific organic CAR (their Fig. 6, values
+    # read off the bar chart, approximate):
+    #   A ~= 0.2-0.45 um^-1, B ~= 4-5 um^-1, C ~= 0.13-0.43 cm^2/mJ.
+    # Other C measurements cited therein (different resists/methods):
+    #   0.04 cm^2/mJ (film-thickness-loss method, ref. 16 in the paper),
+    #   0.0409 +/- 0.0023 cm^2/mJ (FTIR, ref. 17), 0.037-0.055 cm^2/mJ
+    #   (refs. 18-20) -- i.e. C ~= 0.04-0.5 cm^2/mJ across methods/resists.
+    #
+    # IMPORTANT physical finding from the paper (Sec. 3.2): for EUV CAR,
+    # A is much smaller than the total absorption coefficient alpha, and
+    # B ~= alpha (i.e. A << B) -- the OPPOSITE regime from i-line/g-line
+    # resists, which have A >> B. This project's current defaults
+    # (A=0.5 > B=0.2) are in the WRONG regime for an EUV CAR resist per
+    # this reference; A should very likely be << B (B on the order of a
+    # few um^-1), not the other way around. NOT YET CORRECTED HERE --
+    # flagged for the full_chem recalibration pass (see arbeitslog),
+    # since changing it changes already-referenced simulation outputs
+    # and needs explicit sign-off per project rules.
+    dill_A: float = 0.5  # Bleachable absorption coefficient [1/µm] -- see note above, likely mis-scaled vs. dill_B
+    dill_B: float = 0.2  # Non-bleachable absorption coefficient [1/µm] -- literature suggests ~4-5 for EUV CAR, see note above
+    dill_C: float = 0.05  # Photo-rate constant [cm²/mJ] -- within the 0.037-0.055 cm²/mJ range reported across several (non-EUV-specific) studies; Fallica et al.'s own EUV-CAR measurements run higher (0.13-0.43)
     dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon); typical range 0.02–0.10 for EUV CAR (see resist/exposure.py)
 
-    # PEB (reaction-diffusion) parameters
-    peb_D: float = 5.0  # Acid diffusivity [nm²/s]
+    # PEB (reaction-diffusion) parameters.
+    #
+    # LITERATURE REFERENCE: Lavery, K. A.; Choi, K.-W.; Vogt, B. D.;
+    # Prabhu, V. M.; Lin, E. K.; Wu, W.; Satija, S. K.; Leeson, M. J.;
+    # Cao, H. B.; Thompson, G.; Deng, H.; Fryer, D. S. "Fundamentals of
+    # the Reaction-Diffusion Process in Model EUV Photoresists." Proc.
+    # SPIE 6153, 615313 (2006) (NIST/Intel, neutron reflectivity on a
+    # model EUV bilayer resist). Measured directly (their Figs. 4b/5a,
+    # long-ranged front, 90-130 C PEB, 30 s):
+    #   diffusion length sigma ~= 5-15 nm
+    #   diffusion coefficient D ~= 2-8 x1e-14 cm^2/s = 2-8 nm^2/s
+    # Both current defaults below (peb_D=5.0, peb_sigma_diff=5.0) fall
+    # within or at the edge of these measured ranges -- reasonably well
+    # grounded, unlike the Dill A/B mismatch above.
+    peb_D: float = 5.0  # Acid diffusivity [nm²/s] -- consistent with Lavery et al. 2006, ~2-8 nm²/s measured
     peb_k: float = 0.3  # Deprotection rate constant [s⁻¹]
     peb_t_bake: float = 60.0  # Bake time [s]
-    peb_sigma_diff: float = 5.0  # Analytical diffusion sigma [nm]
+    peb_sigma_diff: float = 5.0  # Analytical diffusion sigma [nm] -- at the low end of Lavery et al. 2006's measured 5-15 nm range
 
-    # Mack development parameters
-    mack_R_max: float = 100.0  # Max development rate [nm/s]
-    mack_R_min: float = 0.1  # Min development rate [nm/s]
-    mack_n: float = 5.0  # Dissolution selectivity (contrast)
-    mack_M_th: float = 0.5  # Threshold inhibitor concentration
+    # Mack development parameters.
+    #
+    # LITERATURE STATUS (2026-09-02 research pass): no EUV-specific,
+    # peer-reviewed source for Rmax/Rmin/n/Mth was found. The Mack
+    # (1987) model itself long predates EUV lithography and is normally
+    # fit per-resist to measured develop-rate data, not read off a
+    # universal reference. One illustrative non-EUV (DUV/i-line era)
+    # example resist "PD523AD" (commonly used in teaching/Prolith
+    # material, not independently verified here against a primary
+    # measurement) reports two different fitted parameter sets
+    # depending on developer/process: Rmax=85 or 183 nm/s, Rmin=0.009
+    # or 0.006 nm/s, Mth=0.060 or 0.450, n not given. This only shows
+    # the plausible order of magnitude and the large resist-to-resist/
+    # process-to-process spread -- it is NOT a substitute for an
+    # EUV-CAR-specific fit and should not be treated as a validated
+    # reference. mack_n=5.0 below happens to be close to a value (5.8)
+    # seen for that same non-EUV example, but this is a coincidence,
+    # not evidence. Recalibrating these against real EUV develop-rate
+    # data is an open item -- flagged as a judgment call without solid
+    # literature backing (see arbeitslog / stop-and-ask criteria).
+    mack_R_max: float = 100.0  # Max development rate [nm/s] -- order-of-magnitude only, no EUV-specific source found
+    mack_R_min: float = 0.1  # Min development rate [nm/s] -- order-of-magnitude only, no EUV-specific source found
+    mack_n: float = 5.0  # Dissolution selectivity (contrast) -- order-of-magnitude only, no EUV-specific source found
+    mack_M_th: float = 0.5  # Threshold inhibitor concentration -- order-of-magnitude only, no EUV-specific source found
 
     # Stochastic / Shot Noise parameters
     enable_stochastic: bool = False  # Enable photon shot noise + LER/LWR
