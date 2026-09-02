@@ -244,7 +244,7 @@ def _cd_via_aerial_threshold(
     - Dark regions (absorber) → undeveloped → 1 (remaining)
     - CD = width of the undeveloped (below-threshold) region
 
-    The threshold is ``resist_threshold_norm × max(aerial)``.
+    The threshold is ``resist_threshold_norm × mean(aerial) × 20 / dose``.
 
     Returns (cd_nm, resist_profile, nils_value).
     """
@@ -252,7 +252,9 @@ def _cd_via_aerial_threshold(
     device = aerial.device
     cut = aerial[half, :]  # centre-row cut
     # FIXED threshold relative to nominal-dose intensity (c0² × nominal dose),
-    # NOT 0.5 × max(aerial).  This makes CD dose-dependent and physically correct.
+    # NOT 0.5 × mean(aerial).  The dose normalisation makes CD dose-dependent
+    # and physically correct (higher dose → higher intensity → threshold crossed
+    # at a different part of the profile).
     # c0 is the mean reflectivity (a·duty + b·(1−duty)); reconstructed here from
     # the aerial DC level.
     dc_level = float(aerial.mean())

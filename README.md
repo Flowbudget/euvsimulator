@@ -1,332 +1,332 @@
-# euvsimulator — Open Source Extreme Ultraviolet Lithography Simulator
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/euvsimulator/actions)
-[![Tests](https://img.shields.io/badge/tests-534%2F534%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
-[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?include_prereleases&sort=semver)](https://github.com/Flowbudget/euvsimulator/releases)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
-
-**From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
-
-| | |
-|---|---|
-| ⚛️ **First-principles physics** | CXRO atomic scattering → TMM reflectivity → RCWA mask diffraction → Hopkins imaging → Dill ABC resist |
-| 🚀 **GPU-native** | PyTorch autograd throughout — differentiable from mask geometry to CD |
-| 🧪 **Validated** | 534 unit tests, cross-checked against CXRO database, independent literature, and Grok verification |
-| 📦 **Zero commercial dependencies** | Apache 2.0 — fork, modify, deploy freely |
-| 🌐 **Web API + Dashboard** | FastAPI REST server with interactive web UI |
-| 📓 **Teaching-ready** | 6 executable Jupyter notebooks covering full pipeline |
-
----
-
-## What makes euvsimulator different?
-
-euvsimulator is the **only open-source tool that models the complete EUV lithography pipeline from photon to CD**:
-
-| Module | Method | euvsimulator | IMD | GD-Calc | OpenLithoHub |
-|--------|--------|--------|-----|---------|--------------|
-| **Material constants** | CXRO/Henke f₁,f₂ | ✅ | ✅ | ❌ | ❌ |
-| **Multilayer mirror** | Transfer-Matrix (S-matrix) | ✅ | ✅ | ❌ | ❌ |
-| **Mask diffraction** | RCWA 1D/2D + S-matrix cascade | ✅ | ❌ | ✅ | ❌ |
-| **Aerial image** | Hopkins/Abbe + pupil + source | ✅ | ❌ | ❌ | ❌ |
-| **High-NA optics** | Anamorphic 4×/8×, Zernike | ✅ | ❌ | ❌ | ❌ |
-| **Resist chemistry** | Dill ABC + PEB + development | ✅ | ❌ | ❌ | ❌ |
-| **Plasma source** | LPP Sn-droplet spectral model | ✅ | ❌ | ❌ | ❌ |
-| **Stochastics** | Shot noise, LER/LWR | ✅ | ❌ | ❌ | ✅ |
-| **CD metrology** | Process window, Bossung | ✅ | ❌ | ❌ | ❌ |
-| **Optimization** | Differentiable OPC/ILT bridge | ✅ | ❌ | ❌ | ✅ |
-| **Web API** | REST + dashboard | ✅ | ❌ | ❌ | ❌ |
-
-IMD is the gold standard for multilayer reflectivity. GD-Calc solves rigorous coupled-wave analysis. OpenLithoHub benchmarks OPC quality. **euvsimulator is the only tool that connects all the physics** — from plasma spectrum through mask diffraction to developed resist profile.
-
----
-
-## Validated test calculations
-
-All results independently verified against the CXRO/Henke database and literature values.
-Full details in [`testberechnungen.md`](testberechnungen.md).
-
-| Test | Result | Method |
-|------|--------|--------|
-| **Mo optical constants** (91.84 eV) | n = 0.92335, k = 0.00647 | CXRO database interpolation |
-| **Si optical constants** (91.84 eV) | n = 0.99900, k = 0.00183 | CXRO database interpolation |
-| **Mo/Si multilayer** 50 BL @ 6° | **R = 64.7%** (ideal) / 60.6% (σ=0.5 nm) | S-matrix TMM + Névot-Croce |
-| **Wavelength: 13.5 nm** | — | E = hc/λ = 91.84 eV |
-| **Illumination: NA 0.33** | Conventional, σ = 0.8 | Dipole / annular / quasar |
-| **Aerial image NILS** | **5.48** @ 64 nm pitch, 32 nm CD (ideal) → **2.70** with SE blur 10 nm | Hopkins formulation + SE blur |
-| **Process window** | CD vs. dose × focus | Bossung plot |
-
-> *"The calculations are solid and physically sound."* — Grok (independent review, 2026-07-09)
-
----
-
-### Secondary-Electron (SE) Blur
-
-The `se_blur_nm` parameter models the resist point-spread function: EUV photoelectrons
-and Auger electrons undergo a random walk before generating photoacid, blurring the
-aerial image at the nm scale. This is **the dominant physical cause of finite NILS**
-in real EUV processes.
-
-```python
-from euv.pipeline import SimulationConfig, RESIST_PRESETS
-
-# Ideal optical image (unrealistically high NILS)
-cfg = SimulationConfig(se_blur_nm=0.0)
-
-# Realistic CAR resist
-cfg = SimulationConfig(se_blur_nm=RESIST_PRESETS["CAR"])  # 5.0 nm
-
-# Or explicit
-cfg = SimulationConfig(se_blur_nm=10.0)
-```
-
-Typical values:
-- `RESIST_PRESETS["CAR"]` = 5.0 nm (chemically amplified resist)
-- `RESIST_PRESETS["nonCAR"]` = 2.5 nm (non-CAR)
-- `RESIST_PRESETS["HighNA"]` = 3.0 nm (High-NA EUV, smaller features)
-
-**Without SE blur, NILS reflects only the 3-order optical contrast and is unrealistically high (~5–8). With 5–10 nm blur, NILS drops to the physically correct range of 2–3.**
-
----
-
-## Quick start
-
-### Installation
-
-```bash
-# From GitHub (latest main branch)
-pip install git+https://github.com/Flowbudget/euvsimulator.git
-
-# Or clone and install from source (for development)
-git clone https://github.com/Flowbudget/euvsimulator.git
-cd euvsimulator
-pip install -e .                       # install from local source
-pip install -e ".[dev]"                # with dev dependencies
-```
-
-### Command-line interface
-
-```bash
-# End-to-end simulation
-euv simulate --period=64 --cd=32 --dose=20
-
-# End-to-end with realistic SE blur (10 nm)
-euv simulate --period=64 --cd=32 --dose=20 --se-blur=10
-
-# Use CAR resist preset (5 nm SE blur)
-euv simulate --period=64 --cd=32 --dose=20 --resist-preset=CAR
-
-# Process window (dose-focus Bossung plot)
-euv process-window --period=64 --cd=32
-
-# Web dashboard (REST API + interactive UI)
-euv serve
-# → http://localhost:8000
-
-# Query material database
-euv materials Mo --energy=91.84
-
-# Generate test mask (GDSII)
-euv make-mask --period=64 --cd=32 --output=mask.gds
-
-# Performance benchmark
-euv bench
-
-# System info
-euv info
-```
-
-### Python API
-
-```python
-from euvsimulator.pipeline import SimulationConfig, run_simulation
-
-cfg = SimulationConfig(
-    period_nm=64, line_width_nm=32,
-    dose_mj_cm2=20, na=0.33, sigma=0.8,
-    resist_model="full_chem",
-    se_blur_nm=5.0,  # CAR resist
-)
-result = run_simulation(cfg)
-print(f"CD = {result.cd_nm:.1f} nm")
-print(f"NILS = {result.nils_value:.3f}")
-
-# With RCWA mask-3D (Phase 4)
-result_rcwa = run_simulation(cfg, use_rcwa=True)
-print(f"RCWA CD = {result_rcwa.cd_nm:.1f} nm")
-```
-
-### Jupyter Notebooks (6 tutorials)
-
-```bash
-cd notebooks
-jupyter lab  # or: jupyter notebook
-```
-
-| Notebook | Description |
-|----------|-------------|
-| `01_aerial_image.ipynb` | TMM → RCWA → Hopkins → SE blur → NA/σ sensitivity |
-| `02_nils_cd.ipynb` | NILS definition, SE blur impact, Bossung curves, resolution limits |
-| `03_resist_chain.ipynb` | Dill ABC → PEB reaction-diffusion → Mack development → 1/√D scaling |
-| `04_process_window.ipynb` | DoF/EL extraction, MEEF, SE blur/NA sweeps, CSV/PNG export |
-| `05_stochastics.ipynb` | Poisson shot noise, LER/LWR extraction, multi-realisation stats, QE sweep |
-| `06_mask3d.ipynb` | Thin-mask vs RCWA, taper/undercut, best focus shift, TE/TM |
-
-All notebooks execute cleanly via `jupyter nbconvert --execute` (tested in CI).
-
----
-
-## Architecture
-
-```
-src/euvsimulator/
-├── source/         LPP Sn-plasma emission model (spectrum + dose)
-├── materials/      CXRO atomic scattering factors f₁,f₂ (Z = 1–92)
-├── optics/         Multilayer TMM (S-matrix, Névot-Croce, grading)
-├── mask3d/         RCWA 1D/2D Fourier Modal Method (stable S-matrix)
-├── aerial/         Abbe/Hopkins imaging, pupil, source shapes
-├── resist/         Dill ABC exposure, PEB, development, shot noise
-├── io/             CLI, GDSII, rasterization
-├── metro/          CD metrology, process window, SEM rendering
-├── opc/            Differentiable OpenILT bridge
-├── accel/          GPU acceleration + VRAM management
-├── etch/           Etch bias model
-├── calibrate/      Wafer calibration (scipy optimisation)
-├── api/            FastAPI REST server + web dashboard
-└── pipeline.py     End-to-end simulation orchestration
-```
-
-```
-┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐
-│ SOURCE │ → │  MASK  │ → │OPTICS │ → │ AERIAL │ → │ RESIST │ → │ METRO  │
-│ LPP Sn │   │ RCWA   │   │ TMM   │   │Hopkins│   │Dill ABC│   │ CD/PW  │
-└────────┘   └────────┘   └────────┘   └────────┘   └────────┘   └────────┘
-```
-
----
-
-## CLI reference
-
-| Command | Description |
-|---------|-------------|
-| `euv simulate` | Full end-to-end simulation (CLI args or YAML/JSON config) |
-| `euv process-window` | Dose-focus Bossung grid → DoF + EL |
-| `euv make-mask` | Generate line/space test mask (GDSII) |
-| `euv materials` | List elements / query n + ik at any photon energy |
-| `euv serve` | Launch the REST API + web dashboard |
-| `euv bench` | Performance benchmark |
-| `euv info` | System + module overview |
-| `euv version` | Print version |
-| `euv calibrate` | Calibrate resist-model parameters to measured wafer CD data |
-
----
-
-## Documentation
-
-Full Sphinx documentation at [`docs/`](docs/):
-- [Overview](docs/overview.rst)
-- [Installation](docs/install.rst)
-- [Architecture](docs/architecture.rst)
-- [Quickstart](docs/quickstart.rst)
-- [API reference](docs/api/modules.rst)
-- [Contributing](docs/contributing.rst)
-
-Build locally:
-```bash
-pip install sphinx sphinx-rtd-theme
-cd docs && make html
-```
-
----
-
-## Project status
-
-| Milestone | Status |
-|-----------|--------|
-| Project scaffold & CXRO materials | ✅ |
-| Multilayer optics (S-matrix TMM) | ✅ |
-| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), taper/undercut, integrated via `use_rcwa=True` |
-| Aerial image (Abbe/Hopkins + SE blur) | ✅ |
-| High-NA imaging (anamorphic) | ✅ |
-| End-to-end pipeline | ✅ |
-| LPP source model | ✅ |
-| Resist chemistry (Dill ABC + PEB + Mack) | ✅ |
-| Stochastic effects (shot noise, LER/LWR) | ✅ Shot noise, LER/LWR, 1/√Dose scaling, Monte-Carlo |
-| CD metrology & process window | ✅ |
-| Inverse lithography (OpenILT bridge) | ✅ |
-| GPU acceleration | ✅ |
-| REST API + web UI | ✅ |
-| Tutorials & documentation | ✅ 6 notebooks complete |
-| Docker deployment | ✅ |
-| **CI/CD pipeline** | ✅ **GitHub Actions: Linux/macOS/Windows × Python 3.10–3.13** |
-| **Test count** | **534 / 534 passing** |
-| **License** | Apache 2.0 |
-
----
-
-## Roadmap / Known TODOs
-
-> **Note:** The core physics pipeline is validated and production-ready. These items are enhancements for specific use cases.
-
-| Area | Description | Priority |
-|------|-------------|----------|
-| **Resist `full_chem` parameters** | Expose Dill A/B/C/Q, PEB k/t/D/σ, Mack params in Config & CLI | High |
-| **Stochastics in pipeline** | Integrate photon shot noise + LER/LWR → `SimulationResult` | ✅ Done |
-| **Process window visualization** | `--output-plot` (PNG heatmap) + `--output-csv` for `euv process-window` | Medium |
-| **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | ✅ Done (v1.0) |
-| **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
-| **Citation metadata** | `CITATION.cff` + Zenodo DOI for v1.0 | Medium |
-
-See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with code sketches.
-
----
-
-## Discoverability & Citation
-
-### GitHub Topics
-`euv-lithography` `semiconductor-simulation` `computational-lithography` `rcwa` `hopkins-imaging` `resist-modeling` `dill-model` `multilayer-optics` `plasma-physics` `open-source` `python` `pytorch` `fastapi` `scientific-computing`
-
-### For researchers
-If you use euvsimulator in your research, please cite it:
-
-```bibtex
-@software{euvsimulator2026,
-  author       = {Flowbudget},
-  title        = {euvsimulator: Open Source EUV Lithography Simulator},
-  version      = {1.0.3},
-  year         = {2026},
-  url          = {https://github.com/Flowbudget/euvsimulator},
-  license      = {Apache-2.0},
-  doi          = {10.5281/zenodo.XXXXXXX}
-}
-```
-
-A Zenodo DOI will be minted with the v1.0 release.
-
----
-
-## License
-
-Apache 2.0 — see [`LICENSE`](LICENSE).
-
----
-
-## How to contribute
-
-We welcome contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines.
-
-- 🐛 Open an [issue](https://github.com/Flowbudget/euvsimulator/issues) for bugs
-- 💡 Start a [discussion](https://github.com/Flowbudget/euvsimulator/discussions) for features
-- 🔀 Submit pull requests on the `main` branch
-- 📝 Improve documentation or add tutorials
-- 🎓 If you use euvsimulator in research, cite it! (citation coming with v1.0)
-
----
-
-## Support
-
-PayPal: **gofter@web.de** — send via PayPal Friends & Family
-
-Development supported by [GitHub Sponsors](https://github.com/sponsors/Flowbudget) and PayPal donations.
-OpEnUV is open source — contributions welcome. ❤️
+1|# euvsimulator — Open Source Extreme Ultraviolet Lithography Simulator
+2|
+3|[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+4|[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+5|[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/euvsimulator/actions)
+6|[![Tests](https://img.shields.io/badge/tests-796%2B%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
+7|[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?include_prereleases&sort=semver)](https://github.com/Flowbudget/euvsimulator/releases)
+8|[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+9|
+10|**From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
+11|
+12|| | |
+13||---|---|
+14|| ⚛️ **First-principles physics** | CXRO atomic scattering → TMM reflectivity → RCWA mask diffraction → Hopkins imaging → Dill ABC resist |
+15|| 🚀 **GPU-native** | PyTorch autograd throughout — differentiable from mask geometry to CD |
+16||| 🧪 **Tested** | 796+ unit tests, cross-checked against CXRO material database |
+17|| 📦 **Zero commercial dependencies** | Apache 2.0 — fork, modify, deploy freely |
+18|| 🌐 **Web API + Dashboard** | FastAPI REST server with interactive web UI |
+19|| 📓 **Teaching-ready** | 6 executable Jupyter notebooks covering full pipeline |
+20|
+21|---
+22|
+23|## What makes euvsimulator different?
+24|
+25|euvsimulator is the **only open-source tool that models the complete EUV lithography pipeline from photon to CD**:
+26|
+27|| Module | Method | euvsimulator | IMD | GD-Calc | OpenLithoHub |
+28||--------|--------|--------|-----|---------|--------------|
+29|| **Material constants** | CXRO/Henke f₁,f₂ | ✅ | ✅ | ❌ | ❌ |
+30|| **Multilayer mirror** | Transfer-Matrix (S-matrix) | ✅ | ✅ | ❌ | ❌ |
+31|| **Mask diffraction** | RCWA 1D/2D + S-matrix cascade | ✅ | ❌ | ✅ | ❌ |
+32|| **Aerial image** | Hopkins/Abbe + pupil + source | ✅ | ❌ | ❌ | ❌ |
+33|| **High-NA optics** | Anamorphic 4×/8×, Zernike | ✅ | ❌ | ❌ | ❌ |
+34|| **Resist chemistry** | Dill ABC + PEB + development | ✅ | ❌ | ❌ | ❌ |
+35|| **Plasma source** | LPP Sn-droplet spectral model | ✅ | ❌ | ❌ | ❌ |
+36|| **Stochastics** | Shot noise, LER/LWR | ✅ | ❌ | ❌ | ✅ |
+37|| **CD metrology** | Process window, Bossung | ✅ | ❌ | ❌ | ❌ |
+38|| **Optimization** | Differentiable OPC/ILT bridge | ✅ | ❌ | ❌ | ✅ |
+39|| **Web API** | REST + dashboard | ✅ | ❌ | ❌ | ❌ |
+40|
+41|IMD is the gold standard for multilayer reflectivity. GD-Calc solves rigorous coupled-wave analysis. OpenLithoHub benchmarks OPC quality. **euvsimulator is the only tool that connects all the physics** — from plasma spectrum through mask diffraction to developed resist profile.
+42|
+43|---
+44|
+45|## Verified reference calculations
+46|
+47|All material constants verified against the CXRO/Henke database.
+48|Full details in [`testberechnungen.md`](testberechnungen.md).
+49|
+50|| Test | Result | Method |
+51||------|--------|--------|
+52|| **Mo optical constants** (91.84 eV) | n = 0.92335, k = 0.00647 | CXRO database interpolation |
+53|| **Si optical constants** (91.84 eV) | n = 0.99900, k = 0.00183 | CXRO database interpolation |
+54|| **Mo/Si multilayer** 50 BL @ 6° | **R = 64.7%** (ideal) / 60.6% (σ=0.5 nm) | S-matrix TMM + Névot-Croce |
+55|| **Wavelength: 13.5 nm** | — | E = hc/λ = 91.84 eV |
+56|| **Illumination: NA 0.33** | Conventional, σ = 0.8 | Dipole / annular / quasar |
+57|| **Aerial image NILS** | **5.48** @ 64 nm pitch, 32 nm CD (ideal) → **2.70** with SE blur 10 nm | Hopkins formulation + SE blur |
+58|| **Process window** | CD vs. dose × focus | Bossung plot |
+59|
+
+61|
+62|---
+63|
+64|### Secondary-Electron (SE) Blur
+65|
+66|The `se_blur_nm` parameter models the resist point-spread function: EUV photoelectrons
+67|and Auger electrons undergo a random walk before generating photoacid, blurring the
+68|aerial image at the nm scale. This is **the dominant physical cause of finite NILS**
+69|in real EUV processes.
+70|
+71|```python
+72|from euv.pipeline import SimulationConfig, RESIST_PRESETS
+73|
+74|# Ideal optical image (unrealistically high NILS)
+75|cfg = SimulationConfig(se_blur_nm=0.0)
+76|
+77|# Realistic CAR resist
+78|cfg = SimulationConfig(se_blur_nm=RESIST_PRESETS["CAR"])  # 5.0 nm
+79|
+80|# Or explicit
+81|cfg = SimulationConfig(se_blur_nm=10.0)
+82|```
+83|
+84|Typical values:
+85|- `RESIST_PRESETS["CAR"]` = 5.0 nm (chemically amplified resist)
+86|- `RESIST_PRESETS["nonCAR"]` = 2.5 nm (non-CAR)
+87|- `RESIST_PRESETS["HighNA"]` = 3.0 nm (High-NA EUV, smaller features)
+88|
+89|**Without SE blur, NILS reflects only the 3-order optical contrast and is unrealistically high (~5–8). With 5–10 nm blur, NILS drops to the physically correct range of 2–3.**
+90|
+91|---
+92|
+93|## Quick start
+94|
+95|### Installation
+96|
+97|```bash
+98|# From GitHub (latest main branch)
+99|pip install git+https://github.com/Flowbudget/euvsimulator.git
+100|
+101|# Or clone and install from source (for development)
+102|git clone https://github.com/Flowbudget/euvsimulator.git
+103|cd euvsimulator
+104|pip install -e .                       # install from local source
+105|pip install -e ".[dev]"                # with dev dependencies
+106|```
+107|
+108|### Command-line interface
+109|
+110|```bash
+111|# End-to-end simulation
+112|euv simulate --period=64 --cd=32 --dose=20
+113|
+114|# End-to-end with realistic SE blur (10 nm)
+115|euv simulate --period=64 --cd=32 --dose=20 --se-blur=10
+116|
+117|# Use CAR resist preset (5 nm SE blur)
+118|euv simulate --period=64 --cd=32 --dose=20 --resist-preset=CAR
+119|
+120|# Process window (dose-focus Bossung plot)
+121|euv process-window --period=64 --cd=32
+122|
+123|# Web dashboard (REST API + interactive UI)
+124|euv serve
+125|# → http://localhost:8000
+126|
+127|# Query material database
+128|euv materials Mo --energy=91.84
+129|
+130|# Generate test mask (GDSII)
+131|euv make-mask --period=64 --cd=32 --output=mask.gds
+132|
+133|# Performance benchmark
+134|euv bench
+135|
+136|# System info
+137|euv info
+138|```
+139|
+140|### Python API
+141|
+142|```python
+143|from euvsimulator.pipeline import SimulationConfig, run_simulation
+144|
+145|cfg = SimulationConfig(
+146|    period_nm=64, line_width_nm=32,
+147|    dose_mj_cm2=20, na=0.33, sigma=0.8,
+148|    resist_model="full_chem",
+149|    se_blur_nm=5.0,  # CAR resist
+150|)
+151|result = run_simulation(cfg)
+152|print(f"CD = {result.cd_nm:.1f} nm")
+153|print(f"NILS = {result.nils_value:.3f}")
+154|
+155|# With RCWA mask-3D (Phase 4)
+156|result_rcwa = run_simulation(cfg, use_rcwa=True)
+157|print(f"RCWA CD = {result_rcwa.cd_nm:.1f} nm")
+158|```
+159|
+160|### Jupyter Notebooks (6 tutorials)
+161|
+162|```bash
+163|cd notebooks
+164|jupyter lab  # or: jupyter notebook
+165|```
+166|
+167|| Notebook | Description |
+168||----------|-------------|
+169|| `01_aerial_image.ipynb` | TMM → RCWA → Hopkins → SE blur → NA/σ sensitivity |
+170|| `02_nils_cd.ipynb` | NILS definition, SE blur impact, Bossung curves, resolution limits |
+171|| `03_resist_chain.ipynb` | Dill ABC → PEB reaction-diffusion → Mack development → 1/√D scaling |
+172|| `04_process_window.ipynb` | DoF/EL extraction, MEEF, SE blur/NA sweeps, CSV/PNG export |
+173|| `05_stochastics.ipynb` | Poisson shot noise, LER/LWR extraction, multi-realisation stats, QE sweep |
+174|| `06_mask3d.ipynb` | Thin-mask vs RCWA, taper/undercut, best focus shift, TE/TM |
+175|
+176|All notebooks execute cleanly via `jupyter nbconvert --execute` (tested in CI).
+177|
+178|---
+179|
+180|## Architecture
+181|
+182|```
+183|src/euvsimulator/
+184|├── source/         LPP Sn-plasma emission model (spectrum + dose)
+185|├── materials/      CXRO atomic scattering factors f₁,f₂ (Z = 1–92)
+186|├── optics/         Multilayer TMM (S-matrix, Névot-Croce, grading)
+187|├── mask3d/         RCWA 1D/2D Fourier Modal Method (stable S-matrix)
+188|├── aerial/         Abbe/Hopkins imaging, pupil, source shapes
+189|├── resist/         Dill ABC exposure, PEB, development, shot noise
+190|├── io/             CLI, GDSII, rasterization
+191|├── metro/          CD metrology, process window, SEM rendering
+192|├── opc/            Differentiable OpenILT bridge
+193|├── accel/          GPU acceleration + VRAM management
+194|├── etch/           Etch bias model
+195|├── calibrate/      Wafer calibration (scipy optimisation)
+196|├── api/            FastAPI REST server + web dashboard
+197|└── pipeline.py     End-to-end simulation orchestration
+198|```
+199|
+200|```
+201|┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐
+202|│ SOURCE │ → │  MASK  │ → │OPTICS │ → │ AERIAL │ → │ RESIST │ → │ METRO  │
+203|│ LPP Sn │   │ RCWA   │   │ TMM   │   │Hopkins│   │Dill ABC│   │ CD/PW  │
+204|└────────┘   └────────┘   └────────┘   └────────┘   └────────┘   └────────┘
+205|```
+206|
+207|---
+208|
+209|## CLI reference
+210|
+211|| Command | Description |
+212||---------|-------------|
+213|| `euv simulate` | Full end-to-end simulation (CLI args or YAML/JSON config) |
+214|| `euv process-window` | Dose-focus Bossung grid → DoF + EL |
+215|| `euv make-mask` | Generate line/space test mask (GDSII) |
+216|| `euv materials` | List elements / query n + ik at any photon energy |
+217|| `euv serve` | Launch the REST API + web dashboard |
+218|| `euv bench` | Performance benchmark |
+219|| `euv info` | System + module overview |
+220|| `euv version` | Print version |
+221|| `euv calibrate` | Calibrate resist-model parameters to measured wafer CD data |
+222|
+223|---
+224|
+225|## Documentation
+226|
+227|Full Sphinx documentation at [`docs/`](docs/):
+228|- [Overview](docs/overview.rst)
+229|- [Installation](docs/install.rst)
+230|- [Architecture](docs/architecture.rst)
+231|- [Quickstart](docs/quickstart.rst)
+232|- [API reference](docs/api/modules.rst)
+233|- [Contributing](docs/contributing.rst)
+234|
+235|Build locally:
+236|```bash
+237|pip install sphinx sphinx-rtd-theme
+238|cd docs && make html
+239|```
+240|
+241|---
+242|
+243|## Project status
+244|
+245|| Milestone | Status |
+246||-----------|--------|
+247|| Project scaffold & CXRO materials | ✅ |
+248|| Multilayer optics (S-matrix TMM) | ✅ |
+249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), taper/undercut, integrated via `use_rcwa=True` |
+250|| Aerial image (Abbe/Hopkins + SE blur) | ✅ |
+251|| High-NA imaging (anamorphic) | ✅ |
+252|| End-to-end pipeline | ✅ |
+253|| LPP source model | ✅ |
+254|| Resist chemistry (Dill ABC + PEB + Mack) | ✅ |
+255|| Stochastic effects (shot noise, LER/LWR) | ✅ Shot noise, LER/LWR, 1/√Dose scaling, Monte-Carlo |
+256|| CD metrology & process window | ✅ |
+257|| Inverse lithography (OpenILT bridge) | ✅ |
+258|| GPU acceleration | ✅ |
+259|| REST API + web UI | ✅ |
+260|| Tutorials & documentation | ✅ 6 notebooks complete |
+261|| Docker deployment | ✅ |
+262|| **CI/CD pipeline** | ✅ **GitHub Actions: Linux/macOS/Windows × Python 3.10–3.13** |
+263||| **Test count** | **796+ / 796+ passing** |
+264|| **License** | Apache 2.0 |
+265|
+266|---
+267|
+268|## Roadmap / Known TODOs
+269|
+270|> **Note:** The core physics pipeline is internally validated. These items are enhancements for specific use cases.
+271|
+272|| Area | Description | Priority |
+273||------|-------------|----------|
+274|| **Resist `full_chem` parameters** | Dill A/B/C/Q, PEB k/t/D/σ, Mack params exposed in Config & CLI | ✅ Done |
+275|| **Stochastics in pipeline** | Integrate photon shot noise + LER/LWR → `SimulationResult` | ✅ Done |
+276|| **Process window visualization** | `--output-plot` (PNG heatmap) + `--output-csv` for `euv process-window` | ✅ Done |
+277|| **RCWA / Mask-3D in pipeline** | Switch from analytic thin-mask to RCWA for real mask topography | ✅ Done (v1.0) |
+278|| **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
+279|| **Citation metadata** | `CITATION.cff` + Zenodo DOI for v1.0 | Medium |
+280|
+281|See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with code sketches.
+282|
+283|---
+284|
+285|## Discoverability & Citation
+286|
+287|### GitHub Topics
+288|`euv-lithography` `semiconductor-simulation` `computational-lithography` `rcwa` `hopkins-imaging` `resist-modeling` `dill-model` `multilayer-optics` `plasma-physics` `open-source` `python` `pytorch` `fastapi` `scientific-computing`
+289|
+290|### For researchers
+291|If you use euvsimulator in your research, please cite it:
+292|
+293|```bibtex
+294|@software{euvsimulator2026,
+295|  author       = {Flowbudget},
+296|  title        = {euvsimulator: Open Source EUV Lithography Simulator},
+297|  version      = {1.0.3},
+298|  year         = {2026},
+299|  url          = {https://github.com/Flowbudget/euvsimulator},
+300|  license      = {Apache-2.0},
+301|  doi          = {10.5281/zenodo.XXXXXXX}
+302|}
+303|```
+304|
+305|A Zenodo DOI will be minted with the v1.0 release.
+306|
+307|---
+308|
+309|## License
+310|
+311|Apache 2.0 — see [`LICENSE`](LICENSE).
+312|
+313|---
+314|
+315|## How to contribute
+316|
+317|We welcome contributions! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines.
+318|
+319|- 🐛 Open an [issue](https://github.com/Flowbudget/euvsimulator/issues) for bugs
+320|- 💡 Start a [discussion](https://github.com/Flowbudget/euvsimulator/discussions) for features
+321|- 🔀 Submit pull requests on the `main` branch
+322|- 📝 Improve documentation or add tutorials
+323|- 🎓 If you use euvsimulator in research, cite it! (citation coming with v1.0)
+324|
+325|---
+326|
+327|## Support
+328|
+329|PayPal: **gofter@web.de** — send via PayPal Friends & Family
+330|
+331|Development supported by [GitHub Sponsors](https://github.com/sponsors/Flowbudget) and PayPal donations.
+332|OpEnUV is open source — contributions welcome. ❤️
