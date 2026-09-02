@@ -104,18 +104,18 @@ def simulate(
         "aerial_threshold", "--resist-model", help="Resist model: aerial_threshold or full_chem"
     ),
     # Dill ABC exposure options
-    dill_A: float = typer.Option(0.5, "--dill-A", help="Bleachable absorption coefficient [1/µm]"),
+    dill_A: float = typer.Option(0.3, "--dill-A", help="Bleachable absorption coefficient [1/µm]; EUV CAR literature (Fallica et al. 2016) suggests << dill-B"),
     dill_B: float = typer.Option(
-        0.2, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]"
+        4.5, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Fallica et al. 2016) suggests this dominates over dill-A"
     ),
     dill_C: float = typer.Option(0.05, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
     dill_Q: float = typer.Option(0.04, "--dill-Q", help="Quantum efficiency (acid molecules per absorbed photon; typical 0.02–0.10 for EUV CAR)"),
     # PEB options
-    peb_D: float = typer.Option(5.0, "--peb-D", help="Acid diffusivity [nm²/s]"),
+    peb_D: float = typer.Option(3.3, "--peb-D", help="Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake) unless --peb-sigma-diff overrides it directly"),
     peb_k: float = typer.Option(0.3, "--peb-k", help="Deprotection rate constant [s⁻¹]"),
     peb_t_bake: float = typer.Option(60.0, "--peb-t-bake", help="Bake time [s]"),
-    peb_sigma_diff: float = typer.Option(
-        5.0, "--peb-sigma-diff", help="Analytical diffusion sigma [nm]"
+    peb_sigma_diff: Optional[float] = typer.Option(
+        None, "--peb-sigma-diff", help="Analytical diffusion sigma [nm]; overrides --peb-D/--peb-t-bake when set"
     ),
     # Stochastic / Shot Noise options
     enable_stochastic: bool = typer.Option(
@@ -717,7 +717,7 @@ def calibrate(
             "dill_Q": 0.04,
             "peb_k": 0.3,
             "peb_t_bake": 60.0,
-            "peb_sigma_diff": 5.0,
+            "peb_sigma_diff": 20.0,  # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference" formulations cluster 17-35nm
             "mack_R_max": 100.0,
             "mack_R_min": 0.1,
             "mack_n": 5.0,
@@ -740,10 +740,10 @@ def calibrate(
             "dill_Q": (0.1, 2.0),
             "peb_k": (0.05, 2.0),
             "peb_t_bake": (30.0, 120.0),
-            "peb_sigma_diff": (1.0, 20.0),
+            "peb_sigma_diff": (1.0, 40.0),  # widened: Anderson et al. 2009 (OSTI 961531) measured real EUV resists up to 38.4nm -- a 20nm cap would have artificially excluded valid fits
             "mack_R_max": (10.0, 500.0),
             "mack_R_min": (0.01, 10.0),
-            "mack_n": (1.5, 20.0),
+            "mack_n": (1.5, 30.0),  # widened: Schnattinger PhD thesis (FAU, 193nm CAR resist, see pipeline.py mack_n comment) measured n=25.14 -- a 20 cap would have excluded that real (if wavelength-caveated) value
             "mack_M_th": (0.1, 0.9),
         }
 
@@ -761,7 +761,7 @@ def calibrate(
             dill_Q=params.get("dill_Q", 0.04),
             peb_k=params.get("peb_k", 0.3),
             peb_t_bake=params.get("peb_t_bake", 60.0),
-            peb_sigma_diff=params.get("peb_sigma_diff", 5.0),
+            peb_sigma_diff=params.get("peb_sigma_diff", 20.0),
             mack_R_max=params.get("mack_R_max", 100.0),
             mack_R_min=params.get("mack_R_min", 0.1),
             mack_n=params.get("mack_n", 5.0),

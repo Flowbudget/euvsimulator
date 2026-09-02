@@ -164,36 +164,135 @@ class SimulationConfig:
     # IMPORTANT physical finding from the paper (Sec. 3.2): for EUV CAR,
     # A is much smaller than the total absorption coefficient alpha, and
     # B ~= alpha (i.e. A << B) -- the OPPOSITE regime from i-line/g-line
-    # resists, which have A >> B. This project's current defaults
-    # (A=0.5 > B=0.2) are in the WRONG regime for an EUV CAR resist per
-    # this reference; A should very likely be << B (B on the order of a
-    # few um^-1), not the other way around. NOT YET CORRECTED HERE --
-    # flagged for the full_chem recalibration pass (see arbeitslog),
-    # since changing it changes already-referenced simulation outputs
-    # and needs explicit sign-off per project rules.
-    dill_A: float = 0.5  # Bleachable absorption coefficient [1/µm] -- see note above, likely mis-scaled vs. dill_B
-    dill_B: float = 0.2  # Non-bleachable absorption coefficient [1/µm] -- literature suggests ~4-5 for EUV CAR, see note above
-    dill_C: float = 0.05  # Photo-rate constant [cm²/mJ] -- within the 0.037-0.055 cm²/mJ range reported across several (non-EUV-specific) studies; Fallica et al.'s own EUV-CAR measurements run higher (0.13-0.43)
-    dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon); typical range 0.02–0.10 for EUV CAR (see resist/exposure.py)
+    # resists, which have A >> B. CORRECTED (2026-09-02, second research
+    # pass) to A=0.3, B=4.5 um^-1 -- the midpoint of Fallica et al.'s own
+    # measured EUV-CAR range (A~=0.2-0.45, B~=4-5 um^-1). Independently
+    # corroborated by a second, unrelated real-resist calibration
+    # (Schnattinger PhD thesis, FAU 2008/2009, open.fau.de -- A=0.0,
+    # B=2.36 um^-1 for a real 193nm ArF-immersion CAR resist; same A<<B
+    # regime, though that source is NOT itself used for the EUV magnitude
+    # since it's the wrong wavelength -- see mack_* parameters below for
+    # why that distinction matters). This changes full_chem path outputs;
+    # it does NOT affect the aerial_threshold benchmark (dill_A/B are not
+    # used on that path) so it is not a regression of the "solide
+    # geprüft" reference values.
+    dill_A: float = 0.3  # Bleachable absorption coefficient [1/µm] -- Fallica et al. 2016, EUV-CAR measured range 0.2-0.45
+    dill_B: float = 4.5  # Non-bleachable absorption coefficient [1/µm] -- Fallica et al. 2016, EUV-CAR measured range 4-5
+    #
+    # dill_C ADDITIONAL CROSS-CHECK (2026-09-02, third research pass): Kazazis,
+    # D. et al. (ARCNL), "Absorption coefficient and exposure kinetics of
+    # photoresists at EUV," Proc. SPIE 10143, 101430A (2017), freely hosted
+    # at ir.arcnl.nl (ARCNL = Dutch EUV lithography institute, ASML-affiliated).
+    # Measured Dill C directly for seven real, state-of-the-art organic EUV CAR
+    # formulations (P1-P3, several PAG loadings): 0.010-0.021 cm^2/mJ -- LOWER
+    # than both the current default and Fallica et al.'s own EUV-CAR range
+    # (0.13-0.43). Combined honest range across all real EUV-CAR measurements
+    # found in this search: ~0.010-0.43 cm^2/mJ, i.e. a >40x spread between
+    # different real resists. dill_C is evidently strongly resist-specific (PAG
+    # chemistry/loading dependent, per this same paper); 0.05 remains a
+    # defensible order-of-magnitude pick within this wide envelope, not an
+    # outlier, so left unchanged -- but do not treat 0.05 as "the" EUV CAR
+    # value if a specific resist is being modeled; recalibrate per-resist.
+    dill_C: float = 0.05  # Photo-rate constant [cm²/mJ] -- within the ~0.010-0.43 cm²/mJ range spanned by real EUV-CAR measurements (Fallica et al. 2016, Kazazis et al. 2017); see note above, resist-specific
+    #
+    # dill_Q STATUS (2026-09-02, third research pass): the previous "typical
+    # range 0.02-0.10 for EUV CAR" claim below was UNCITED (traced back through
+    # resist/exposure.py, which also gives no source) -- flagging that
+    # explicitly rather than silently inheriting an unsourced number. One real,
+    # EUV-native, peer-reviewed value WAS found: Mack et al., "Stochastic
+    # exposure kinetics of extreme ultraviolet photoresists: quenching model,"
+    # Proc. SPIE 7972 (2011) -- their baseline Table I gives PAG Quantum
+    # Efficiency phi_PAG = 0.5 (see the peb_D citation below; same table).
+    # NOT adopted as the new default here, for a specific, tested reason: Q,
+    # dill_C, peb_k, and mack_M_th are COUPLED (they jointly determine whether
+    # the simulated resist develops at all -- see the CD=64nm "PRE-EXISTING
+    # KNOWN ISSUE" note near mack_M_th below). Verified experimentally in this
+    # research pass: raising Q from 0.04 to Mack et al.'s 0.5 (with every other
+    # parameter at its own independently-best-cited value) does NOT produce a
+    # realistic result -- it overshoots to the OPPOSITE degenerate extreme
+    # (CD=0.0nm, the entire field clears) rather than a resolvable line. Ranges
+    # 0.1-0.3 land somewhere between the two degenerate extremes, but picking a
+    # specific point in that gap with no citation of its own would be exactly
+    # the kind of ungrounded tuning this project does not want. Left at 0.04
+    # (still uncited, but at least not silently swapped for an equally
+    # arbitrary "improvement") pending either real experimental calibration
+    # data (use `euv calibrate`) or a from-scratch, fully self-consistent
+    # single-resist EUV CAR parameter set (Dill A/B/C/Q + PEB k + Mack
+    # Rmax/Rmin/n/Mth all from the SAME measured resist) -- despite an
+    # extensive multi-institution search (see docs/claude_code_arbeitslog.md
+    # and /Users/flo/mack fits/catalog.md), no such single freely-available
+    # source was found for an EUV (13.5nm) resist; the closest complete set
+    # found is for a 193nm resist (see mack_* parameters below).
+    dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon) -- UNCITED, see note above; do not treat the "0.02-0.10 typical" framing as sourced
 
     # PEB (reaction-diffusion) parameters.
     #
-    # LITERATURE REFERENCE: Lavery, K. A.; Choi, K.-W.; Vogt, B. D.;
-    # Prabhu, V. M.; Lin, E. K.; Wu, W.; Satija, S. K.; Leeson, M. J.;
-    # Cao, H. B.; Thompson, G.; Deng, H.; Fryer, D. S. "Fundamentals of
-    # the Reaction-Diffusion Process in Model EUV Photoresists." Proc.
-    # SPIE 6153, 615313 (2006) (NIST/Intel, neutron reflectivity on a
-    # model EUV bilayer resist). Measured directly (their Figs. 4b/5a,
-    # long-ranged front, 90-130 C PEB, 30 s):
-    #   diffusion length sigma ~= 5-15 nm
+    # LITERATURE REFERENCE for peb_D: Lavery, K. A.; Choi, K.-W.; Vogt,
+    # B. D.; Prabhu, V. M.; Lin, E. K.; Wu, W.; Satija, S. K.; Leeson,
+    # M. J.; Cao, H. B.; Thompson, G.; Deng, H.; Fryer, D. S.
+    # "Fundamentals of the Reaction-Diffusion Process in Model EUV
+    # Photoresists." Proc. SPIE 6153, 615313 (2006) (NIST/Intel, neutron
+    # reflectivity on a model EUV bilayer resist). Measured directly
+    # (their Figs. 4b/5a, long-ranged front, 90-130 C PEB, 30 s):
     #   diffusion coefficient D ~= 2-8 x1e-14 cm^2/s = 2-8 nm^2/s
-    # Both current defaults below (peb_D=5.0, peb_sigma_diff=5.0) fall
-    # within or at the edge of these measured ranges -- reasonably well
-    # grounded, unlike the Dill A/B mismatch above.
-    peb_D: float = 5.0  # Acid diffusivity [nm²/s] -- consistent with Lavery et al. 2006, ~2-8 nm²/s measured
-    peb_k: float = 0.3  # Deprotection rate constant [s⁻¹]
+    #
+    # LITERATURE REFERENCE for the diffusion LENGTH (sigma): Anderson,
+    # C. N. "Extreme Ultraviolet Lithography: A Few More Pieces of the
+    # Puzzle." PhD dissertation, UC Berkeley / LBNL (2009), freely hosted
+    # at OSTI.gov (US DOE public-access mandate):
+    # https://www.osti.gov/servlets/purl/961531 -- directly measured
+    # deprotection blur (the same physical quantity as sigma_diff here)
+    # for multiple REAL, NAMED, commercial EUV (13.5nm) CAR resists (TOK
+    # EUVR P1123 across PEB 80-120C, and Rohm&Haas XP-5435/5271/5496,
+    # EH-27 across PAG/base loading). Two independent measurement metrics
+    # (contact-hole and corner), cross-validated, 1.2-1.75nm RMS error
+    # bars. Measured blur spans 9.7-38.4nm; the unmodified/"Reference"
+    # formulations (i.e. not artificially detuned for the study) cluster
+    # around 17-35nm. This is a fully EUV-native measurement -- no
+    # wavelength-transfer caveat, unlike dill_A/B's secondary corroborating
+    # source above.
+    #
+    # peb_D default below (3.3 nm^2/s) is chosen so that, combined with
+    # peb_t_bake=60s, it reproduces sigma=sqrt(2*D*t)~=20nm -- inside
+    # both the Lavery D-range (2-8 nm^2/s) and the Anderson blur-range
+    # (9.7-38.4nm, close to the "Reference" formulations' 17-35nm
+    # cluster). peb_sigma_diff is now None by default so peb_D (the
+    # quantity actually reported in the literature) is the parameter
+    # that takes effect; set peb_sigma_diff explicitly only to bypass
+    # peb_D/peb_t_bake with a directly-specified blur length (e.g. when
+    # matching one specific measured resist from the Anderson table
+    # above without recomputing D).
+    #
+    # BUG FIX (2026-09-02): previously peb_sigma_diff defaulted to 5.0
+    # (a concrete float, not None), and reaction_diffusion_analytical()
+    # always prefers sigma_diff over D+t_bake when sigma_diff is given
+    # (see resist/peb.py) -- so peb_D/--peb-D was DEAD, silently ignored
+    # by the pipeline regardless of what the user set it to. Same class
+    # of bug as the earlier-fixed CLI --threshold dead-parameter issue.
+    # Fixed by making peb_sigma_diff Optional (None default) and passing
+    # D=cfg.peb_D through in run_simulation()'s _cd_via_full_chem() call.
+    peb_D: float = 3.3  # Acid diffusivity [nm²/s] -- within Lavery et al. 2006's measured 2-8 nm²/s; chosen with peb_t_bake=60s to reproduce Anderson et al. 2009's measured EUV deprotection blur (see note above)
+    # peb_k STATUS (2026-09-02): UNCITED. A real EUV-adjacent kinetics study
+    # was found -- Prabhu, V. M. et al. (NIST), "Characterization of the
+    # Photoacid Diffusion Length and Reaction Kinetics in EUV Photoresists
+    # with IR Spectroscopy," Macromolecules 43(9), 4276 (2010), NIST
+    # tsapps.nist.gov/publication/get_pdf.cfm?pub_id=904320 (free) -- Table 2
+    # gives kP=0.51 nm^3/s for a model bilayer system at 90C PEB, in a
+    # bimolecular rate law dphi/dt = kP*H*(1-phi) with H in nm^-3. This does
+    # NOT translate directly into this codebase's k (used as a pseudo-
+    # first-order rate against the dimensionless, already-normalised `acid`
+    # from dose_to_acid): the correct mapping would be roughly k_equivalent =
+    # kP * H0 (H0 = initial PAG density, ~0.013-0.026 nm^-3 in that paper),
+    # giving k_equivalent ~= 0.007-0.013 s^-1 -- an order of magnitude SMALLER
+    # than the current 0.3, which would make the CD=64nm degeneracy below
+    # worse, not better. That NIST system is also a deliberately slow model
+    # compound built for trackable IR kinetics, not a production EUV resist,
+    # so its absolute rate is not necessarily representative anyway. Left
+    # unchanged pending real calibration data; see the dill_Q and mack_M_th
+    # notes for the fuller picture of why this can't be fixed in isolation.
+    peb_k: float = 0.3  # Deprotection rate constant [s⁻¹] -- UNCITED, see note above
     peb_t_bake: float = 60.0  # Bake time [s]
-    peb_sigma_diff: float = 5.0  # Analytical diffusion sigma [nm] -- at the low end of Lavery et al. 2006's measured 5-15 nm range
+    peb_sigma_diff: float | None = None  # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see note above
 
     # Mack development parameters.
     #
@@ -234,6 +333,71 @@ class SimulationConfig:
     mack_R_min: float = 0.1  # Min development rate [nm/s] -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
     mack_n: float = 5.0  # Dissolution selectivity (contrast) -- matches one of the illustrative cases in Mack's "Inside PROLITH" (1997) Fig. 7-2, not an EUV-specific fit; see note above
     mack_M_th: float = 0.5  # Threshold inhibitor concentration -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
+
+    # ─────────────────────────────────────────────────────────────────
+    # PRE-EXISTING KNOWN ISSUE (confirmed, root-caused 2026-09-02, NOT
+    # fixed here -- fixing it correctly requires real data, see below):
+    #
+    # `resist_model="full_chem"` with ALL parameters at their current
+    # defaults produces a degenerate result: cd_nm == 64.0 (the entire
+    # field stays "undeveloped" -- M_t never drops below mack_M_th
+    # anywhere). This predates this research pass; it is NOT introduced
+    # or worsened by the dill_A/B or peb_D/peb_sigma_diff corrections
+    # above (those affect the optical/RCWA and diffusion-length stages
+    # respectively, upstream of and independent from this failure).
+    #
+    # Root cause, quantified: M_t = exp(-peb_k * acid * peb_t_bake), and
+    # M_t only crosses below mack_M_th when peb_k * acid_max * peb_t_bake
+    # > ln(1/mack_M_th). At current defaults, acid_max (after PEB
+    # diffusion blur) yields peb_k*acid_max*peb_t_bake ~= 0.3-0.4,
+    # while ln(1/0.5) = 0.693 is needed -- short by roughly 2x.
+    #
+    # This CANNOT be fixed by swapping in a single literature value for
+    # just one of dill_Q, peb_k, or mack_M_th -- verified experimentally
+    # in this research pass. dill_A/B/peb_D/peb_sigma_diff (optics/
+    # diffusion) are now well-grounded from real EUV measurements (see
+    # their own citations above), but dill_C, dill_Q, peb_k, and
+    # mack_M_th are COUPLED: e.g. raising dill_Q alone from 0.04 to Mack
+    # et al. 2011's real EUV-cited 0.5 (see dill_Q note above) does not
+    # land on a realistic result -- it overshoots straight through to
+    # the OPPOSITE degenerate extreme (cd_nm == 0.0, everything clears)
+    # rather than a resolvable line, because the diffusion blur (now
+    # correctly ~20nm, comparable to the 32nm half-pitch) smooths the
+    # latent acid image enough that the threshold crossing is an
+    # all-or-nothing event across most of the field, not a clean edge.
+    #
+    # The reason a single joint fix wasn't attempted here: doing so
+    # without real data would mean hand-picking a point in the gap
+    # between the two degenerate extremes with no citation of its own
+    # -- exactly the kind of ungrounded parameter-tuning this project
+    # explicitly does not want (see feedback_euvsimulator_no_compromises
+    # in the maintaining assistant's memory, and the project's own
+    # Grundprinzip 4). A genuinely non-compromised fix needs one of:
+    #   (a) real experimental dose/focus Bossung + CD/LWR data run
+    #       through this project's own `euv calibrate` command (built
+    #       for exactly this joint-fit problem; no such dataset is
+    #       available to this project yet), or
+    #   (b) a single freely-available source giving a COMPLETE,
+    #       internally self-consistent EUV-CAR (13.5nm) parameter set
+    #       (Dill A/B/C/Q + PEB diffusivity/rate + Mack Rmax/Rmin/n/Mth
+    #       ALL from the same measured resist). Despite an extensive,
+    #       multi-institution search (WebSearch, imec-publications.be
+    #       and open.fau.de institutional repositories crawled via their
+    #       DSpace REST APIs, OSTI.gov, ARCNL, citation-trail-following
+    #       -- ~25 sources catalogued, see
+    #       /Users/flo/mack fits/catalog.md and
+    #       docs/claude_code_arbeitslog.md), no such single EUV-native
+    #       source was found -- only a complete set for a 193nm ArF
+    #       resist (Schnattinger PhD thesis, see mack_R_max note above),
+    #       and separately-sourced EUV pieces (exposure kinetics from
+    #       one set of authors/resists, development kinetics from a
+    #       different set) that do not combine into a working default.
+    #
+    # Until (a) or (b), `resist_model="full_chem"` should be treated as
+    # NOT YET SCIENTIFICALLY VALIDATED for its default parameters --
+    # `resist_model="aerial_threshold"` (the default) remains the
+    # solidly-tested path (see project status memory / audit/ reports).
+    # ─────────────────────────────────────────────────────────────────
 
     # Stochastic / Shot Noise parameters
     enable_stochastic: bool = False  # Enable photon shot noise + LER/LWR
@@ -451,6 +615,7 @@ def _cd_via_full_chem(
     _, inhib = reaction_diffusion_analytical(
         acid,
         inhib_in,
+        D=cfg.peb_D,
         k=cfg.peb_k,
         t_bake=cfg.peb_t_bake,
         sigma_diff=cfg.peb_sigma_diff,
