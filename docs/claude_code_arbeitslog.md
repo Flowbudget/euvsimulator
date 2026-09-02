@@ -112,3 +112,32 @@ mit bestem Aufwand recherchiert, Lücke transparent dokumentiert statt erfunden)
 Nutzer-Entscheidung, wie mit der Mack-Lücke in Aufgabe 2/3 umzugehen ist.
 
 ---
+
+## 2026-09-02 — Aufgabe 1 (Fortsetzung 2): Ursprung der Mack-Defaults gefunden
+
+**Auslöser:** Nutzer teilte Hinweise einer anderen KI (Grok) zu Fundorten für EUV-Mack-Fits mit
+(SPIE, lithoguru.com, Herstellerdatenblätter, IMEC/ASML). Das war kein neuer Zahlenwert, sondern
+ein Hinweis, gezielter zu suchen — daraufhin `site:lithoguru.com` durchsucht.
+
+**Fund:** Chris Macks eigenes, frei gehostetes Standardwerk **"Inside PROLITH: A Comprehensive
+Guide to Optical Lithography Simulation"** (FINLE Technologies, 1997), Kapitel 7
+("Photoresist Development"), Fig. 7-1 zeigt das Original-Mack-Modell mit den illustrativen
+Beispielwerten `rmax=100 nm/s, rmin=0.1 nm/s, mTH=0.5, n=2/4/8/16`; Fig. 7-2 nutzt zusätzlich
+`n=5` als einen der gezeigten Fälle. Das ist eine **exakte Übereinstimmung** mit den aktuellen
+`mack_R_max`, `mack_R_min`, `mack_M_th`-Defaults im Code (und einer nahen Übereinstimmung bei
+`mack_n`) — mit hoher Wahrscheinlichkeit ihr tatsächlicher Ursprung.
+
+**Wichtige Einordnung:** Das ist eine generische Lehrbuch-Illustration, um die *Form* des
+Modells bei variierendem `n` zu zeigen — **kein** Fit an einen gemessenen (schon gar nicht
+EUV-spezifischen) Resist. Damit sind die Defaults jetzt nachvollziehbar herkunftsbelegt (keine
+freie Erfindung), aber weiterhin nicht wissenschaftlich als EUV-CAR-repräsentativ validiert.
+
+**Buch komplett lokal archiviert** (auf Nutzerwunsch): 179 Seiten, frisch von
+`lithoguru.com` heruntergeladen (kein Bezahlzugang nötig — vom Autor selbst frei gehostet),
+unter `references/literature/inside_prolith_mack_1997/Inside_PROLITH_Mack_1997.pdf` mit
+begleitender `README.md`.
+
+**Verifiziert:** `SimulationConfig()` lädt fehlerfrei, `test_pipeline.py` +
+`test_full_chem_config.py`: 50/50 grün.
+
+---

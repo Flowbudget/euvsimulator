@@ -197,42 +197,43 @@ class SimulationConfig:
 
     # Mack development parameters.
     #
-    # LITERATURE STATUS (2026-09-02 research pass, extended per explicit
-    # user follow-up): no freely-accessible, EUV-specific, peer-reviewed
-    # source for Rmax/Rmin/n/Mth was found, despite two rounds of
-    # targeted search. The Mack (1987) model itself long predates EUV
-    # lithography and is normally fit per-resist to measured develop-rate
-    # data, not read off a universal reference. Two EUV-specific
-    # candidate papers were identified but are PAYWALLED from this
-    # environment (no institutional access available here):
+    # ORIGIN IDENTIFIED (2026-09-02, third research pass): Rmax=100 nm/s,
+    # Rmin=0.1 nm/s, and Mth=0.5 below are an EXACT match, and n=5 a close
+    # match, to the worked illustrative example in Chris Mack's own
+    # canonical reference text:
+    #   Mack, C. A. "Inside PROLITH: A Comprehensive Guide to Optical
+    #   Lithography Simulation." FINLE Technologies, Austin, TX (1997),
+    #   Ch. 7 ("Photoresist Development"), Fig. 7-1: "Development rate
+    #   plot of the Original Mack model ... (rmax = 100 nm/s, rmin = 0.1
+    #   nm/s, mTH = 0.5, and n = 2, 4, 8, and 16)"; Fig. 7-2 similarly
+    #   uses rmax=100, rmin=0.1, and n=5 as one of its illustrated cases.
+    #   Freely hosted by the author: https://lithoguru.com/scientist/litho_papers/Inside_PROLITH.pdf
+    #   (read directly, not via search-summary; full 179-page book archived
+    #   locally at references/literature/inside_prolith_mack_1997/).
+    #
+    # IMPORTANT CAVEAT: this is explicitly a GENERIC TEXTBOOK ILLUSTRATION
+    # Mack chose to demonstrate the *shape* of the Original/Enhanced Mack
+    # model as n is varied -- it is not fit to any measured photoresist,
+    # EUV or otherwise. So while the defaults below are traceable to a
+    # well-known, authoritative source (not an arbitrary guess), they are
+    # NOT evidence that these values are physically representative of a
+    # real EUV CAR resist's development kinetics. Despite two further
+    # rounds of targeted search, no EUV-specific, peer-reviewed
+    # Rmax/Rmin/n/Mth fit was found; the two most promising leads remain
+    # paywalled from this environment:
     #   - "Extraction and identification of resist modeling parameters
     #     for EUV Lithography," Proc. SPIE 6923, 69230T (2008).
     #   - Long, L. T.; Neureuther, A. R.; Naulleau, P. P. "Three-
     #     dimensional modeling of EUV photoresist using the multivariate
     #     Poisson propagation model." J. Micro/Nanopatterning Mater.
     #     Metrol. 20(3), 034601 (2021). doi:10.1117/1.JMM.20.3.034601
-    #     (a search summary -- NOT independently read here -- mentioned
-    #     develop rate calibrated at deprotection fraction 0.27 = 35
-    #     nm/30s; treat as an unverified lead only, not a citable value.)
-    # If institutional/library access to either is available, they are
-    # the most promising next step for a real EUV-specific Mack fit.
-    # One illustrative non-EUV (DUV/i-line era) example resist "PD523AD"
-    # (commonly used in teaching/Prolith material, not independently
-    # verified here against a primary measurement) reports two different
-    # fitted parameter sets depending on developer/process: Rmax=85 or
-    # 183 nm/s, Rmin=0.009 or 0.006 nm/s, Mth=0.060 or 0.450, n not
-    # given. This only shows the plausible order of magnitude and the
-    # large resist-to-resist/process-to-process spread -- it is NOT a
-    # substitute for an EUV-CAR-specific fit and should not be treated
-    # as a validated reference. mack_n=5.0 below happens to be close to
-    # a value (5.8) seen for that same non-EUV example, but this is a
-    # coincidence, not evidence. Recalibrating these against real EUV develop-rate
-    # data is an open item -- flagged as a judgment call without solid
-    # literature backing (see arbeitslog / stop-and-ask criteria).
-    mack_R_max: float = 100.0  # Max development rate [nm/s] -- order-of-magnitude only, no EUV-specific source found
-    mack_R_min: float = 0.1  # Min development rate [nm/s] -- order-of-magnitude only, no EUV-specific source found
-    mack_n: float = 5.0  # Dissolution selectivity (contrast) -- order-of-magnitude only, no EUV-specific source found
-    mack_M_th: float = 0.5  # Threshold inhibitor concentration -- order-of-magnitude only, no EUV-specific source found
+    # If institutional/library access to either becomes available, they
+    # are the next step for a real EUV-specific fit. Recalibrating these
+    # against real EUV develop-rate data remains an open item.
+    mack_R_max: float = 100.0  # Max development rate [nm/s] -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
+    mack_R_min: float = 0.1  # Min development rate [nm/s] -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
+    mack_n: float = 5.0  # Dissolution selectivity (contrast) -- matches one of the illustrative cases in Mack's "Inside PROLITH" (1997) Fig. 7-2, not an EUV-specific fit; see note above
+    mack_M_th: float = 0.5  # Threshold inhibitor concentration -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
 
     # Stochastic / Shot Noise parameters
     enable_stochastic: bool = False  # Enable photon shot noise + LER/LWR
