@@ -606,3 +606,124 @@ Schrotrauschen) — würde die LWR-Lücke wahrscheinlich (nicht sicher) weiter s
 ein neuer, nicht-trivialer Architektur-Baustein, kein einfacher Parameter-Fix.
 
 ---
+
+## 2026-09-03 (Fortsetzung 2): PAG-/Quencher-Molekülzahl-Diskretheit im Belichtungsschritt
+
+**Auslöser:** "baue die PAG-/Quencher-Diskretheit in den Belichtungsschritt ein" — direkte
+Umsetzung des oben skizzierten nächsten Schritts, um die 3-5x-LWR-Unterschätzung anzugehen.
+
+**Neue Quelle:** Mack, Biafore & Smith 2011, "Stochastic Acid-Base Quenching Kinetics in
+Chemically Amplified Photoresists," Proc. SPIE 7972, 797202 (frei via lithoguru.com) — NICHT
+dieselbe Mack-2011-Arbeit wie die für `dill_Q` verwendete ("Stochastic exposure kinetics").
+Table I liefert die drei zentralen neuen Konstanten: PAG-Dichte 0,2/nm³, Quencher-Dichte
+0,05/nm³, Säure-Base-Quench-Rate 15 nm³/s.
+
+**Neuer Code:**
+- `resist/exposure.py`: `sample_pag_quencher_acid()` — sampelt `n_PAG ~ Poisson(rho_PAG·V_voxel)`
+  (tatsächlich im Voxel anwesende Moleküle, nicht nur ihr Mittelwert), `n_acid ~
+  Binomial(n_PAG, Q·(1-exp(-C·dose)))`, `n_Q ~ Poisson(rho_Q·V_voxel)` unabhängig. Beide
+  Ausgaben normiert auf `rho_PAG` (Mack's h=H/G0, q=Q/G0-Konvention).
+- `resist/peb.py`: `_reaction_limited_quench()` — geschlossene Lösung der bimolekularen
+  Neutralisationskinetik dh/dt=dq/dt=-rate·h·q über die MINOR-Spezies (die, die auf 0
+  getrieben wird), numerisch stabil über den unsigned Abstand `d=|h0-q0|` statt des
+  vorzeichenbehafteten Deltas (vermeidet Exponential-Overflow im säure-limitierten Fall).
+  `reaction_diffusion_with_quenching()` verkettet Reaktion + PEB-Diffusion + dieselbe
+  Deprotektionskinetik wie der Mean-Field-Pfad.
+- `pipeline.py`: neues `exposure_stochasticity: bool = False`-Flag (Default AUS) plus
+  `pag_density_per_nm3`, `quencher_density_per_nm3`, `acid_base_quench_rate_nm3_per_s`
+  (alle drei mit Table-I-Zitat). Im stochastischen Zweig von `_cd_via_full_chem`: bei
+  `exposure_stochasticity=True` wird `dose_z` (Beer-Lambert-Tiefenprofil) berechnet, durch
+  `sample_pag_quencher_acid` geschickt, dann durch `reaction_diffusion_with_quenching`, und
+  fällt danach in dieselbe `surface_advancement_level_set`-Weiterverarbeitung wie der
+  Mean-Field-Zweig.
+
+**Zwei Bugs beim Aufbau gefunden und behoben (Unit-Ebene):**
+1. `p_convert` in `sample_pag_quencher_acid` fehlte anfangs der `Q`-Faktor (war
+   `1-exp(-C·dose)` statt `Q·(1-exp(-C·dose))`) — inkonsistent mit der Mean-Field-Konvention.
+2. `_reaction_limited_quench` benutzte beim Rekonstruieren der Major-Spezies das
+   VORZEICHENBEHAFTETE `delta` statt den unsigned Abstand `d` — im Quencher-Überschuss-Fall
+   (q0>h0) ergab das `q_final=0` statt korrekt `q0-h0`. Gefangen durch 5 eigenständige
+   Testfälle (Säure-Überschuss, Quencher-Überschuss, Entartungsfall h0=q0, t=0, vektorisierter
+   Batch mit Nullen).
+
+**Dritter, größerer Bug — gefunden erst über die volle Pipeline, nicht per Unit-Test:**
+Mit beiden o.g. Fixes lief die Pipeline fehlerfrei durch, lieferte aber bei JEDER getesteten
+Dosis (16–80 mJ/cm²) exakt LER=LWR=0,0 — trotz eines sauberen, dosisabhängigen CD (58nm bei
+16mJ, 34,5nm bei 20mJ, 19,5nm bei 25mJ, 0 ab 30mJ). Ein exaktes `0,0` bei JEDER Dosis (nicht
+nur ein kleiner Wert) deutete auf ein strukturelles Problem, nicht auf Unterkalibrierung.
+
+Debugging per `monkey-patching` der echten Pipeline-Funktionsaufrufe (nicht per isoliertem
+Nachbau-Skript, das sich vorher als irreführend erwiesen hatte — Lektion: bei Verdacht auf
+einen Pipeline-Bug IMMER die echten Zwischenwerte aus dem laufenden `run_simulation()`
+abgreifen, nie eine Nachbildung von Hand vertrauen):
+- `dose_z` (Eingang) zeigte echte, plausible räumliche Variation (0,45–11,07, Mittel 4,65) —
+  kein Bug dort.
+- `A_out` (Säure NACH Quenching+Blur) lag bei Mittel 5,5e-8, Max 0,003 — praktisch überall
+  Null. `M_out` (Inhibitor nach Deprotektion) lag bei 0,9866–1,0 — praktisch KEINE
+  Deprotektion irgendwo. Das erklärte die flache `depth_map` = `mack_R_min·develop_time_s` =
+  3,0nm überall (identisch zum früheren "uniform 3.0"-Befund aus dem isolierten
+  Nachbau-Skript — der war also doch kein Artefakt, sondern real).
+
+**Ursache:** `reaction_diffusion_with_quenching()` wendete die Reihenfolge Blur→Reaktion an
+(erst über die volle PEB-Diffusionslänge ~20nm — bei den benutzten Gitterauflösungen mehrere
+hundert Pixel Kernel-Radius über hunderte statistisch unabhängige Y-Tile-Zeilen gemittelt —
+DANN die Neutralisationskinetik). Bei `quench_rate=15 nm³/s`, `t_bake=60s` läuft die Reaktion
+für praktisch jeden Säureüberschuss ≥~0,001 (in den normierten Einheiten) bis zur vollständigen
+Sättigung durch (`d·rate·t≫1`). Wird diese saturierende Reaktion auf ein bereits über ~100+
+Voxel ENSEMBLE-GEMITTELTES Feld angewendet, reproduziert sie nur noch das (bei den
+zitierten PAG/Quencher-Dichten nahe Null liegende) Ensemble-Mittel — genau das gesamplete
+molekulare Rauschen, das diese Funktion einfangen sollte, ist zu diesem Zeitpunkt bereits
+weggemittelt.
+
+Physikalisch korrekt ist die umgekehrte Reihenfolge: "reaction-limited" Kinetik bedeutet per
+Definition, dass die Reaktion schnell/lokal gegenüber der Diffusion ist — genau das
+rechtfertigt erst die Behandlung als lokal durchmischte bimolekulare ODE auf Voxel-Skala. Sie
+muss also auf den ROHEN, ungeblurrten Pro-Voxel-Zählwerten arbeiten (repräsentiert die
+molekulare Diskretheit vor der PEB-Diffusion), und erst das REAKTIONSPRODUKT wird anschließend
+über die PEB-Länge geblurrt (repräsentiert die Diffusion der nach der Neutralisation
+verbliebenen Säure während der restlichen Backzeit).
+
+Numerisch verifiziert an synthetischen Daten (H=1024, gleiche Parameter): Blur→Reaktion ergab
+Mittel/Std = 3,7e-21/8,0e-21 (vollständig entartet); Reaktion→Blur ergab Mittel/Std =
+0,029/7,2e-4 (echtes, nicht-entartetes Signal). Fix: Reihenfolge in
+`reaction_diffusion_with_quenching()` getauscht (Reaktion zuerst, Diffusion danach),
+Docstring entsprechend korrigiert.
+
+**Ergebnis nach dem Fix** (`exposure_stochasticity=True` allein, `stochastic_ler_grid_y=4096`,
+3 Realisierungen):
+
+| Dosis [mJ/cm²] | CD [nm] | LER [nm] | LWR [nm] |
+|---|---|---|---|
+| 16 | 58,0 | 0,49 | 0,98 |
+| 20 | 34,5 | 0,87 | 1,65 |
+| 25 | 19,5 | 0,76 | 1,40 |
+
+Echte, nicht-entartete, dosisabhängige Werte — das Feature funktioniert jetzt für sich
+genommen. Zum Vergleich bei 16mJ/cm² lieferte `development_stochasticity=True` allein (der
+bereits vorhandene Mechanismus) LWR=3,24nm — größenordnungsmäßig näher an Vesters echten
+6,5–10,3nm als `exposure_stochasticity` allein (0,98nm).
+
+**Offener Befund — NICHT gelöst, ehrlich stehen gelassen:** beide Mechanismen KOMBINIERT
+(`development_stochasticity=True` UND `exposure_stochasticity=True`) ergaben bei 16mJ/cm²
+LWR=0,22nm — WENIGER als `development_stochasticity` allein (3,24nm), obwohl zwei zusätzliche,
+unabhängige Rauschquellen naiv eine Zunahme (Addition in Quadratur) erwarten ließen. Ursache
+noch nicht identifiziert; Arbeitshypothese: `development_strength=20,0` wurde ausschließlich
+für die Overshoot-Skala des Mean-Field-Belichtungspfads empirisch kalibriert (siehe Eintrag
+oben), und das `depth_map_noisy`-Feld aus dem `exposure_stochasticity`-Zweig hat vermutlich
+eine strukturell andere Overshoot-Verteilung (near-threshold statt breiter Streuung), wodurch
+dieselbe `development_strength` den Kantenübergang eher glättet als verrauscht. Nicht weiter
+untersucht in dieser Runde — bewusste Entscheidung, den Kern-Bugfix (Blur-Reihenfolge) zuerst
+zu sichern, bevor in eine zweite, separate Kalibrierungsrunde investiert wird.
+
+**Getestet:** `test_full_chem_config.py` (7 grün), `test_development_stochasticity.py`
+(19 grün), `test_stochastic_pipeline.py` (5 grün) — alle unverändert grün, da
+`exposure_stochasticity` standardmäßig aus ist und der geänderte Code (`reaction_diffusion_
+with_quenching`) nur in diesem neuen, per Default inaktiven Zweig aufgerufen wird. Keine
+golden-value-Anpassungen nötig.
+
+**Noch offen:** die o.g. Kombinations-Kalibrierung; ein direkter Vesters-Vergleich mit
+`exposure_stochasticity=True` (mit oder ohne `development_stochasticity`) im echten
+8–16mJ/cm²-Dosisfenster (bislang nur bei 16mJ getestet, da das Modell bei niedrigeren Dosen
+weiterhin gar nicht entwickelt, siehe Befund 1 oben); Commit dieser Änderungen steht noch aus.
+
+---

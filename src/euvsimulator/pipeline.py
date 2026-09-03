@@ -28,8 +28,15 @@ from euvsimulator.resist.develop import (
     stochastic_development,
     surface_advancement_level_set,
 )
-from euvsimulator.resist.exposure import dill_abc_exposure, dose_to_acid
-from euvsimulator.resist.peb import reaction_diffusion_analytical
+from euvsimulator.resist.exposure import (
+    dill_abc_exposure,
+    dose_to_acid,
+    sample_pag_quencher_acid,
+)
+from euvsimulator.resist.peb import (
+    reaction_diffusion_analytical,
+    reaction_diffusion_with_quenching,
+)
 from euvsimulator.constants import HC_EV_NM
 from euvsimulator.resist.stochastic import (
     extract_ler,
@@ -815,6 +822,53 @@ class SimulationConfig:
     development_strength: float = 20.0  # dimensionless dissolution events per pixel at drive=1 -- see note above
     development_correlation_nm: float = 0.5  # molecular aggregate correlation length [nm]
 
+    # PAG/quencher molecular discreteness (2026-09-03, "baue die PAG-/
+    # Quencher-Diskretheit in den Belichtungsschritt ein"): a SEPARATE
+    # stochastic noise source from photon-shot-noise (photon_deposition_
+    # shot_noise, always used when enable_stochastic=True). Rather than a
+    # mean-field acid = Q*(1-exp(-C*dose)), this samples an ACTUAL,
+    # Poisson-distributed number of PAG molecules per voxel and a
+    # Binomial conversion of that finite population -- see resist/
+    # exposure.py's sample_pag_quencher_acid() docstring for the full
+    # model. Motivated directly by a validation finding the same day
+    # (docs/claude_code_arbeitslog.md): simulated LWR undershot Vesters'
+    # real measured LWR (6.5-10.3nm) by ~3-5x even with photon-shot-noise
+    # and development_stochasticity both on, suggesting a real, missing
+    # noise source upstream of development -- this is the hypothesis
+    # that finding pointed at, now implemented (closing the gap is NOT
+    # yet re-verified as of writing this comment -- see the arbeitslog
+    # entry for this change for the actual before/after numbers).
+    #
+    # Off by default (exposure_stochasticity=False): this is a NEW,
+    # separate noise source layered on top of an already-working
+    # pipeline, and enabling it changes LER/LWR output -- opt-in,
+    # exactly like development_stochasticity, so it does not silently
+    # invalidate the golden-value tests fixed earlier this session.
+    #
+    # pag_density_per_nm3 / quencher_density_per_nm3 /
+    # acid_base_quench_rate_nm3_per_s are ALL from ONE real, cited,
+    # EUV-native, internally self-consistent source (their own Table I,
+    # not independently picked): Mack, J.J. Biafore & M.D. Smith,
+    # "Stochastic Acid-Base Quenching in Chemically Amplified
+    # Photoresists: A Simulation Study," Proc. SPIE 7972, 797202 (2011),
+    # free via https://www.lithoguru.com/scientist/litho_papers/
+    # 2011_EUV_Stochastic_Quenching_Kinetics.pdf (fetched and read
+    # directly). This is a DIFFERENT paper from the "Stochastic exposure
+    # kinetics..." one dill_Q/mack_R_max cite (same author group, same
+    # PROLITH stochastic-resist-model simulator, a distinct SPIE
+    # proceedings paper -- do not conflate the two when updating either
+    # citation). Table I ("Baseline stochastic resist parameters for EUV
+    # simulations"): PAG density 0.2/nm^3, quencher density 0.05/nm^3
+    # (i.e. quencher loaded at 25% of PAG, a real cited ratio, not a
+    # guess), quenching rate constant 15 nm^3/s, PEB time 25s (NOT
+    # adopted here -- peb_t_bake keeps its own Anderson-et-al.-2009-cited
+    # 60s default rather than switching to this paper's own value, to
+    # stay consistent with the rest of this project's PEB timing).
+    exposure_stochasticity: bool = False  # ON = sample discrete PAG/quencher populations instead of mean-field acid; see note above
+    pag_density_per_nm3: float = 0.2  # Initial PAG number density [nm^-3] -- Mack, Biafore & Smith 2011 Table I; see note above
+    quencher_density_per_nm3: float = 0.05  # Initial quencher number density [nm^-3] -- same source/table
+    acid_base_quench_rate_nm3_per_s: float = 15.0  # Acid-base quenching rate constant [nm^3/s] -- same source/table
+
     # Mask-3D / RCWA parameters (Phase 4)
     use_rcwa: bool = False  # Use full RCWA instead of thin-mask analytic
     absorber_taper_deg: float = 90.0  # Sidewall angle from horizontal (90 = vertical)
@@ -1105,25 +1159,63 @@ def _cd_via_full_chem(
             # field -- the direct analogue of the old acid_noisy, but
             # physically complete (depth-resolved absorption + PEB, not a
             # bare Dill-C exponential on 2D dose).
-            acid_noisy_3d, _ = dill_abc_exposure(
-                d_eff,
-                A=cfg.dill_A,
-                B=cfg.dill_B,
-                C=cfg.dill_C,
-                Q=cfg.dill_Q,
-                thickness=cfg.resist_thickness_nm / 1000.0,
-                n_layers=n_layers,
-            )
-            inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
-            _, inhib_noisy_3d = reaction_diffusion_analytical(
-                acid_noisy_3d,
-                inhib_in_noisy_3d,
-                D=cfg.peb_D,
-                k=cfg.peb_k,
-                t_bake=cfg.peb_t_bake,
-                sigma_diff=cfg.peb_sigma_diff,
-                dx=dx_nm,
-            )
+            if cfg.exposure_stochasticity:
+                # PAG/quencher molecular discreteness (see SimulationConfig's
+                # exposure_stochasticity note for the full citation/model).
+                # dill_Q plays the SAME role as in the mean-field path here
+                # (per-molecule conversion probability Q*(1-exp(-C*dose)),
+                # applied inside sample_pag_quencher_acid's Binomial draw --
+                # see that function's own Q docstring for why this is the
+                # right way to carry dill_Q into a per-molecule model, not
+                # just reused for convenience). dill_A/dill_B still drive
+                # the depth-resolved Beer-Lambert dose (dose_z below), same
+                # as the mean-field path.
+                alpha = cfg.dill_A + cfg.dill_B  # [1/um]
+                thickness_um = cfg.resist_thickness_nm / 1000.0
+                z_um = torch.linspace(0.0, thickness_um, n_layers, device=d_eff.device)
+                dose_z = d_eff.unsqueeze(0) * torch.exp(-alpha * z_um.view(-1, 1, 1))
+                acid_noisy_3d, quencher_noisy_3d = sample_pag_quencher_acid(
+                    dose_z,
+                    C=cfg.dill_C,
+                    Q=cfg.dill_Q,
+                    pag_density=cfg.pag_density_per_nm3,
+                    quencher_density=cfg.quencher_density_per_nm3,
+                    dx=dx_nm,
+                    dz=dz_nm,
+                    rng=rng,
+                )
+                inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
+                _, _, inhib_noisy_3d = reaction_diffusion_with_quenching(
+                    acid_noisy_3d,
+                    quencher_noisy_3d,
+                    inhib_in_noisy_3d,
+                    D=cfg.peb_D,
+                    k=cfg.peb_k,
+                    quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+                    t_bake=cfg.peb_t_bake,
+                    sigma_diff=cfg.peb_sigma_diff,
+                    dx=dx_nm,
+                )
+            else:
+                acid_noisy_3d, _ = dill_abc_exposure(
+                    d_eff,
+                    A=cfg.dill_A,
+                    B=cfg.dill_B,
+                    C=cfg.dill_C,
+                    Q=cfg.dill_Q,
+                    thickness=cfg.resist_thickness_nm / 1000.0,
+                    n_layers=n_layers,
+                )
+                inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
+                _, inhib_noisy_3d = reaction_diffusion_analytical(
+                    acid_noisy_3d,
+                    inhib_in_noisy_3d,
+                    D=cfg.peb_D,
+                    k=cfg.peb_k,
+                    t_bake=cfg.peb_t_bake,
+                    sigma_diff=cfg.peb_sigma_diff,
+                    dx=dx_nm,
+                )
             depth_map_noisy = surface_advancement_level_set(
                 inhib_noisy_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
             )

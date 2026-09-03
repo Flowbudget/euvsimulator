@@ -138,6 +138,141 @@ def dill_abc_exposure(
 
 
 # ──────────────────────────────────────────────
+# PAG/quencher molecular discreteness (stochastic exposure)
+# ──────────────────────────────────────────────
+
+
+def sample_pag_quencher_acid(
+    dose_z: torch.Tensor,
+    C: float | torch.Tensor,
+    pag_density: float,
+    quencher_density: float,
+    dx: float,
+    dz: float,
+    Q: float | torch.Tensor = 1.0,
+    dy: float | None = None,
+    rng: torch.Generator | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Sample discrete PAG/quencher acid generation (molecular shot noise).
+
+    ``dill_abc_exposure``/``dose_to_acid`` compute the MEAN-FIELD acid
+    concentration, ``acid = Q*(1-exp(-C*dose))`` -- correct in the limit
+    of infinitely many PAG molecules per voxel, but EUV lithography's
+    whole "stochastics problem" is that a real voxel does not have
+    infinitely many: a 92 eV photon absorption event converts one of a
+    FINITE, LOCALLY-COUNTED number of PAG molecules, and that finiteness
+    is itself a noise source distinct from (and, per the validation in
+    docs/claude_code_arbeitslog.md 2026-09-03, apparently LARGER than)
+    photon-arrival shot noise alone. This function samples that finite-
+    population effect directly:
+
+        n_PAG ~ Poisson(rho_PAG * V_voxel)          -- molecules actually
+                                                          present, not just
+                                                          their mean
+        p_convert = Q * (1 - exp(-C * dose_z))       -- same Dill-C
+                                                          conversion
+                                                          probability as
+                                                          the mean-field
+                                                          model
+        n_acid ~ Binomial(n_PAG, p_convert)          -- each present PAG
+                                                          independently
+                                                          converts or not;
+                                                          saturation
+                                                          (can't exceed
+                                                          n_PAG) is free
+        n_Q ~ Poisson(rho_Q * V_voxel)               -- quencher loaded
+                                                          independently of
+                                                          exposure
+
+    Both outputs are normalised to rho_PAG (i.e. acid=1 would mean "every
+    PAG in this voxel's average population converted"), matching this
+    codebase's existing acid-concentration convention and the h=H/G0,
+    q=Q/G0 relative-concentration convention used by the PEB quenching
+    step below (see peb.py's ``reaction_diffusion_with_quenching``).
+
+    Parameters
+    ----------
+    dose_z : torch.Tensor
+        Depth-resolved dose after Beer-Lambert attenuation [mJ/cm²] (the
+        same quantity ``dill_abc_exposure`` computes internally before
+        its own mean-field acid step). Shape ``(N, H, W)`` or ``(H, W)``.
+    C : float or torch.Tensor
+        Dill photo-rate constant [cm²/mJ] -- same parameter and same
+        physical role as in the mean-field model.
+    Q : float or torch.Tensor
+        PAG quantum efficiency (Mack's phi_PAG -- see pipeline.py's
+        dill_Q comment for the full derivation of why this codebase's
+        dill_Q corresponds to phi_PAG, not the unrelated "film quantum
+        yield"): the per-molecule probability that an already-excited
+        PAG actually converts, applied identically to the mean-field
+        model's Q*(1-exp(-C*dose)). Default 1.0 (no additional loss) --
+        pipeline.py's stochastic block always passes cfg.dill_Q
+        explicitly; the default here is for standalone/test use.
+    pag_density : float
+        Initial PAG number density [nm⁻³]. Real, cited EUV-native value:
+        Mack, Biafore & Smith, "Stochastic Acid-Base Quenching in
+        Chemically Amplified Photoresists: A Simulation Study," Proc.
+        SPIE 7972, 797202 (2011), Table I ("Baseline stochastic resist
+        parameters for EUV simulations") -- free via lithoguru.com. See
+        pipeline.py's pag_density_per_nm3 comment for the full citation.
+    quencher_density : float
+        Initial quencher number density [nm⁻³]. Same source/table.
+    dx, dz : float
+        Lateral and vertical voxel dimensions [nm].
+    dy : float, optional
+        Second lateral voxel dimension [nm]. Defaults to *dx* (matches
+        ``photon_deposition_shot_noise``'s own convention -- this
+        codebase's lateral grid is a 1D line/space cross-section
+        Y-tiled for statistics, so *dy* is a real physical voxel extent
+        along the un-modelled direction, not merely 1).
+    rng : torch.Generator, optional
+        RNG for the Poisson/Binomial draws. A fresh (non-reproducible)
+        CPU generator is created if not given.
+
+    Returns
+    -------
+    acid : torch.Tensor
+        Sampled relative acid concentration, same shape as *dose_z*.
+    quencher : torch.Tensor
+        Sampled relative quencher concentration, same shape as *dose_z*.
+    """
+    if rng is None:
+        rng = torch.Generator(device=dose_z.device)
+
+    dy_val = dy if dy is not None else dx
+    voxel_volume = dx * dy_val * dz
+    mean_pag = max(pag_density * voxel_volume, 1e-12)
+    mean_quencher = quencher_density * voxel_volume
+
+    n_pag = torch.poisson(torch.full_like(dose_z, mean_pag), generator=rng)
+    p_convert = torch.clamp(Q * (1.0 - torch.exp(-C * dose_z)), 0.0, 1.0)
+    n_acid = torch.binomial(n_pag, p_convert, generator=rng) if hasattr(torch, "binomial") else _binomial_fallback(n_pag, p_convert, rng)
+    n_quencher = torch.poisson(torch.full_like(dose_z, mean_quencher), generator=rng)
+
+    acid = n_acid / mean_pag
+    quencher = n_quencher / mean_pag
+
+    return acid, quencher
+
+
+def _binomial_fallback(
+    n: torch.Tensor, p: torch.Tensor, rng: torch.Generator
+) -> torch.Tensor:
+    """Binomial(n, p) via a normal approximation with continuity correction.
+
+    Only used if the installed torch build lacks ``torch.binomial``
+    (added in a relatively recent torch release). np*(1-p) is large
+    enough at EUV-relevant PAG densities (typically several molecules
+    per voxel at the grid resolutions this codebase uses) that the
+    normal approximation is adequate; rounded and clamped to [0, n].
+    """
+    mean = n * p
+    var = torch.clamp(n * p * (1.0 - p), min=1e-12)
+    draw = torch.normal(mean, var.sqrt(), generator=rng)
+    return torch.clamp(torch.round(draw), min=torch.zeros_like(n), max=n)
+
+
+# ──────────────────────────────────────────────
 # Secondary-electron blur (Gaussian PSF)
 # ──────────────────────────────────────────────
 
