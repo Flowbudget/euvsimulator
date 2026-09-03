@@ -367,11 +367,16 @@ dill_A/B/C dort nicht verwendet werden).
 **Vollständige Testsuite deckte einen echten Folgeeffekt auf (kein Bug, aber muss behandelt
 werden):** 5 statt 1 Fehlschlag. 4 davon in `test_development_stochasticity.py`/
 `test_ler_production_integration.py` — beide nutzen `_car_cfg()` mit `resist_model="full_chem"`
-und ungesetzten `dill_A/B/C` (also den neuen Defaults). Da die Gesamtabsorption
-`dill_A+dill_B` von 4.8/µm auf 1.06/µm sinkt, ändert sich das Beer-Lambert-Dosisprofil in der
-Resist-Tiefe, das in die stochastischen LER/LWR-Schätzer einfließt — die dort hinterlegten
-"Golden Values" (harte Zahlenvergleiche zur Regressionserkennung) stammen noch von den alten
-Dill-Werten. Das ist eine **echte, erwartete Konsequenz** der bewussten Parameteränderung,
+und ungesetzten `dill_A/B/C` (also den neuen Defaults). `dill_C` (0.05→0.08997) ändert
+`dose_to_acid()`s Ausgabe, die in die stochastischen LER/LWR-Schätzer einfließt — die dort
+hinterlegten "Golden Values" (harte Zahlenvergleiche zur Regressionserkennung) stammen noch
+von den alten Dill-Werten. **[KORREKTUR, 2026-09-03, nachträglich beim MackModel-Wiring
+entdeckt: hier stand ursprünglich fälschlich, `dill_A+dill_B` (Gesamtabsorption) sei die
+Ursache. Tatsächlich haben `dill_A`/`dill_B` im gesamten Code NULL Effekt auf irgendein
+Simulationsergebnis — sie werden nirgends gelesen, nur deklariert/durchgereicht. Isoliert
+per direktem Test bestätigt: `dill_C` allein reproduziert 100% der beobachteten
+Golden-Value-Verschiebung. Siehe den entsprechenden Log-Eintrag weiter unten für die volle
+Aufarbeitung.]** Das ist eine **echte, erwartete Konsequenz** der bewussten Parameteränderung,
 kein Implementierungsfehler — im selben Stil aktualisiert, wie es das Projekt bereits einmal
 bei der "P1-1 TCC correction" gehandhabt hat (dokumentierter Grund + alter Wert im Kommentar
 erhalten, nicht stillschweigend überschrieben). Alle sechs betroffenen Konstanten

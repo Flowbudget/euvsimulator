@@ -172,10 +172,34 @@ class SimulationConfig:
     # B=2.36 um^-1 for a real 193nm ArF-immersion CAR resist; same A<<B
     # regime, though that source is NOT itself used for the EUV magnitude
     # since it's the wrong wavelength -- see mack_* parameters below for
-    # why that distinction matters). This changes full_chem path outputs;
-    # it does NOT affect the aerial_threshold benchmark (dill_A/B are not
-    # used on that path) so it is not a regression of the "solide
-    # geprüft" reference values.
+    # why that distinction matters).
+    #
+    # ARCHITECTURE GAP, discovered 2026-09-03 (round 9, while wiring
+    # MackModel into the pipeline -- see mack_R_max note below): dill_A and
+    # dill_B currently have ZERO EFFECT ON ANY SIMULATION OUTPUT, full stop
+    # -- not just "not used on the aerial_threshold path" as an earlier,
+    # narrower version of this note claimed. Verified by grepping the
+    # entire src tree: cfg.dill_A/cfg.dill_B are read nowhere outside this
+    # dataclass declaration and the CLI pass-through in io/cli.py. The one
+    # function in this codebase that DOES implement real Beer-Lambert
+    # depth-resolved absorption with A and B, dill_abc_exposure() in
+    # resist/exposure.py, is exported from resist/__init__.py but never
+    # called from pipeline.py or anywhere else -- the full_chem path
+    # instead calls the separate, simplified dose_to_acid() (same file),
+    # which only takes C and Q and has no depth/absorption-coefficient
+    # concept at all. Confirmed experimentally, not just by reading code:
+    # SimulationConfig(dill_A=.., dill_B=.., ...) with every combination of
+    # old/new values, all else equal, produces bitwise-identical
+    # aerial_image AND full_chem outputs (cd_nm, ler_nm, lwr_nm) as long as
+    # dill_C is held fixed -- isolating dill_C alone reproduces 100% of an
+    # observed golden-value LER/LWR shift that an earlier commit incorrectly
+    # attributed to dill_A/B (see test_ler_production_integration.py and
+    # test_development_stochasticity.py, corrected in the same commit as
+    # this note). So this is NOT a regression of the "solide geprüft"
+    # aerial_threshold reference values (dill_A/B were never used there
+    # either), but the citation work above for dill_A/B, real and carefully
+    # sourced as it is, is currently inert -- a second, separate wiring gap
+    # alongside the mack_R_max/R_min/n one below, not yet fixed here.
     # UPDATE (2026-09-03, round 9 -- see mack_R_max/mack_R_min/mack_n/mack_M_th
     # below for the full story): dill_A/B replaced again with a SELF-CONSISTENT
     # set from a single real EUV-exposed resist -- Yamamoto, H.; Kozawa, T.;

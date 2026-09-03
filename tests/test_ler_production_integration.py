@@ -42,13 +42,22 @@ SEED = 42
 # increases LER/LWR values.  This is a documented physics fix.
 #
 # Golden values updated again for the EUV-native Yamamoto et al. 2011
-# dill_A/B/C adoption (2026-09-03, see pipeline.py dill_A/B/C comments):
-# total absorption dill_A+dill_B dropped from 4.8/um to 1.06/um (a real,
-# cited EUV resist measurement replacing an independently-sourced
-# patchwork), which changes the Beer-Lambert depth-dose profile feeding
-# the stochastic LER/LWR path -- a documented model-input change, not a
-# calibration or a regression. Re-measured reproducibly (seed=42,
-# se_blur=5, _car_cfg() defaults with dill_Q=1.0 pinned as before).
+# dill_C adoption (2026-09-03, see pipeline.py dill_C comment): dill_C
+# rose from 0.05 to 0.08997 cm2/mJ (a real, cited EUV resist
+# measurement replacing an independently-sourced default), which
+# directly changes dose_to_acid()'s output feeding the stochastic
+# LER/LWR path -- a documented model-input change, not a calibration or
+# a regression. NOTE (correcting an earlier version of this comment):
+# dill_A and dill_B were changed in the same commit but are NOT the
+# cause -- confirmed by isolating each change independently
+# (SimulationConfig(dill_A=.., dill_B=.., dill_C=..) combinations run
+# directly): dill_A/dill_B currently have ZERO effect on any simulation
+# output anywhere in this codebase (declared in SimulationConfig and
+# exposed as CLI flags, but never read by pipeline.py or resist/*.py --
+# the one function that would use them, dill_abc_exposure() in
+# resist/exposure.py, is never called). Re-measured reproducibly
+# (seed=42, se_blur=5, _car_cfg() defaults with dill_Q=1.0 pinned as
+# before).
 GOLDEN_LEGACY_LER = 0.2835345566  # was 0.2726584375 (pre Yamamoto dill_A/B/C)
 GOLDEN_LEGACY_LWR = 0.2572942674  # was 0.2833657265 (pre Yamamoto dill_A/B/C)
 GOLDEN_LARGE_N_LER = 0.3065865934  # was 0.3539170623 (pre Yamamoto dill_A/B/C)
