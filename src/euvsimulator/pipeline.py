@@ -310,27 +310,82 @@ class SimulationConfig:
     #   (read directly, not via search-summary; full 179-page book archived
     #   locally at references/literature/inside_prolith_mack_1997/).
     #
-    # IMPORTANT CAVEAT: this is explicitly a GENERIC TEXTBOOK ILLUSTRATION
-    # Mack chose to demonstrate the *shape* of the Original/Enhanced Mack
-    # model as n is varied -- it is not fit to any measured photoresist,
-    # EUV or otherwise. So while the defaults below are traceable to a
-    # well-known, authoritative source (not an arbitrary guess), they are
-    # NOT evidence that these values are physically representative of a
-    # real EUV CAR resist's development kinetics. Despite two further
-    # rounds of targeted search, no EUV-specific, peer-reviewed
-    # Rmax/Rmin/n/Mth fit was found; the two most promising leads remain
-    # paywalled from this environment:
-    #   - "Extraction and identification of resist modeling parameters
-    #     for EUV Lithography," Proc. SPIE 6923, 69230T (2008).
-    #   - Long, L. T.; Neureuther, A. R.; Naulleau, P. P. "Three-
-    #     dimensional modeling of EUV photoresist using the multivariate
-    #     Poisson propagation model." J. Micro/Nanopatterning Mater.
-    #     Metrol. 20(3), 034601 (2021). doi:10.1117/1.JMM.20.3.034601
-    # If institutional/library access to either becomes available, they
-    # are the next step for a real EUV-specific fit. Recalibrating these
-    # against real EUV develop-rate data remains an open item.
-    mack_R_max: float = 100.0  # Max development rate [nm/s] -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
-    mack_R_min: float = 0.1  # Min development rate [nm/s] -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
+    # IMPORTANT CAVEAT (background, applies to mack_n/mack_M_th below, see
+    # UPDATE for mack_R_max/mack_R_min): the "Inside PROLITH" values are a
+    # GENERIC TEXTBOOK ILLUSTRATION Mack chose to demonstrate the *shape*
+    # of the Original/Enhanced Mack model as n is varied -- not fit to any
+    # measured photoresist, EUV or otherwise. Traceable to a well-known,
+    # authoritative source (not an arbitrary guess), but NOT evidence of
+    # being physically representative of a real EUV CAR resist.
+    #
+    # UPDATE (2026-09-03, PROVISIONAL -- see status below): mack_R_max and
+    # mack_R_min replaced with EUV-native values from a real measurement.
+    # Vesters, Y.; De Simone, D.; De Gendt, S. "Dissolution Rate Monitor
+    # Tool to Measure EUV Photoresist Dissolution." J. Photopolym. Sci.
+    # Technol. 30(6), 675-681 (2017), free via J-STAGE:
+    # https://www.jstage.jst.go.jp/article/photopolymer/30/6/30_675/_pdf
+    # Fig. 6 plots a dissolution contrast curve for two REAL, ASML
+    # NXE-scanner-designated EUV (13.5nm) resists (NXE1716 = high
+    # quencher loading, NXE1717 = low quencher loading), explicitly
+    # captioned "Data is fitted using original Mack model." No numeric
+    # table is given, only the plot -- values below were extracted by
+    # rendering the page at 400dpi, calibrating the pixel-to-value mapping
+    # against the axis gridlines (log-scale, verified self-consistent to
+    # <0.5px across multiple independent decades on both axes), and
+    # locating the actual data-marker pixel centroids at the lowest- and
+    # highest-dose measured points (NOT the fitted curve, and NOT
+    # extrapolated to dose=0/infinity -- see raw per-resist values below).
+    # Cross-checked against the paper's own text ("both Rmin and Rmax for
+    # the high quencher resist are higher than for the lower quencher
+    # resist") -- the extracted numbers confirm this in both directions.
+    #   NXE1716 (high Q): ~0.017 nm/s (at 1.0 mJ/cm^2) to ~241 nm/s (at 25.4 mJ/cm^2)
+    #   NXE1717 (low Q):  ~0.012 nm/s (at 1.0 mJ/cm^2) to ~174 nm/s (at 25.1 mJ/cm^2)
+    # Defaults below use the geometric mean of the two resists (a
+    # defensible way to combine two distinct real measurements into one
+    # default without arbitrarily preferring one formulation), NOT a new
+    # number invented to "look reasonable": Rmax = sqrt(241*174) = 205
+    # nm/s, Rmin = sqrt(0.017*0.012) = 0.0143 nm/s.
+    #
+    # STATUS -- READ BEFORE TRUSTING THESE NUMBERS: an email was sent
+    # 2026-09-03 to the corresponding author (Danilo De Simone, imec,
+    # danilo.desimone@imec.be) asking for the actual fitted Rmax/Rmin/n/
+    # Mth table behind Fig. 6, since a graph reading -- however carefully
+    # pixel-calibrated -- is still a reconstruction, not the authors' own
+    # number. THESE VALUES ARE PROVISIONAL pending that reply (or
+    # independent confirmation). If/when a reply arrives: replace the
+    # values below with the authors' real numbers, update this comment
+    # and docs/claude_code_arbeitslog.md accordingly, and remove this
+    # provisional-status paragraph. Do not let this note go stale --
+    # if you are reading this long after 2026-09, either the reply
+    # arrived and this should already be resolved, or it didn't and that
+    # is itself worth telling the user rather than silently trusting a
+    # months-old "pending" label.
+    #
+    # SEPARATE, ALREADY-KNOWN ISSUE -- these parameters currently have
+    # ZERO EFFECT ON SIMULATION OUTPUT: mack_R_max/mack_R_min/mack_n are
+    # only used for __post_init__ bounds validation below; the actual
+    # full_chem development step (_cd_via_full_chem in this file) calls
+    # threshold_development(inhib, threshold=cfg.mack_M_th) -- a binary
+    # threshold, not the continuous Mack R(M) rate equation. The MackModel
+    # class implementing that equation exists (resist/develop.py) but is
+    # never instantiated in the actual pipeline. So updating Rmax/Rmin
+    # here is a documentation/readiness improvement for when that class
+    # gets wired in (a separate, larger task -- see project status memory
+    # / docs/claude_code_arbeitslog.md), NOT a change to current
+    # simulation behavior, and does NOT touch the CD=64nm degeneracy
+    # documented below at mack_M_th (that issue is about the PEB/
+    # threshold step, not about these development-rate parameters).
+    #
+    # mack_n and mack_M_th are UNCHANGED (still the "Inside PROLITH"
+    # illustrative values) -- Fig. 6 only gives two plateau data points
+    # per curve, not enough to independently fit the sigmoid's steepness
+    # (n) or switching threshold (Mth) without also reconstructing the
+    # authors' own dose-to-protection-level model, which was not
+    # published and would require a new modeling assumption of our own to
+    # invert -- exactly the kind of shaky derivation this project does not
+    # want. Left as explicitly-flagged textbook values rather than guessed.
+    mack_R_max: float = 205.0  # Max development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); see note above, currently has no effect on simulation output
+    mack_R_min: float = 0.0143  # Min development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); see note above, currently has no effect on simulation output
     mack_n: float = 5.0  # Dissolution selectivity (contrast) -- matches one of the illustrative cases in Mack's "Inside PROLITH" (1997) Fig. 7-2, not an EUV-specific fit; see note above
     mack_M_th: float = 0.5  # Threshold inhibitor concentration -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
 

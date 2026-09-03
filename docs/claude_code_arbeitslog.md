@@ -195,3 +195,50 @@ nach einem einzelnen vollständigen EUV-193nm-äquivalenten Fund suchen.
 vorbestehender Fehlschlag in `test_metro.py`, siehe früherer Eintrag). Keine Regression.
 
 ---
+
+## 2026-09-03 — Mack R_max/R_min: EUV-nativer, aber PROVISORISCHER Fund eingebaut
+
+**Kontext:** Fortsetzung der Mack-Parameter-Recherche (siehe `/Users/flo/mack fits/catalog.md`,
+inzwischen 28 Quellen). Bester Fund: Vesters, De Simone, De Gendt (imec/KU Leuven), *J.
+Photopolym. Sci. Technol.* 30(6), 675 (2017), frei über J-STAGE — echte, bei ASML-NXE-Scannern
+benannte EUV-Resists (NXE1716, NXE1717), explizit mit dem Original-Mack-Modell gefittet, aber
+nur als Diagrammkurve (Fig. 6) publiziert, keine Zahlentabelle.
+
+**Rigorose Neuvermessung statt Schätzung:** Seite mit 400dpi gerendert, alle Haupt-Gitterlinien
+pixelgenau erkannt (Konsistenz <0.5px über mehrere Dekaden), Datenpunkt-Marker exakt lokalisiert.
+Gegenprobe bestanden: Meine Messung bestätigt die im Fließtext behauptete Beziehung (High-
+Quencher-Resist hat höheres Rmin UND Rmax) in beide Richtungen.
+
+**Umgesetzt:** `mack_R_max: 100.0→205.0`, `mack_R_min: 0.1→0.0143` (geometrisches Mittel der
+beiden real gemessenen Resists, um nicht willkürlich einen zu bevorzugen). `mack_n`/`mack_M_th`
+bewusst NICHT verändert — aus zwei Plateau-Punkten pro Kurve lässt sich weder die Steilheit (n)
+noch der Schwellenwert (Mth) sauber zurückrechnen, ohne das unbekannte Dosis→Schutzgrad-Modell
+der Autoren selbst zu erfinden.
+
+**Wichtige Einordnung, zweifach:**
+1. **Diese Werte sind ausdrücklich PROVISORISCH.** Der Nutzer hat am 2026-09-03 die
+   korrespondierende Autorin (Danilo De Simone, imec) direkt angeschrieben und um die echten
+   gefitteten Werte gebeten. Bis zur Antwort (oder einer unabhängigen Bestätigung) gelten diese
+   Zahlen als vorläufig — ausführlich im Code bei `mack_R_max` dokumentiert, inkl. Hinweis, das
+   nicht stillschweigend als "erledigt" zu betrachten, falls diese Notiz mal alt wird.
+2. **Diese Änderung hat aktuell KEINE Auswirkung auf Simulationsergebnisse.**
+   `mack_R_max`/`mack_R_min`/`mack_n` werden nur in `__post_init__` zur Validierung genutzt —
+   der eigentliche `full_chem`-Entwicklungsschritt ruft `threshold_development()` auf (binärer
+   Schwellenwertvergleich), nicht die kontinuierliche Mack-R(M)-Gleichung. `MackModel` existiert
+   in `resist/develop.py`, wird aber nirgends instanziiert (bereits bekanntes, separates
+   Problem, siehe Projekt-Status-Erinnerung — "Aufgabe 3" der ursprünglichen Liste). Diese
+   Änderung ist also reine Dokumentations-/Vorbereitungsarbeit für den Tag, an dem das verdrahtet
+   wird — kein Fix für die CD=64nm-Entartung.
+
+**Wie mit Unsicherheit umgegangen wird (Frage des Nutzers "wie würdest du es tun"):** Kein
+separates Tracking-System eingeführt (wäre Überkonstruktion für den aktuellen Projektstand) —
+stattdessen: (a) der Wert selbst trägt "PROVISIONAL" im Kommentar direkt daneben, nicht nur in
+einem separaten Dokument, damit niemand die Zahl kopiert ohne den Kontext zu sehen; (b) der
+Kommentar nennt explizit, was bei Antwort/Nicht-Antwort zu tun ist; (c) Status zusätzlich hier im
+Arbeitslog und im `mack fits`-Katalog nachverfolgt. Wenn die Antwort eintrifft: Kommentar, Wert
+und diesen Log-Eintrag aktualisieren, "PROVISIONAL" entfernen.
+
+**Verifiziert:** `SimulationConfig()` lädt fehlerfrei. Vollständige Testsuite läuft (Ergebnis
+siehe nächster Eintrag/Commit).
+
+---
