@@ -176,8 +176,34 @@ class SimulationConfig:
     # it does NOT affect the aerial_threshold benchmark (dill_A/B are not
     # used on that path) so it is not a regression of the "solide
     # geprüft" reference values.
-    dill_A: float = 0.3  # Bleachable absorption coefficient [1/µm] -- Fallica et al. 2016, EUV-CAR measured range 0.2-0.45
-    dill_B: float = 4.5  # Non-bleachable absorption coefficient [1/µm] -- Fallica et al. 2016, EUV-CAR measured range 4-5
+    # UPDATE (2026-09-03, round 9 -- see mack_R_max/mack_R_min/mack_n/mack_M_th
+    # below for the full story): dill_A/B replaced again with a SELF-CONSISTENT
+    # set from a single real EUV-exposed resist -- Yamamoto, H.; Kozawa, T.;
+    # Tagawa, S. (Osaka University); Mimura, T.; Iwai, T.; Onodera, J. (Tokyo
+    # Ohka Kogyo Co.). "Dissolution Kinetics in Chemically Amplified EUV
+    # Resist." J. Photopolym. Sci. Technol. 24(4), 405-410 (2011), free via
+    # J-STAGE: https://www.jstage.jst.go.jp/article/photopolymer/24/4/24_4_405/_pdf
+    # (fetched and read directly, including a 300dpi page render to confirm
+    # table units against a possible OCR error -- see mack_M_th note for that
+    # check). Real EUV exposure (Energetic/Energetiq EQ-10M source), a real
+    # PHS-derivative CAR resist ("Polymer A", 35% acid-labile protecting
+    # groups, TPS-tf PAG, TOK-affiliated formulation -- not a branded product
+    # name, but genuine industrial chemistry, not a lab curiosity), Table 2's
+    # "ABC Parameters" (their label for the classic Dill A/B/C model, fit for
+    # direct use in PROLITH): A=0/µm, B=1.06/µm, C=0.08997 cm²/mJ.
+    # A=0 agrees with (and is even more extreme than) the A<<B EUV regime
+    # already established by Fallica et al. 2016 (A~=0.2-0.45, B~=4-5); B is
+    # ~4x smaller than Fallica's range -- legitimate resist-to-resist
+    # variation (absorber/PAG loading differs by formulation), not a
+    # contradiction, and not averaged away with Fallica's numbers: this
+    # project's "no compromises" rule favors one INTERNALLY CONSISTENT set
+    # (A, B, C, Rmax, Rmin, Mth, n all fit together from the same real
+    # measurement campaign) over a patchwork of independently-best-per-
+    # parameter picks that were never fit against each other. Fallica et
+    # al.'s ranges remain valuable as an independent cross-check that the
+    # regime (not the exact numbers) is right -- kept in the paragraph below.
+    dill_A: float = 0.0  # Bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_B/C and mack_* below); Fallica et al. 2016 independently confirms the same A<<B regime (their range 0.2-0.45); see note above
+    dill_B: float = 1.06  # Non-bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/C and mack_* below); Fallica et al. 2016 found a higher range (4-5) for a different, undisclosed EUV-CAR formulation -- both real, resist-specific; see note above
     #
     # dill_C ADDITIONAL CROSS-CHECK (2026-09-02, third research pass): Kazazis,
     # D. et al. (ARCNL), "Absorption coefficient and exposure kinetics of
@@ -193,7 +219,15 @@ class SimulationConfig:
     # defensible order-of-magnitude pick within this wide envelope, not an
     # outlier, so left unchanged -- but do not treat 0.05 as "the" EUV CAR
     # value if a specific resist is being modeled; recalibrate per-resist.
-    dill_C: float = 0.05  # Photo-rate constant [cm²/mJ] -- within the ~0.010-0.43 cm²/mJ range spanned by real EUV-CAR measurements (Fallica et al. 2016, Kazazis et al. 2017); see note above, resist-specific
+    # UPDATE (2026-09-03, round 9): replaced with Yamamoto et al. 2011's
+    # self-consistent C=0.08997 cm²/mJ (see the dill_A/B note above for the
+    # full citation and the internal-consistency reasoning) -- comfortably
+    # inside the 0.010-0.43 cm²/mJ envelope already established below by
+    # Fallica/Kazazis, so this is not a magnitude surprise, just a switch to
+    # a value that is fit jointly with dill_A/B/mack_R_max/mack_R_min/
+    # mack_M_th/mack_n from one real EUV measurement rather than picked
+    # independently.
+    dill_C: float = 0.08997  # Photo-rate constant [cm²/mJ] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B and mack_* below); within the ~0.010-0.43 cm²/mJ range independently spanned by Fallica et al. 2016 / Kazazis et al. 2017; see note above
     #
     # dill_Q STATUS (2026-09-02, third research pass): the previous "typical
     # range 0.02-0.10 for EUV CAR" claim below was UNCITED (traced back through
@@ -290,6 +324,26 @@ class SimulationConfig:
     # so its absolute rate is not necessarily representative anyway. Left
     # unchanged pending real calibration data; see the dill_Q and mack_M_th
     # notes for the fuller picture of why this can't be fixed in isolation.
+    # peb_k UPDATE 2026-09-03 (round 9): Yamamoto et al. 2011 (see dill_A/B
+    # note above) reports Arrhenius parameters for the deprotection reaction
+    # at their own PEB condition (110°C/60s -- the same condition used for
+    # the dissolution-rate table): "Thermal Decomp. Ea = 27.8 kJ/mol",
+    # "Thermal Decomp. ln(Ar) = 6.1 /s" in Table 2. This would in principle
+    # give a real, EUV-native k(T) = Ar*exp(-Ea/RT) -- BUT the paper's own
+    # body text states essentially the same number with a DIFFERENT unit
+    # ("activation energy of ca. 21.4-27.8 Kcal/mol for polymer A",
+    # confirmed by re-rendering the actual PDF page at 300dpi to rule out an
+    # OCR artifact -- the printed table really does say "kJ/mol" while the
+    # printed body text really does say "Kcal/mol" for what appears to be
+    # the same 27.8 figure). A kcal-vs-kJ mixup is a 4.184x error, which
+    # would swing k(T) by many orders of magnitude in an Arrhenius
+    # exponential -- far too large to guess at. NOT adopted: computing a
+    # number from an internally inconsistent primary source and presenting
+    # it as "real data" would be exactly the kind of ungrounded derivation
+    # this project does not want. Left at the existing uncited 0.3 pending
+    # either resolving the unit ambiguity (e.g. finding the underlying SPIE
+    # 2009 conference paper by the same authors, which may not share the
+    # apparent typo) or a fresh calibration.
     peb_k: float = 0.3  # Deprotection rate constant [s⁻¹] -- UNCITED, see note above
     peb_t_bake: float = 60.0  # Bake time [s]
     peb_sigma_diff: float | None = None  # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see note above
@@ -426,18 +480,65 @@ class SimulationConfig:
     # multiply-confirmed value) -- update if a better EUV-native n
     # surfaces (e.g. if De Simone's reply includes one for NXE1716/1717).
     #
-    # mack_M_th remains UNCHANGED (still the "Inside PROLITH" illustrative
-    # value) -- neither Vesters et al. 2017 nor Itani et al. 2008 report a
-    # threshold parameter (Vesters' Fig. 6 only gives two plateau points
-    # per curve, not enough to fit Mth without inventing a dose-to-M model
-    # of our own; Itani's Table 1 reports Rmax/Rmin/slope only, no Mth
-    # column at all). Left as an explicitly-flagged textbook value rather
-    # than guessed -- still the single biggest remaining gap in this
-    # parameter set.
-    mack_R_max: float = 205.0  # Max development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); cross-validated in order of magnitude by Itani et al. 2008 (85-93 nm/s, independent EUV measurement); see note above, currently has no effect on simulation output
-    mack_R_min: float = 0.0143  # Min development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); cross-validated in order of magnitude by Itani et al. 2008 (0.0017-0.1 nm/s, independent EUV measurement); see note above, currently has no effect on simulation output
-    mack_n: float = 2.5  # Dissolution selectivity (contrast) -- PROVISIONAL, Itani et al. 2008 EIPBN (Selete/Osaka Univ.), real EUV-exposed PHS resist, measured "slope m" of the dissolution-rate curve; first EUV-native (not generic textbook) value found for this parameter; see note above
-    mack_M_th: float = 0.5  # Threshold inhibitor concentration -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
+    # UPDATE 3 (2026-09-03, round 9 continued -- "dann los", user explicitly
+    # asked to keep pursuing a specific paywalled lead's free-access options):
+    # while chasing a paywalled SPIE 2009 paper by Yamamoto/Kozawa/Tagawa
+    # (Osaka University) + Mimura/Iwai/Onodera (Tokyo Ohka Kogyo), found its
+    # freely-accessible open-journal counterpart instead -- see the dill_A/B
+    # note above for the full citation (J. Photopolym. Sci. Technol. 24(4),
+    # 405-410, 2011, free via J-STAGE). This is the SINGLE MOST COMPLETE
+    # EUV-native source found in this entire project: Table 2 gives Rmax,
+    # Rmin, Mth, AND n -- the full Mack quadruplet -- fit TOGETHER with
+    # dill_A/B/C from ONE real EUV-exposed resist ("Polymer A"), explicitly
+    # for use as PROLITH calculation parameters (PROLITH's native resist
+    # model is the Original Mack model used throughout this file):
+    #   Development Rmax = 68.6 nm/s
+    #   Development Rmin = 0.10 nm/s
+    #   Development Mth  = 0.39
+    #   Development n    = 18.2
+    # Verified by reading the actual paper (not a search summary) and by
+    # rendering the table's page at 300dpi to rule out OCR errors on every
+    # number (see the peb_k note above for the one place that check found a
+    # real problem -- the PEB Arrhenius parameters, NOT this table).
+    # SUPERSEDES the two provisional sources above as the adopted default:
+    # Vesters et al. 2017 (Rmax/Rmin only, pixel-read off a graph, no Mth/n)
+    # and Itani et al. 2008 (Rmax/Rmin/n only, no Mth, two different generic
+    # resist classes, not fit jointly with any Dill parameters). Both are
+    # kept in the comments above/below as independent order-of-magnitude
+    # cross-checks, not discarded -- they still matter for judging whether
+    # this new set is physically reasonable:
+    #   Rmax 68.6 nm/s: between Itani's PHS value (85) and same order as
+    #     Vesters' pair (174-241) -- consistent.
+    #   Rmin 0.10 nm/s: matches Itani's molecular-resist value (0.1)
+    #     exactly, within the Vesters range order of magnitude (0.012-0.017)
+    #     -- consistent.
+    #   n 18.2: notably higher than Itani's PHS value (2.5) or Mack's own
+    #     illustrative 5 -- a much steeper/sharper threshold response. Not
+    #     contradicted by anything else found (no other real EUV n to
+    #     compare against besides Itani's), but flagged here as the one
+    #     number in this set furthest from prior expectation; if a future
+    #     source disagrees sharply on n specifically, treat that as the
+    #     more likely candidate for revision, not Rmax/Rmin/Mth/dill_A/B/C.
+    #   Mth 0.39: the single biggest gap this project has had all along --
+    #     first real, cited EUV-native value found for this parameter at
+    #     all (Mack's own 0.5 was always a generic textbook illustration).
+    # STILL NOT FULLY CONFIRMED (hence STATUS below, same posture as the
+    # superseded Vesters PROVISIONAL flag): "Polymer A" is TOK-affiliated
+    # real industrial CAR chemistry, not a named commercial product like
+    # Vesters' NXE1716/1717, and this is one paper/one measurement campaign,
+    # not yet independently multiply-confirmed for the Mth/n pair
+    # specifically. Tested experimentally (2026-09-03): swapping in this
+    # full set (dill_A/B/C + mack_M_th together) does NOT change the
+    # pre-existing full_chem CD=64.0nm degeneracy documented below --
+    # verified by direct SimulationConfig()/run_simulation() calls before
+    # committing this change, not assumed. This is expected (the
+    # degeneracy's root cause is peb_k/dill_Q, not dill_C/mack_M_th, per the
+    # quantified analysis below) and means adopting these values is safe:
+    # it does not silently change any already-reported simulation result.
+    mack_R_max: float = 68.6  # Max development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_min/Mth/n); cross-validated in order of magnitude by Vesters et al. 2017 (174-241 nm/s) and Itani et al. 2008 (85-93 nm/s); see note above, currently has no effect on simulation output
+    mack_R_min: float = 0.10  # Min development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/Mth/n); matches Itani et al. 2008's molecular-resist value (0.1) exactly, within Vesters et al. 2017's order of magnitude (0.012-0.017); see note above, currently has no effect on simulation output
+    mack_n: float = 18.2  # Dissolution selectivity (contrast) -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/Mth); notably steeper than Itani et al. 2008's PHS value (2.5) or Mack's generic textbook 5 -- see note above for why this is flagged, not silently trusted; see note above, currently has no effect on simulation output
+    mack_M_th: float = 0.39  # Threshold inhibitor concentration -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/n); first real EUV-native value found for this parameter (previously Mack's own generic textbook illustration, 0.5); see note above -- this IS used by the full_chem development step (unlike Rmax/Rmin/n), tested to not change the CD=64nm degeneracy (see note above and note below)
 
     # ─────────────────────────────────────────────────────────────────
     # PRE-EXISTING KNOWN ISSUE (confirmed, root-caused 2026-09-02, NOT
@@ -453,9 +554,22 @@ class SimulationConfig:
     #
     # Root cause, quantified: M_t = exp(-peb_k * acid * peb_t_bake), and
     # M_t only crosses below mack_M_th when peb_k * acid_max * peb_t_bake
-    # > ln(1/mack_M_th). At current defaults, acid_max (after PEB
-    # diffusion blur) yields peb_k*acid_max*peb_t_bake ~= 0.3-0.4,
-    # while ln(1/0.5) = 0.693 is needed -- short by roughly 2x.
+    # > ln(1/mack_M_th). At the ORIGINAL defaults (dill_C=0.05,
+    # mack_M_th=0.5), acid_max (after PEB diffusion blur) yielded
+    # peb_k*acid_max*peb_t_bake ~= 0.3-0.4, while ln(1/0.5) = 0.693 was
+    # needed -- short by roughly 2x.
+    #
+    # UPDATE (2026-09-03, round 9): dill_C and mack_M_th above were both
+    # replaced with Yamamoto et al. 2011's EUV-native, self-consistent
+    # values (dill_C: 0.05 -> 0.08997; mack_M_th: 0.5 -> 0.39). Both shifts
+    # individually push toward clearing (higher dill_C -> more acid;
+    # lower mack_M_th -> lower bar to cross), so this was RE-TESTED
+    # directly, not assumed: SimulationConfig(resist_model="full_chem")
+    # with the new defaults still gives cd_nm == 64.0, identical to before.
+    # The degeneracy is confirmed robust to this specific change, i.e. it
+    # really is peb_k/dill_Q (still uncited, see their own notes above)
+    # that is the binding constraint, not dill_C/mack_M_th -- consistent
+    # with, not contradicting, the analysis below.
     #
     # This CANNOT be fixed by swapping in a single literature value for
     # just one of dill_Q, peb_k, or mack_M_th -- verified experimentally
@@ -485,18 +599,30 @@ class SimulationConfig:
     #   (b) a single freely-available source giving a COMPLETE,
     #       internally self-consistent EUV-CAR (13.5nm) parameter set
     #       (Dill A/B/C/Q + PEB diffusivity/rate + Mack Rmax/Rmin/n/Mth
-    #       ALL from the same measured resist). Despite an extensive,
-    #       multi-institution search (WebSearch, imec-publications.be
-    #       and open.fau.de institutional repositories crawled via their
-    #       DSpace REST APIs, OSTI.gov, ARCNL, citation-trail-following
-    #       -- ~25 sources catalogued, see
+    #       ALL from the same measured resist).
+    #
+    #       UPDATE (2026-09-03, round 9): (b) is now PARTIALLY achieved.
+    #       Yamamoto et al. 2011 (see dill_A/B and mack_R_max notes above,
+    #       free via J-STAGE) gives a real, self-consistent, EUV-native
+    #       Dill A/B/C + Mack Rmax/Rmin/Mth/n septuplet -- now adopted as
+    #       the defaults above -- found via a 9-round, ~36-source search
+    #       across institutional repositories (DSpace REST APIs at imec,
+    #       FAU, KU Leuven), government archives (OSTI.gov), conference
+    #       archives (EIPBN, the EUVL Workshop since 2008 at euvlitho.com),
+    #       code/data repositories (GitHub, Zenodo, Hugging Face), and
+    #       author-centric/citation-trail follow-ups (see
     #       /Users/flo/mack fits/catalog.md and
-    #       docs/claude_code_arbeitslog.md), no such single EUV-native
-    #       source was found -- only a complete set for a 193nm ArF
-    #       resist (Schnattinger PhD thesis, see mack_R_max note above),
-    #       and separately-sourced EUV pieces (exposure kinetics from
-    #       one set of authors/resists, development kinetics from a
-    #       different set) that do not combine into a working default.
+    #       docs/claude_code_arbeitslog.md for the full trail). What
+    #       Yamamoto et al. does NOT cover: this codebase's own dill_Q
+    #       (quantum efficiency, not part of the classic 3-parameter Dill
+    #       model) and peb_k (a clean Arrhenius fit exists in the same
+    #       paper, but with a unit inconsistency between its table and
+    #       body text that could not be safely resolved -- see the peb_k
+    #       note above). So the degeneracy below is NOT yet fixed --
+    #       re-tested directly with the new dill_C/mack_M_th values,
+    #       confirmed still cd_nm==64.0 -- but the search space for what's
+    #       still missing has narrowed from "an entire EUV-native
+    #       parameter set" to specifically "dill_Q and peb_k".
     #
     # Until (a) or (b), `resist_model="full_chem"` should be treated as
     # NOT YET SCIENTIFICALLY VALIDATED for its default parameters --

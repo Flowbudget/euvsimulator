@@ -45,8 +45,18 @@ SEED = 42
 # Golden values updated for P1-1 TCC correction (2026-09-01):
 # The exact source-pupil overlap TCC reduces contrast, which
 # increases LER/LWR values.  This is a documented physics fix.
-GOLDEN_LARGE_N_LER = 0.3539170623  # was 0.1831419468 (pre TCC fix)
-GOLDEN_LARGE_N_LWR = 0.5123765469  # was 0.2626072168 (pre TCC fix)
+#
+# Golden values updated again for the EUV-native Yamamoto et al. 2011
+# dill_A/B/C adoption (2026-09-03, see pipeline.py dill_A/B/C comments
+# and test_ler_production_integration.py for the matching update there):
+# total absorption dill_A+dill_B dropped from 4.8/um to 1.06/um (a real,
+# cited EUV resist measurement replacing an independently-sourced
+# patchwork), which changes the Beer-Lambert depth-dose profile feeding
+# the stochastic LER/LWR path -- a documented model-input change, not a
+# calibration or a regression. Re-measured reproducibly (seed=42,
+# se_blur=5, _car_cfg() defaults with dill_Q=1.0 pinned as before).
+GOLDEN_LARGE_N_LER = 0.3065865934  # was 0.3539170623 (pre Yamamoto dill_A/B/C)
+GOLDEN_LARGE_N_LWR = 0.4227482378  # was 0.5123765469 (pre Yamamoto dill_A/B/C)
 
 
 def _car_cfg(**kw):
@@ -229,9 +239,12 @@ def test_legacy_off_golden_unchanged():
     # calibration.  Pre-Option-C values: LER=0.0925884545,
     # LWR=0.1459884644.
     r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
-    # Golden values updated for P1-1 TCC correction (2026-09-01)
-    assert abs(r.ler_nm - 0.2726584375) <= 1e-9
-    assert abs(r.lwr_nm - 0.2833657265) <= 1e-9
+    # Golden values updated for P1-1 TCC correction (2026-09-01), then
+    # again for the EUV-native Yamamoto et al. 2011 dill_A/B/C adoption
+    # (2026-09-03, see pipeline.py dill_A/B/C comments) -- was
+    # LER=0.2726584375, LWR=0.2833657265 before this change.
+    assert abs(r.ler_nm - 0.2835345566) <= 1e-9
+    assert abs(r.lwr_nm - 0.2572942674) <= 1e-9
 
 
 def test_legacy_mode_applies_development_switch():

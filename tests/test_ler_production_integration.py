@@ -40,12 +40,21 @@ SEED = 42
 # Golden values updated for P1-1 TCC correction (2026-09-01):
 # The exact source-pupil overlap TCC reduces contrast, which
 # increases LER/LWR values.  This is a documented physics fix.
-GOLDEN_LEGACY_LER = 0.2726584375  # was 0.1412447989 (pre TCC fix)
-GOLDEN_LEGACY_LWR = 0.2833657265  # was 0.1837939024 (pre TCC fix)
-GOLDEN_LARGE_N_LER = 0.3539170623  # was 0.1831419468 (pre TCC fix)
-GOLDEN_N_EFF = 64.7974  # was 64.5180 (pre TCC fix)
-GOLDEN_L_INT_NM = 7.9382  # was 7.9753 (pre TCC fix)
-GOLDEN_RHO_TRUNC = 55  # was 70 (pre TCC fix)
+#
+# Golden values updated again for the EUV-native Yamamoto et al. 2011
+# dill_A/B/C adoption (2026-09-03, see pipeline.py dill_A/B/C comments):
+# total absorption dill_A+dill_B dropped from 4.8/um to 1.06/um (a real,
+# cited EUV resist measurement replacing an independently-sourced
+# patchwork), which changes the Beer-Lambert depth-dose profile feeding
+# the stochastic LER/LWR path -- a documented model-input change, not a
+# calibration or a regression. Re-measured reproducibly (seed=42,
+# se_blur=5, _car_cfg() defaults with dill_Q=1.0 pinned as before).
+GOLDEN_LEGACY_LER = 0.2835345566  # was 0.2726584375 (pre Yamamoto dill_A/B/C)
+GOLDEN_LEGACY_LWR = 0.2572942674  # was 0.2833657265 (pre Yamamoto dill_A/B/C)
+GOLDEN_LARGE_N_LER = 0.3065865934  # was 0.3539170623 (pre Yamamoto dill_A/B/C)
+GOLDEN_N_EFF = 61.3873  # was 64.7974 (pre Yamamoto dill_A/B/C)
+GOLDEN_L_INT_NM = 8.3821  # was 7.9382 (pre Yamamoto dill_A/B/C)
+GOLDEN_RHO_TRUNC = 61  # was 55 (pre Yamamoto dill_A/B/C)
 
 
 def _car_cfg(**kw):

@@ -302,9 +302,90 @@ Vollständige Testsuite: 796/797 bestanden, die eine Fehlschlag ist die bereits 
 unabhängige `test_metro.py`-Altlast (verwaister `import euv.metro` aus der OpEnUV-Umbenennung)
 — keine Regression durch diese Änderungen.
 
-**Verbleibende Lücke unverändert:** `mack_M_th` weiterhin ohne EUV-native Quelle (weder
-Vesters noch Itani geben einen Schwellenwert an) — nach wie vor der größte offene Punkt im
-Mack-Parametersatz. Vollständiger Suchverlauf (jetzt 35 katalogisierte Quellen über 9 Runden)
-in `/Users/flo/mack fits/search_log.md` und `catalog.json`.
+**Verbleibende Lücke (Stand zu diesem Zeitpunkt):** `mack_M_th` weiterhin ohne EUV-native
+Quelle. Vollständiger Suchverlauf (35 katalogisierte Quellen über 9 Runden) in
+`/Users/flo/mack fits/search_log.md` und `catalog.json`.
+
+---
+
+## 2026-09-03 (Fortsetzung, "dann los"): Hauptfund — vollständiger, in sich konsistenter
+## EUV-nativer Dill+Mack-Parametersatz (Yamamoto et al. 2011)
+
+**Auslöser:** Nutzer bat, den konkret genannten nächsten Schritt tatsächlich zu verfolgen —
+Zugang zum paywalled SPIE-2009-Paper von Yamamoto/Kozawa/Tagawa (Osaka University) und
+Mimura/Iwai/Onodera (Tokyo Ohka Kogyo, TOK) zu prüfen.
+
+**Paywalled Paper blieb unzugänglich** (SPIE-Seite durch Bot-Schutz gesichert, bewusst nicht
+umgangen; kein Volltext auf ResearchGate; Autoren-eigene heutige Laborseite betrifft anderes
+Forschungsfeld; CrossRef nur Metadaten). Bei der Suche nach freien Parallel-Publikationen
+derselben Gruppe fand eine direkte J-STAGE-Titelsuche stattdessen den bereits publizierten,
+frei zugänglichen offenen Zwillingsartikel derselben Autoren im selben Journal wie unser
+bisher bester Fund (Vesters 2017).
+
+**🏆🏆 Yamamoto, Kozawa, Tagawa, Mimura, Iwai, Onodera, "Dissolution Kinetics in Chemically
+Amplified EUV Resist", J. Photopolym. Sci. Technol. 24(4), 405-410 (2011), frei via J-STAGE.**
+Tabelle 2 gibt die vollständigen PROLITH-Berechnungsparameter für einen echten
+EUV-belichteten Resist ("Polymer A", PHS-Derivat mit 35% Schutzgruppen, TOK-Chemie) — alle
+sieben Werte aus EINER Messkampagne gemeinsam gefittet:
+
+- **Dill (ABC):** A=0/µm, B=1.06/µm, C=0.08997 cm²/mJ
+- **Mack:** Rmax=68.6nm/s, Rmin=0.10nm/s, **Mth=0.39**, n=18.2
+
+Das ist der erste vollständige, in sich konsistente EUV-native Parametersatz der gesamten
+Suche — insbesondere der seit Projektbeginn gesuchte Mth-Wert (bisher nur Mack's generische
+Lehrbuch-Illustration 0.5).
+
+**Rigoros verifiziert, nicht nur übernommen:**
+- PDF direkt gelesen (nicht nur Suchzusammenfassung)
+- Tabellenseite bei 300dpi gerendert, um OCR-Fehler auszuschließen — dabei tatsächlich einen
+  echten Fehler im Original entdeckt: die PEB-Aktivierungsenergie steht in der Tabelle als
+  "27.8 kJ/mol", im Fließtext als "ca. 27.8 Kcal/mol" für denselben Wert. Ein Kcal/kJ-Fehler
+  wäre Faktor 4.184 — bei einem Arrhenius-Term über Größenordnungen. Diese spezifische
+  Ableitung für `peb_k` deshalb bewusst NICHT übernommen, nur als offene Ambiguität im Code
+  dokumentiert.
+- Vor dem Commit empirisch getestet: `SimulationConfig()`/`run_simulation()` mit alten vs.
+  neuen Werten verglichen — die bekannte CD=64nm-Entartung im `full_chem`-Pfad bleibt exakt
+  unverändert (bestätigt: `peb_k`/`dill_Q` sind weiterhin der bindende Engpass, nicht
+  `dill_C`/`mack_M_th`).
+
+**Umgesetzt:** `dill_A/B/C` und `mack_R_max/R_min/n/M_th` in `pipeline.py` und `cli.py`
+(inkl. `calibrate`-Fallback-Werte) auf die Yamamoto-Werte gesetzt. Der bisherige Flickenteppich
+(Fallica für Dill, Vesters für Rmax/Rmin, Itani für n, Mack's Lehrbuch für Mth) bleibt als
+Kreuzvalidierung in den Kommentaren erhalten, wird aber nicht mehr als Default verwendet —
+ein einzelner, gemeinsam gefitteter Satz aus einer echten Messung ist physikalisch belastbarer
+als unabhängig bestpassend ausgewählte Einzelwerte, die nie zusammen gefittet wurden.
+
+**Eine Auffälligkeit bewusst im Code geflaggt statt verschwiegen:** `mack_n=18.2` ist deutlich
+höher als jeder andere in dieser Suche gefundene n-Wert (Itani: 2.5–7.0, Mack's generisch: 5) —
+eine viel steilere Schwellenantwort. Nicht durch andere Quellen widerlegt, aber explizit als
+der am wenigsten durch Vorerwartung gestützte Wert markiert.
+
+**Verifiziert:** `uv run python -c "SimulationConfig()"` lädt fehlerfrei; `full_chem`-CD
+bleibt 64.0nm (erwartet, siehe oben), `aerial_threshold`-CD unverändert (27.6nm, da
+dill_A/B/C dort nicht verwendet werden).
+
+**Vollständige Testsuite deckte einen echten Folgeeffekt auf (kein Bug, aber muss behandelt
+werden):** 5 statt 1 Fehlschlag. 4 davon in `test_development_stochasticity.py`/
+`test_ler_production_integration.py` — beide nutzen `_car_cfg()` mit `resist_model="full_chem"`
+und ungesetzten `dill_A/B/C` (also den neuen Defaults). Da die Gesamtabsorption
+`dill_A+dill_B` von 4.8/µm auf 1.06/µm sinkt, ändert sich das Beer-Lambert-Dosisprofil in der
+Resist-Tiefe, das in die stochastischen LER/LWR-Schätzer einfließt — die dort hinterlegten
+"Golden Values" (harte Zahlenvergleiche zur Regressionserkennung) stammen noch von den alten
+Dill-Werten. Das ist eine **echte, erwartete Konsequenz** der bewussten Parameteränderung,
+kein Implementierungsfehler — im selben Stil aktualisiert, wie es das Projekt bereits einmal
+bei der "P1-1 TCC correction" gehandhabt hat (dokumentierter Grund + alter Wert im Kommentar
+erhalten, nicht stillschweigend überschrieben). Alle sechs betroffenen Konstanten
+(`GOLDEN_LARGE_N_LER`, `GOLDEN_LARGE_N_LWR`, `GOLDEN_LEGACY_LER`, `GOLDEN_LEGACY_LWR`,
+`GOLDEN_N_EFF`, `GOLDEN_L_INT_NM`, `GOLDEN_RHO_TRUNC`, plus ein inline verwendeter Duplikatwert)
+mit frisch berechneten, reproduzierbaren Werten (seed=42) aktualisiert. Volle Testsuite danach
+erneut laufen lassen: **796/797 bestanden, die eine Fehlschlag wieder nur die bereits bekannte,
+unabhängige `test_metro.py`-Altlast** — keine Regression durch diese Änderungen.
+
+**Verbleibende Lücken:** `dill_Q` und `peb_k` weiterhin unbelegt (Letzteres trotz eines
+Beinahe-Fundes an der o.g. Einheiten-Ambiguität gescheitert) — das sind jetzt die einzigen
+beiden noch offenen Parameter im gesamten Satz. Separate, unveränderte Architektur-Aufgabe:
+`MackModel` ist weiterhin nicht in die Pipeline verdrahtet. Vollständiger Suchverlauf (37
+katalogisierte Quellen über 9 Runden) in `/Users/flo/mack fits/search_log.md` und
+`catalog.json`.
 
 ---

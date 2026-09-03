@@ -103,12 +103,14 @@ def simulate(
     resist_model: str = typer.Option(
         "aerial_threshold", "--resist-model", help="Resist model: aerial_threshold or full_chem"
     ),
-    # Dill ABC exposure options
-    dill_A: float = typer.Option(0.3, "--dill-A", help="Bleachable absorption coefficient [1/µm]; EUV CAR literature (Fallica et al. 2016) suggests << dill-B"),
+    # Dill ABC exposure options -- defaults match SimulationConfig in pipeline.py:
+    # Yamamoto et al. 2011, EUV-native, self-consistent with the Mack
+    # development parameters below (see pipeline.py dill_A/B comment).
+    dill_A: float = typer.Option(0.0, "--dill-A", help="Bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, Fallica et al. 2016) suggests << dill-B"),
     dill_B: float = typer.Option(
-        4.5, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Fallica et al. 2016) suggests this dominates over dill-A"
+        1.06, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, Fallica et al. 2016) suggests this dominates over dill-A"
     ),
-    dill_C: float = typer.Option(0.05, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
+    dill_C: float = typer.Option(0.08997, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
     dill_Q: float = typer.Option(0.04, "--dill-Q", help="Quantum efficiency (acid molecules per absorbed photon; typical 0.02–0.10 for EUV CAR)"),
     # PEB options
     peb_D: float = typer.Option(3.3, "--peb-D", help="Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake) unless --peb-sigma-diff overrides it directly"),
@@ -147,14 +149,14 @@ def simulate(
         0.0, "--mask-sidewall-roughness", help="Sidewall roughness sigma [nm]"
     ),
     # Mack development options -- defaults match SimulationConfig in pipeline.py;
-    # see that file's mack_R_max/mack_R_min/mack_n comments for full sourcing
-    # (PROVISIONAL, EUV-native: Vesters et al. 2017 for Rmax/Rmin, Itani et al.
-    # 2008 for n).
-    mack_R_max: float = typer.Option(205.0, "--mack-R-max", help="Max development rate [nm/s]"),
-    mack_R_min: float = typer.Option(0.0143, "--mack-R-min", help="Min development rate [nm/s]"),
-    mack_n: float = typer.Option(2.5, "--mack-n", help="Dissolution selectivity (contrast)"),
+    # see that file's mack_R_max comment for full sourcing (EUV-native,
+    # self-consistent: Yamamoto et al. 2011, Rmax/Rmin/Mth/n all from one
+    # real EUV-exposed resist, fit jointly with dill_A/B/C above).
+    mack_R_max: float = typer.Option(68.6, "--mack-R-max", help="Max development rate [nm/s]"),
+    mack_R_min: float = typer.Option(0.10, "--mack-R-min", help="Min development rate [nm/s]"),
+    mack_n: float = typer.Option(18.2, "--mack-n", help="Dissolution selectivity (contrast)"),
     mack_M_th: float = typer.Option(
-        0.5, "--mack-M-th", help="Threshold inhibitor concentration [0-1]"
+        0.39, "--mack-M-th", help="Threshold inhibitor concentration [0-1]"
     ),
     output: Optional[str] = typer.Option(
         None, "--output", help="Output directory (prints to stdout if omitted)"
@@ -716,15 +718,15 @@ def calibrate(
     else:
         # Default initial guess for typical EUV CAR resist
         initial_params = {
-            "dill_C": 0.05,
+            "dill_C": 0.08997,  # Yamamoto et al. 2011, EUV-native (see pipeline.py dill_C comment)
             "dill_Q": 0.04,
             "peb_k": 0.3,
             "peb_t_bake": 60.0,
             "peb_sigma_diff": 20.0,  # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference" formulations cluster 17-35nm
-            "mack_R_max": 205.0,  # Vesters et al. 2017, EUV-native (see pipeline.py mack_R_max comment)
-            "mack_R_min": 0.0143,  # Vesters et al. 2017, EUV-native (see pipeline.py mack_R_min comment)
-            "mack_n": 2.5,  # Itani et al. 2008 EIPBN, EUV-native PHS resist (see pipeline.py mack_n comment)
-            "mack_M_th": 0.5,
+            "mack_R_max": 68.6,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_R_max comment)
+            "mack_R_min": 0.10,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_R_min comment)
+            "mack_n": 18.2,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_n comment)
+            "mack_M_th": 0.39,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_M_th comment)
         }
 
     # Load bounds
@@ -760,15 +762,15 @@ def calibrate(
             resist_model="full_chem",
             grid=128,
             # Resist parameters from calibration
-            dill_C=params.get("dill_C", 0.05),
+            dill_C=params.get("dill_C", 0.08997),
             dill_Q=params.get("dill_Q", 0.04),
             peb_k=params.get("peb_k", 0.3),
             peb_t_bake=params.get("peb_t_bake", 60.0),
             peb_sigma_diff=params.get("peb_sigma_diff", 20.0),
-            mack_R_max=params.get("mack_R_max", 205.0),
-            mack_R_min=params.get("mack_R_min", 0.0143),
-            mack_n=params.get("mack_n", 2.5),
-            mack_M_th=params.get("mack_M_th", 0.5),
+            mack_R_max=params.get("mack_R_max", 68.6),
+            mack_R_min=params.get("mack_R_min", 0.10),
+            mack_n=params.get("mack_n", 18.2),
+            mack_M_th=params.get("mack_M_th", 0.39),
         )
         result = run_simulation(cfg)
         return float(result.cd_nm)
