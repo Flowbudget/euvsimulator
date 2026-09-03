@@ -229,35 +229,77 @@ class SimulationConfig:
     # independently.
     dill_C: float = 0.08997  # Photo-rate constant [cm²/mJ] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B and mack_* below); within the ~0.010-0.43 cm²/mJ range independently spanned by Fallica et al. 2016 / Kazazis et al. 2017; see note above
     #
-    # dill_Q STATUS (2026-09-02, third research pass): the previous "typical
-    # range 0.02-0.10 for EUV CAR" claim below was UNCITED (traced back through
-    # resist/exposure.py, which also gives no source) -- flagging that
-    # explicitly rather than silently inheriting an unsourced number. One real,
-    # EUV-native, peer-reviewed value WAS found: Mack et al., "Stochastic
-    # exposure kinetics of extreme ultraviolet photoresists: quenching model,"
-    # Proc. SPIE 7972 (2011) -- their baseline Table I gives PAG Quantum
-    # Efficiency phi_PAG = 0.5 (see the peb_D citation below; same table).
-    # NOT adopted as the new default here, for a specific, tested reason: Q,
-    # dill_C, peb_k, and mack_M_th are COUPLED (they jointly determine whether
-    # the simulated resist develops at all -- see the CD=64nm "PRE-EXISTING
-    # KNOWN ISSUE" note near mack_M_th below). Verified experimentally in this
-    # research pass: raising Q from 0.04 to Mack et al.'s 0.5 (with every other
-    # parameter at its own independently-best-cited value) does NOT produce a
-    # realistic result -- it overshoots to the OPPOSITE degenerate extreme
-    # (CD=0.0nm, the entire field clears) rather than a resolvable line. Ranges
-    # 0.1-0.3 land somewhere between the two degenerate extremes, but picking a
-    # specific point in that gap with no citation of its own would be exactly
-    # the kind of ungrounded tuning this project does not want. Left at 0.04
-    # (still uncited, but at least not silently swapped for an equally
-    # arbitrary "improvement") pending either real experimental calibration
-    # data (use `euv calibrate`) or a from-scratch, fully self-consistent
-    # single-resist EUV CAR parameter set (Dill A/B/C/Q + PEB k + Mack
-    # Rmax/Rmin/n/Mth all from the SAME measured resist) -- despite an
-    # extensive multi-institution search (see docs/claude_code_arbeitslog.md
-    # and /Users/flo/mack fits/catalog.md), no such single freely-available
-    # source was found for an EUV (13.5nm) resist; the closest complete set
-    # found is for a 193nm resist (see mack_* parameters below).
-    dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon) -- UNCITED, see note above; do not treat the "0.02-0.10 typical" framing as sourced
+    # dill_Q STATUS (2026-09-02, third research pass; deepened 2026-09-03,
+    # round 9): the previous "typical range 0.02-0.10 for EUV CAR" claim below
+    # was UNCITED (traced back through resist/exposure.py, which also gives no
+    # source) -- flagging that explicitly rather than silently inheriting an
+    # unsourced number.
+    #
+    # WHAT THIS PARAMETER ACTUALLY IS, mechanistically (round 9, after reading
+    # Mack, Biafore & Smith, "Stochastic exposure kinetics of extreme
+    # ultraviolet photoresists: a simulation study," J. Micro/Nanolith. MEMS
+    # MOEMS 10(3), 033019 (2011), free via lithoguru.com/scientist/
+    # litho_papers/2011_EUV_Stochastic_Exposure_Kinetics.pdf -- read directly,
+    # Secs. 3.6-3.7): in resist/exposure.py, acid = Q*(1-M) where (1-M) in
+    # [0,1] is the classic Dill-C conversion fraction, so Q sets the
+    # SATURATION acid level in this model's own normalised units -- i.e. this
+    # codebase's Q plays the role of Mack's phi_PAG (his own term: "PAG
+    # quantum efficiency," "an acid is generated with probability equal to
+    # phi_PAG" GIVEN a PAG has already received above-threshold energy), NOT
+    # the "acid yield" / "film quantum yield" (FQY, "average number of
+    # generated acids per absorbed photon") that EUV-resist chemistry papers
+    # actually publish. Mack's own Eqs. 9-13 show WHY these are different
+    # quantities, not just different names for the same thing: FQY = Y0 can
+    # exceed 1 at EUV specifically because one 92 eV photon's secondary
+    # electrons can each independently excite a DIFFERENT nearby PAG molecule
+    # within an "electron blur" radius (Mack's own fit: 2.1-3.3nm) -- Y0
+    # scales with how many PAGs are geometrically in reach, while phi_PAG is
+    # the probability of successful conversion for ONE already-excited PAG,
+    # bounded to [0,1] by definition and INDEPENDENT of that geometric
+    # amplification. Mack's Eq. 13 (C = Cmax*(1-exp(-gamma*phi_PAG))) is
+    # exactly the deconvolution from one to the other.
+    #
+    # CONSEQUENCE, confirmed by checking every "quantum yield"/"FQY" EUV
+    # source found in this entire project: Kozawa & Tagawa (radiolysis
+    # measurements, up to ~6, and up to 8-13 for ultrahigh-PAG-loading
+    # resists) and Hassanein et al., "Film Quantum Yields of EUV & Ultra-High
+    # PAG Photoresists," freely hosted at osti.gov/servlets/purl/1004159-
+    # nvjrXh (real, NAMED Rohm & Haas resists -- EUV-2D, MET-2D/XP5271D,
+    # XP-5496 -- Table 3, FQY = 1.94/1.39/1.45 respectively, verified via a
+    # -layout PDF re-extraction after an initial column-misread nearly
+    # attributed a DIFFERENT column, "Transmittance" 0.56-0.71, to Quantum
+    # Yield -- caught before use) ALL report the Y0/FQY quantity, ALL are
+    # >1, and NONE of them is phi_PAG. No paper found in this project reports
+    # a measured phi_PAG for a real resist -- by Mack's own account, phi_PAG
+    # is extracted by fitting Eq. 13 against a Monte Carlo stochastic
+    # exposure simulator (his PROLITH SRM), not something a titration or
+    # dose-to-clear experiment observes directly. His own Table 2 "baseline"
+    # phi_PAG=0.5 is one illustrative simulation input, not a fit to a named
+    # resist; Figure 9/11 explore 0.25/0.5/1.0 as a parametric sweep across
+    # the full physically-possible range, not a claim that any one of them
+    # is correct for a specific material.
+    #
+    # PRACTICAL UPSHOT: this is a genuine, structural reason further
+    # literature search for dill_Q is unlikely to succeed -- the EUV-resist
+    # literature overwhelmingly reports the OTHER quantity (Y0/FQY), and the
+    # one quantity that IS conceptually right (phi_PAG) is a model-internal,
+    # fitted constant by construction, not a directly citable measurement.
+    # This reinforces (with a mechanistic reason now, not just an absence of
+    # hits) the pre-existing conclusion below: dill_Q and peb_k need real
+    # experimental dose/CD calibration data via `euv calibrate`, not a
+    # literature lookup.
+    #
+    # EMPIRICAL CHARACTERISATION (round 9, tested directly, not guessed):
+    # with the Yamamoto-et-al.-2011 defaults above, dill_Q must be roughly in
+    # [0.14, 0.22] (at peb_k=0.3) or, using peb_k=0.0723 -- itself Yamamoto et
+    # al. 2011's own Arrhenius fit, see peb_k note below -- dill_Q must be
+    # roughly in [0.57, 0.95] for `full_chem` to produce a non-degenerate CD
+    # at all; Mack's baseline 0.5 and ceiling 1.0 individually bracket but do
+    # not land inside this second window. Recorded here as a target range for
+    # any future candidate value or calibration run to be checked against --
+    # NOT as license to pick an arbitrary point inside it, which would still
+    # be exactly the ungrounded tuning this project does not want.
+    dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon) -- UNCITED, see note above; do not treat the "0.02-0.10 typical" framing as sourced; note this docstring's own phrasing conflates phi_PAG and FQY, see note above
 
     # PEB (reaction-diffusion) parameters.
     #
@@ -344,6 +386,27 @@ class SimulationConfig:
     # either resolving the unit ambiguity (e.g. finding the underlying SPIE
     # 2009 conference paper by the same authors, which may not share the
     # apparent typo) or a fresh calibration.
+    #
+    # FOLLOW-UP (2026-09-03, same session, "was machen wir da jetzt?"): the
+    # kJ/mol reading is the physically plausible one of the two -- computed
+    # both at T=383.15K (110C, Yamamoto et al.'s own dissolution-rate/PROLITH
+    # PEB condition): kJ/mol gives k=0.0723/s (a normal deprotection rate);
+    # kcal/mol gives k=6.2e-14/s, which would mean no measurable deprotection
+    # in 150s at any of the 80-140C conditions Yamamoto et al. themselves
+    # report successfully fitting -- self-contradictory with their own
+    # results, so this is now fairly strong internal evidence for "kJ/mol"
+    # over "Kcal/mol" specifically (not proof; the source is still
+    # internally inconsistent). Still NOT adopted as the default, because
+    # k=0.0723 combined with dill_Q=0.5 (Mack et al. 2011's own baseline,
+    # see dill_Q note above) gives cd_nm=64.0 -- just short of this
+    # project's own empirically-found resolvable window (peb_k needs to
+    # reach ~0.083 with dill_Q=0.5 fixed, or dill_Q needs to reach ~0.57
+    # with peb_k=0.0723 fixed -- see dill_Q note for the fuller window).
+    # Two independently-published real numbers landing just outside, rather
+    # than wildly outside, the resolvable region is itself informative (the
+    # model isn't nonsensical), but "close" is not "cited," so peb_k stays
+    # at the existing uncited 0.3 rather than being swapped for a
+    # still-uncertain 0.0723 that doesn't even resolve the degeneracy.
     peb_k: float = 0.3  # Deprotection rate constant [s⁻¹] -- UNCITED, see note above
     peb_t_bake: float = 60.0  # Bake time [s]
     peb_sigma_diff: float | None = None  # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see note above
@@ -623,6 +686,40 @@ class SimulationConfig:
     #       confirmed still cd_nm==64.0 -- but the search space for what's
     #       still missing has narrowed from "an entire EUV-native
     #       parameter set" to specifically "dill_Q and peb_k".
+    #
+    #       FURTHER UPDATE (2026-09-03, same round, "was machen wir da
+    #       jetzt?" -> "1" -> "ja"): pursued dill_Q/peb_k specifically,
+    #       with two concrete results. First, EMPIRICAL: this project's own
+    #       code was used to map the actual resolvable region by direct
+    #       sweep (not guessed) -- with peb_k=0.0723 (Yamamoto et al. 2011's
+    #       own Arrhenius fit, kJ/mol reading, see peb_k note above),
+    #       dill_Q needs to reach ~0.57 to produce any CD < 64nm; Mack et
+    #       al. 2011's own real, cited baseline (0.5) and ceiling (1.0)
+    #       individually bracket but do not land inside that window --
+    #       i.e. two independently-published real numbers combine to land
+    #       JUST short (about 13% in peb_k) of resolving the degeneracy,
+    #       rather than wildly off as with any earlier single-parameter
+    #       swap. Second, MECHANISTIC (see dill_Q note above for the full
+    #       derivation via Mack et al. 2011 Secs. 3.6-3.7): dill_Q's role
+    #       in this codebase (acid = Q*(1-M), Q sets the saturation acid
+    #       level) corresponds to Mack's phi_PAG, a per-excited-PAG
+    #       reaction probability that is NOT the same quantity as the
+    #       "acid yield"/"film quantum yield" (FQY) that EUV-resist
+    #       chemistry papers actually publish (Kozawa & Tagawa: up to
+    #       6-13; Hassanein et al. 2007, OSTI.gov, real named Rohm & Haas
+    #       resists EUV-2D/MET-2D/XP-5496: FQY=1.94/1.39/1.45) -- FQY
+    #       already includes a geometric secondary-electron-cascade
+    #       amplification factor that phi_PAG does not, so plugging a
+    #       published FQY into dill_Q would be a unit/dimension error, not
+    #       a calibration. No paper found anywhere in this ~9-round search
+    #       reports a measured phi_PAG for a real resist; by Mack's own
+    #       account it is extracted by fitting a Monte Carlo stochastic
+    #       exposure simulator, not observed directly. CONCLUSION: dill_Q
+    #       and peb_k are confirmed, with a mechanistic reason now rather
+    #       than just an absence of search hits, to need real experimental
+    #       dose/CD calibration data via `euv calibrate` rather than a
+    #       further literature lookup -- this is not a dead end reached by
+    #       giving up, it is the answer the search converged on.
     #
     # Until (a) or (b), `resist_model="full_chem"` should be treated as
     # NOT YET SCIENTIFICALLY VALIDATED for its default parameters --

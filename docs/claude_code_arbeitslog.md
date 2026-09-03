@@ -389,3 +389,43 @@ katalogisierte Quellen über 9 Runden) in `/Users/flo/mack fits/search_log.md` u
 `catalog.json`.
 
 ---
+
+## 2026-09-03 (Fortsetzung): dill_Q/peb_k — vom Zahlensuche- zum Kalibrier-Problem verstanden
+
+**Auslöser:** "was machen wir da jetzt?" — statt weiter blind nach Zahlen zu suchen, wurde das
+Fenster für `dill_Q`/`peb_k` erst empirisch mit dem eigenen Code kartiert.
+
+**Empirisch:** Mit `peb_k=0,0723` (Yamamoto's eigener Arrhenius-Fit, siehe unten) braucht
+`dill_Q` ein Fenster von ~0,57–0,95 für eine reale (nicht entartete) CD. Mack et al. 2011s
+eigener "Baseline"-Wert (0,5, bereits zitiert) und ihr eigenes theoretisches Maximum (1,0)
+liegen knapp außerhalb, auf gegenüberliegenden Seiten — zwei real zitierte Zahlen kombiniert
+verfehlen das Ziel nur um ~13%, statt wie zuvor um Größenordnungen.
+
+**Ein Beinahe-Fehler, rechtzeitig gefangen:** Bei der Suche nach einem realen "Quantum
+Yield"-Wert hätte eine schlecht formatierte PDF-Extraktion (OSTI-Quelle, echte benannte
+Rohm-and-Haas-Resists EUV-2D/MET-2D/XP-5496) beinahe die Spalte "Transmittance" (0,56–0,71)
+mit "Quantum Yield" verwechselt. Mit `-layout` neu extrahiert und korrigiert, bevor irgendeine
+Zahl verwendet wurde: die echten Werte sind 1,94/1,39/1,45 — alle über 1.
+
+**Die eigentliche Erkenntnis:** Mack et al. 2011 (frei via lithoguru.com) unterscheiden explizit
+zwei verschiedene physikalische Größen: **φ_PAG** (Wahrscheinlichkeit, dass ein bereits
+angeregtes PAG-Molekül zu Säure reagiert, auf [0,1] begrenzt — entspricht exakt `dill_Q`s Rolle
+im Code, `acid = Q*(1-M)`) und **Y0/"Film Quantum Yield"** (Säuren pro absorbiertem Photon,
+kann bei EUV wegen Sekundärelektronen->Mehrfachanregung benachbarter PAGs >1 sein — genau
+das, was die gesamte Literatur, die wir gefunden haben, tatsächlich misst und veröffentlicht).
+φ_PAG selbst wird laut Mack's eigener Methodik nicht direkt gemessen, sondern nur durch
+Rückfitten gegen eine Monte-Carlo-Simulation gewonnen — keine Publikation in der gesamten
+Suche berichtet einen gemessenen φ_PAG für einen realen Resist.
+
+**Konsequenz:** Weitere Literatursuche für `dill_Q` ist strukturell aussichtslos — die
+Literatur berichtet systematisch die falsche Größe. `dill_Q`/`peb_k` sind für dieses Modell
+echte Kalibrierkonstanten (Weg: `euv calibrate` gegen reale Dosis/CD-Daten), keine
+literaturzitierbaren Naturkonstanten. Das bestätigt den bereits im Code dokumentierten Weg —
+jetzt mechanistisch begründet statt nur vermutet. Alles ausführlich in den `dill_Q`-, `peb_k`-
+und "PRE-EXISTING KNOWN ISSUE"-Kommentaren in `pipeline.py` dokumentiert; keine
+Verhaltensänderung der Simulation (nur Dokumentation), verifiziert.
+
+Vollständiger Suchverlauf (39 katalogisierte Quellen über 9 Runden) in
+`/Users/flo/mack fits/search_log.md` und `catalog.json`.
+
+---
