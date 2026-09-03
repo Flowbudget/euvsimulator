@@ -111,14 +111,18 @@ def simulate(
         1.06, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, Fallica et al. 2016) suggests this dominates over dill-A"
     ),
     dill_C: float = typer.Option(0.08997, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
-    dill_Q: float = typer.Option(0.04, "--dill-Q", help="Quantum efficiency (acid molecules per absorbed photon; typical 0.02–0.10 for EUV CAR)"),
+    dill_Q: float = typer.Option(0.5, "--dill-Q", help="PAG quantum efficiency phi_PAG (probability an already-excited PAG converts to acid, NOT acids-per-photon); Mack et al. 2011 baseline"),
     # PEB options
     peb_D: float = typer.Option(3.3, "--peb-D", help="Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake) unless --peb-sigma-diff overrides it directly"),
-    peb_k: float = typer.Option(0.3, "--peb-k", help="Deprotection rate constant [s⁻¹]"),
+    peb_k: float = typer.Option(0.0723, "--peb-k", help="Deprotection rate constant [s⁻¹]; Yamamoto et al. 2011's own Arrhenius fit"),
     peb_t_bake: float = typer.Option(60.0, "--peb-t-bake", help="Bake time [s]"),
     peb_sigma_diff: Optional[float] = typer.Option(
         None, "--peb-sigma-diff", help="Analytical diffusion sigma [nm]; overrides --peb-D/--peb-t-bake when set"
     ),
+    # Depth-resolved exposure/development options (2026-09-03)
+    resist_thickness_nm: float = typer.Option(50.0, "--resist-thickness", help="Resist film thickness [nm]; Yamamoto et al. 2011's own better-resolved PROLITH case"),
+    develop_time_s: float = typer.Option(30.0, "--develop-time", help="Development time [s]; Yamamoto et al. 2011's own dissolution-rate measurement condition"),
+    n_develop_layers: int = typer.Option(21, "--n-develop-layers", help="Number of depth layers for the resolved exposure/PEB/development chain (numerical resolution, not physical)"),
     # Stochastic / Shot Noise options
     enable_stochastic: bool = typer.Option(
         False, "--stochastic", help="Enable photon shot noise and LER/LWR extraction"
@@ -221,6 +225,10 @@ def simulate(
             mack_R_min=mack_R_min,
             mack_n=mack_n,
             mack_M_th=mack_M_th,
+            # Depth-resolved exposure/development parameters
+            resist_thickness_nm=resist_thickness_nm,
+            develop_time_s=develop_time_s,
+            n_develop_layers=n_develop_layers,
             # Stochastic / Shot Noise parameters
             enable_stochastic=enable_stochastic,
             stochastic_n_realisations=stochastic_n_realisations,
@@ -719,8 +727,8 @@ def calibrate(
         # Default initial guess for typical EUV CAR resist
         initial_params = {
             "dill_C": 0.08997,  # Yamamoto et al. 2011, EUV-native (see pipeline.py dill_C comment)
-            "dill_Q": 0.04,
-            "peb_k": 0.3,
+            "dill_Q": 0.5,  # Mack et al. 2011 baseline phi_PAG (see pipeline.py dill_Q comment)
+            "peb_k": 0.0723,  # Yamamoto et al. 2011 Arrhenius fit (see pipeline.py peb_k comment)
             "peb_t_bake": 60.0,
             "peb_sigma_diff": 20.0,  # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference" formulations cluster 17-35nm
             "mack_R_max": 68.6,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_R_max comment)
@@ -763,8 +771,8 @@ def calibrate(
             grid=128,
             # Resist parameters from calibration
             dill_C=params.get("dill_C", 0.08997),
-            dill_Q=params.get("dill_Q", 0.04),
-            peb_k=params.get("peb_k", 0.3),
+            dill_Q=params.get("dill_Q", 0.5),
+            peb_k=params.get("peb_k", 0.0723),
             peb_t_bake=params.get("peb_t_bake", 60.0),
             peb_sigma_diff=params.get("peb_sigma_diff", 20.0),
             mack_R_max=params.get("mack_R_max", 68.6),

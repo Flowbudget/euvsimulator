@@ -93,25 +93,22 @@ def test_full_chem_chemistry_affected_by_params():
 
 def test_both_paths_produce_reasonable_cd():
     """Both aerial_threshold and full_chem give reasonable CDs (different by design).
-    
+
     The aerial_threshold path uses a threshold on the aerial image.
-    The full_chem path uses the developed resist profile.
-    They should both give reasonable values but won't be identical.
-    
-    Note: With the corrected dill_Q=0.04 (was 1.0), the default full_chem
-    parameters no longer overproduce acid. The test uses higher dill_C and
-    peb_k with a lower mack_M_th to produce realistic development.
+    The full_chem path uses the depth-resolved, time-integrated Mack
+    development front (dill_abc_exposure + MackModel via
+    surface_advancement_level_set, wired in 2026-09-03).
+
+    Note (2026-09-03): with the real, EUV-native, cited defaults now in
+    SimulationConfig (dill_A/B/C/Q from Yamamoto et al. 2011 and Mack et
+    al. 2011; see pipeline.py's dill_A/B and mack_R_max comments), plain
+    defaults already produce a realistic, non-degenerate CD -- no more
+    hand-tuned override values are needed to route around the old
+    CD=64.0/0.0 degeneracy (that degeneracy is fixed, not worked around;
+    see pipeline.py's "RESOLVED" note above mack_R_max/mack_R_min).
     """
     cfg1 = SimulationConfig(resist_model="aerial_threshold", grid=128)
-    # Full chem with parameters calibrated for realistic EUV CAR operation
-    cfg2 = SimulationConfig(
-        resist_model="full_chem", grid=128,
-        se_blur_nm=5.0,       # realistic CAR SE-blur
-        dose_mj_cm2=40.0,     # higher dose for full-chem path
-        dill_C=1.0,           # higher photo-rate for development
-        peb_k=1.0,            # faster deprotection
-        mack_M_th=0.1,        # lower development threshold
-    )
+    cfg2 = SimulationConfig(resist_model="full_chem", grid=128)
 
     r1 = run_simulation(cfg1)
     r2 = run_simulation(cfg2)
@@ -202,12 +199,22 @@ def test_validation_rejects_invalid_params():
         pass
 
 
-def test_default_dill_q_updated_to_0_04():
-    """Regression: dill_Q default must match exposure.py's 'typical EUV CAR' value."""
+def test_default_dill_q_is_mack_2011_baseline():
+    """Regression: dill_Q default must stay pinned to its cited source.
+
+    2026-09-03: dill_Q's default is Mack, Biafore & Smith 2011's own
+    baseline PAG quantum efficiency (phi_PAG, J. Micro/Nanolith. MEMS
+    MOEMS 10(3), 033019, Table 2) -- see pipeline.py's dill_Q comment for
+    the full derivation (this codebase's dill_Q corresponds to phi_PAG,
+    not the "acid yield"/FQY that EUV-resist chemistry papers usually
+    report). Superseded an earlier, uncited 0.04 default (and, before
+    that, a stray 1.0) once the depth-resolved MackModel chain made this
+    real, cited value actually produce a non-degenerate result.
+    """
     cfg = SimulationConfig()
-    assert cfg.dill_Q == 0.04, (
-        f"SimulationConfig().dill_Q = {cfg.dill_Q}, expected 0.04. "
-        "Default was 1.0 before fix — inconsistent with dose_to_acid() default (0.04)."
+    assert cfg.dill_Q == 0.5, (
+        f"SimulationConfig().dill_Q = {cfg.dill_Q}, expected 0.5 "
+        "(Mack et al. 2011 baseline phi_PAG, see pipeline.py dill_Q comment)."
     )
 
 

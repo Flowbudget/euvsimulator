@@ -434,3 +434,58 @@ Vollständiger Suchverlauf (39 katalogisierte Quellen über 9 Runden) in
 `/Users/flo/mack fits/search_log.md` und `catalog.json`.
 
 ---
+
+## 2026-09-03 (Fortsetzung): MackModel + dill_abc_exposure verdrahtet — CD=64nm-Problem gelöst
+
+**Auslöser:** "wie gehts weiter?" → Empfehlung, `MackModel` tatsächlich in die Pipeline zu
+verdrahten, statt nur Werte zu dokumentieren, die nichts bewirken. Nutzer: "beides zusammen"
+(auch `dill_abc_exposure` für echte tiefenaufgelöste Belichtung).
+
+**Ein zweiter, unerwarteter Fund beim Start der Arbeit:** `dill_A`/`dill_B` werden im
+GESAMTEN Code nirgends gelesen — nur deklariert und durchgereicht. Dieselbe Bug-Klasse wie
+bei `MackModel`. Dabei fiel auf, dass eine frühere Commit-Erklärung (LER/LWR-Golden-Values
+seien wegen `dill_A+dill_B` geändert) faktisch falsch war — tatsächlich war `dill_C` allein
+verantwortlich. Per direktem Isolationstest bestätigt und in drei Dateien korrigiert
+(`pipeline.py`, beide betroffenen Testdateien), bevor mit der eigentlichen Aufgabe
+weitergemacht wurde.
+
+**Umbau:** `_cd_via_full_chem`s deterministischer Zweig nutzt jetzt:
+1. `dill_abc_exposure()` — echte tiefenaufgelöste Beer-Lambert-Absorption über `dill_A`/`dill_B`
+   (21 Tiefenschichten, neuer Parameter `n_develop_layers`)
+2. `reaction_diffusion_analytical()` — PEB, jetzt pro Tiefenschicht (die Funktion war bereits
+   dimensionsagnostisch, keine Änderung nötig)
+3. `MackModel.rate()` über `surface_advancement_level_set()` — kontinuierliche
+   Zeit-integrierte Entwicklungsfront statt binärem Schwellenwertvergleich
+
+Neue Config-Parameter `resist_thickness_nm` (50nm) und `develop_time_s` (30s) — beide direkt
+aus derselben Yamamoto-et-al.-2011-Quelle zitiert wie die übrigen Resist-Parameter (50nm ist
+explizit der Fall, den die Autoren selbst als gut aufgelöst beschreiben; 26nm zeigte in ihren
+eigenen Worten "considerable bridge of pattern side walls"). Der stochastische LER/LWR-Zweig
+bleibt bewusst unangetastet (eigenständiges Subsystem, eigener Umbau als Folgearbeit).
+
+**Der eigentliche Durchbruch:** Mit der neuen, physikalisch vollständigen Kette wurden
+`dill_Q=0,5` (Mack et al. 2011, echter zitierter Basiswert) und `peb_k=0,0723`
+(Yamamoto et al. 2011, echter zitierter Arrhenius-Wert) — beide zuvor als "real, aber
+funktioniert nicht" verworfen — erneut getestet. Ergebnis: **CD=36,5nm** bei der
+Standarddosis (Ziel-Linienbreite: 32nm) — real, nicht entartet, und bestätigt dosis-monoton
+(15→30 mJ/cm²: CD 64,0→13,0nm, glatt fallend) sowie mit plausiblem Flächenanteil (43%
+entwickelt). **Beide Werte als neue Defaults übernommen.**
+
+**Erkenntnis:** Das "knapp daneben"-Ergebnis von vorhin (13% Abstand) war kein Hinweis, dass
+die Zahlen falsch waren — es war ein Hinweis, dass das VEREINFACHTE Modell, gegen das getestet
+wurde, selbst die Einschränkung war. `full_chem` läuft jetzt komplett mit echten, zitierten,
+EUV-nativen Werten für Dill A/B/C/Q, PEB D/k/t_bake und Mack Rmax/Rmin/Mth/n durch die
+physikalisch vollständige, tiefenaufgelöste Kette.
+
+**Verifiziert:**
+- `aerial_threshold`-Pfad unverändert (27,6nm, keine Regression)
+- Dosis-Sweep monoton und physikalisch plausibel
+- Vollständige Testsuite (Ergebnis siehe nächster Eintrag/Commit)
+
+**Verbleibend:** (a) keiner der Resist-Chemie-Werte ist bislang durch mehr als eine Quelle auf
+Zahlenebene exakt bestätigt (nur Größenordnung, siehe einzelne Parameter-Kommentare) — echte
+Kalibrierdaten via `euv calibrate` bleiben der Weg, das weiter zu verfestigen; (b) der
+stochastische LER/LWR-Pfad nutzt weiterhin sein eigenes, unabhängiges vereinfachtes Modell —
+eigenständige Folgearbeit.
+
+---

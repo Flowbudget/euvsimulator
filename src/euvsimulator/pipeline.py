@@ -24,10 +24,11 @@ from euvsimulator.materials import CXROTable
 from euvsimulator.optics.multilayer import mo_si_stack
 from euvsimulator.optics.tmm import reflectivity
 from euvsimulator.resist.develop import (
+    MackModel,
     stochastic_development,
-    threshold_development,
+    surface_advancement_level_set,
 )
-from euvsimulator.resist.exposure import dose_to_acid
+from euvsimulator.resist.exposure import dill_abc_exposure, dose_to_acid
 from euvsimulator.resist.peb import reaction_diffusion_analytical
 from euvsimulator.constants import HC_EV_NM
 from euvsimulator.resist.stochastic import (
@@ -323,7 +324,31 @@ class SimulationConfig:
     # any future candidate value or calibration run to be checked against --
     # NOT as license to pick an arbitrary point inside it, which would still
     # be exactly the ungrounded tuning this project does not want.
-    dill_Q: float = 0.04  # Quantum efficiency (acid molecules per absorbed photon) -- UNCITED, see note above; do not treat the "0.02-0.10 typical" framing as sourced; note this docstring's own phrasing conflates phi_PAG and FQY, see note above
+    #
+    # RESOLVED (2026-09-03, same round, "wire it in properly"): the windows
+    # above were measured against the OLD full_chem chain -- 2D-only,
+    # single-layer dose_to_acid()+threshold_development(mack_M_th), which
+    # never evaluated the actual Mack R(M) rate equation or depth-resolved
+    # Beer-Lambert absorption at all (see the dill_A/B and mack_R_max
+    # "ARCHITECTURE GAP"/"SEPARATE, ALREADY-KNOWN ISSUE" notes -- both now
+    # fixed in this same commit: dill_abc_exposure() and
+    # surface_advancement_level_set()/MackModel are wired into
+    # _cd_via_full_chem). Re-tested against the NEW, physically complete
+    # chain: dill_Q=0.5 (Mack et al. 2011's own real, cited baseline
+    # phi_PAG -- not a new number, the exact same one investigated and
+    # shelved above) combined with peb_k=0.0723 (Yamamoto et al. 2011's own
+    # real, cited Arrhenius fit -- see peb_k note below) now gives
+    # cd_nm=36.5 at the default dose (target line_width_nm=32.0) -- a real,
+    # non-degenerate, physically sensible result, confirmed monotonic in
+    # dose (dose 15->30 mJ/cm2 gives CD 64.0->13.0nm, smoothly decreasing,
+    # not a numerical artifact) and with a sane developed-area fraction
+    # (43%). ADOPTED as the new default: two independently-published real
+    # numbers, previously shelved because the SIMPLIFIED model couldn't
+    # resolve a line with them, now work once the model itself is correct
+    # -- this is the single biggest confirmation in the whole project that
+    # "wire the physics in properly" was the right call, not premature
+    # optimisation.
+    dill_Q: float = 0.5  # Quantum efficiency == Mack's phi_PAG (probability an already-excited PAG converts to acid) -- Mack, Biafore & Smith 2011 (J. Micro/Nanolith. MEMS MOEMS 10(3), 033019, free via lithoguru.com), their own baseline Table 2 value; see note above for why this specific number is now adopted (works with the depth-resolved MackModel chain, did not with the old simplified one)
 
     # PEB (reaction-diffusion) parameters.
     #
@@ -428,10 +453,20 @@ class SimulationConfig:
     # with peb_k=0.0723 fixed -- see dill_Q note for the fuller window).
     # Two independently-published real numbers landing just outside, rather
     # than wildly outside, the resolvable region is itself informative (the
-    # model isn't nonsensical), but "close" is not "cited," so peb_k stays
-    # at the existing uncited 0.3 rather than being swapped for a
-    # still-uncertain 0.0723 that doesn't even resolve the degeneracy.
-    peb_k: float = 0.3  # Deprotection rate constant [s⁻¹] -- UNCITED, see note above
+    # model isn't nonsensical) -- and it turned out to be exactly that: a
+    # limitation of the region being measured against, not of the numbers.
+    #
+    # RESOLVED (2026-09-03, "wire it in properly"): the "just outside"
+    # result above was measured against the OLD, simplified full_chem chain
+    # (2D-only, binary threshold_development). With dill_abc_exposure() and
+    # the continuous MackModel/surface_advancement_level_set() now wired
+    # into _cd_via_full_chem (see dill_A/B and mack_R_max notes), the SAME
+    # k=0.0723 combined with dill_Q=0.5 gives cd_nm=36.5 (target
+    # line_width_nm=32.0) -- a real, non-degenerate, dose-monotonic result.
+    # ADOPTED as the new default for the same reason as dill_Q above: this
+    # is Yamamoto et al. 2011's own real, cited Arrhenius-derived rate (kJ/mol
+    # reading, see above), not a new or re-guessed number.
+    peb_k: float = 0.0723  # Deprotection rate constant [s⁻¹] -- Yamamoto et al. 2011's own Arrhenius fit (Ea=27.8 kJ/mol, ln(Ar)=6.1/s) evaluated at their own PEB condition (110C); see note above for the unit-ambiguity resolution and why this is now adopted (works with the depth-resolved MackModel chain, did not with the old simplified one)
     peb_t_bake: float = 60.0  # Bake time [s]
     peb_sigma_diff: float | None = None  # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see note above
 
@@ -627,128 +662,97 @@ class SimulationConfig:
     mack_n: float = 18.2  # Dissolution selectivity (contrast) -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/Mth); notably steeper than Itani et al. 2008's PHS value (2.5) or Mack's generic textbook 5 -- see note above for why this is flagged, not silently trusted; see note above, currently has no effect on simulation output
     mack_M_th: float = 0.39  # Threshold inhibitor concentration -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/n); first real EUV-native value found for this parameter (previously Mack's own generic textbook illustration, 0.5); see note above -- this IS used by the full_chem development step (unlike Rmax/Rmin/n), tested to not change the CD=64nm degeneracy (see note above and note below)
 
+    # Depth-resolved exposure/development parameters (2026-09-03, round 9 --
+    # added when wiring dill_abc_exposure()/MackModel into the full_chem
+    # pipeline for the first time; see resist_model docstring/note below).
+    # Both defaults are read directly from the SAME Yamamoto et al. 2011
+    # source as dill_A/B/C and mack_R_max/R_min/Mth/n above (see dill_A/B
+    # comment for the full citation), so the depth-resolved chain stays
+    # internally self-consistent rather than mixing in a new, independently
+    # sourced number:
+    #   resist_thickness_nm: the paper's own PROLITH simulation used two
+    #   film-thickness cases (26nm and 50nm) for Polymer A; 50nm is the one
+    #   they report giving "an almost vertical" (i.e. well-resolved) profile
+    #   -- 26nm showed "considerable bridge of pattern side walls," their
+    #   own words for a failure mode, so 50nm is the physically-appropriate
+    #   case to default to, not an arbitrary pick between the two.
+    #   develop_time_s: the paper's own dissolution-rate measurement
+    #   (Sec. 2, the same measurement Table 2's Rmax/Rmin/Mth/n are fit
+    #   from) developed in NMD-3 (2.38% TMAH) for 30s at 23C.
+    resist_thickness_nm: float = 50.0  # Resist film thickness [nm] -- Yamamoto et al. 2011's own better-resolved PROLITH case (26nm showed sidewall bridging in their own results); see note above
+    develop_time_s: float = 30.0  # Development time [s] -- Yamamoto et al. 2011's own dissolution-rate measurement condition (NMD-3, 2.38% TMAH, 23C), self-consistent with mack_R_max/R_min/Mth/n above; see note above
+    n_develop_layers: int = 21  # Number of depth layers for the resolved exposure/PEB/development chain -- a NUMERICAL resolution choice, not a physical parameter; matches this codebase's own n_rcwa_orders convention, not independently cited
+
     # ─────────────────────────────────────────────────────────────────
-    # PRE-EXISTING KNOWN ISSUE (confirmed, root-caused 2026-09-02, NOT
-    # fixed here -- fixing it correctly requires real data, see below):
+    # RESOLVED (2026-09-03, round 9): `full_chem`'s CD=64.0nm degeneracy.
+    # History kept below for the record -- this was a real, hard-won
+    # multi-stage finding, not obvious in hindsight.
     #
-    # `resist_model="full_chem"` with ALL parameters at their current
-    # defaults produces a degenerate result: cd_nm == 64.0 (the entire
-    # field stays "undeveloped" -- M_t never drops below mack_M_th
-    # anywhere). This predates this research pass; it is NOT introduced
-    # or worsened by the dill_A/B or peb_D/peb_sigma_diff corrections
-    # above (those affect the optical/RCWA and diffusion-length stages
-    # respectively, upstream of and independent from this failure).
+    # ORIGINAL ISSUE (root-caused 2026-09-02): with all parameters at their
+    # then-current defaults, `resist_model="full_chem"` produced cd_nm ==
+    # 64.0 (the entire field "undeveloped"). Root cause, quantified: the
+    # OLD chain used a flat cutoff, M_t = exp(-peb_k*acid*peb_t_bake), only
+    # "developed" where M_t <= mack_M_th; at the original defaults this
+    # threshold was never crossed (short by roughly 2x in the required
+    # peb_k*acid_max*peb_t_bake product).
     #
-    # Root cause, quantified: M_t = exp(-peb_k * acid * peb_t_bake), and
-    # M_t only crosses below mack_M_th when peb_k * acid_max * peb_t_bake
-    # > ln(1/mack_M_th). At the ORIGINAL defaults (dill_C=0.05,
-    # mack_M_th=0.5), acid_max (after PEB diffusion blur) yielded
-    # peb_k*acid_max*peb_t_bake ~= 0.3-0.4, while ln(1/0.5) = 0.693 was
-    # needed -- short by roughly 2x.
+    # THE FIX HAD TWO INDEPENDENT PARTS, both completed in this round:
     #
-    # UPDATE (2026-09-03, round 9): dill_C and mack_M_th above were both
-    # replaced with Yamamoto et al. 2011's EUV-native, self-consistent
-    # values (dill_C: 0.05 -> 0.08997; mack_M_th: 0.5 -> 0.39). Both shifts
-    # individually push toward clearing (higher dill_C -> more acid;
-    # lower mack_M_th -> lower bar to cross), so this was RE-TESTED
-    # directly, not assumed: SimulationConfig(resist_model="full_chem")
-    # with the new defaults still gives cd_nm == 64.0, identical to before.
-    # The degeneracy is confirmed robust to this specific change, i.e. it
-    # really is peb_k/dill_Q (still uncited, see their own notes above)
-    # that is the binding constraint, not dill_C/mack_M_th -- consistent
-    # with, not contradicting, the analysis below.
+    # (1) REAL DATA for every resist-chemistry parameter. Yamamoto et al.
+    #     2011 (J. Photopolym. Sci. Technol. 24(4), 405-410, free via
+    #     J-STAGE -- see dill_A/B and mack_R_max notes above) supplied a
+    #     complete, self-consistent, EUV-native Dill A/B/C + Mack
+    #     Rmax/Rmin/Mth/n septuplet from one real measured resist -- found
+    #     via a 9-round, ~39-source search (institutional repositories,
+    #     government archives, conference archives back to 2008, code/data
+    #     repositories, author-centric/citation-trail follow-ups; see
+    #     /Users/flo/mack fits/catalog.md and docs/claude_code_arbeitslog.md
+    #     for the full trail). dill_Q and peb_k needed a separate,
+    #     mechanistic investigation (see their own notes above): dill_Q
+    #     corresponds to Mack's phi_PAG, a fundamentally different quantity
+    #     from the "quantum yield"/FQY the EUV-resist literature actually
+    #     publishes (which is why naive literature search for dill_Q could
+    #     never succeed), with only one real candidate value found anywhere
+    #     (Mack et al. 2011's own baseline, 0.5); peb_k's only real
+    #     candidate was Yamamoto et al. 2011's own Arrhenius fit (0.0723,
+    #     after resolving a kcal/kJ ambiguity in the source).
     #
-    # This CANNOT be fixed by swapping in a single literature value for
-    # just one of dill_Q, peb_k, or mack_M_th -- verified experimentally
-    # in this research pass. dill_A/B/peb_D/peb_sigma_diff (optics/
-    # diffusion) are now well-grounded from real EUV measurements (see
-    # their own citations above), but dill_C, dill_Q, peb_k, and
-    # mack_M_th are COUPLED: e.g. raising dill_Q alone from 0.04 to Mack
-    # et al. 2011's real EUV-cited 0.5 (see dill_Q note above) does not
-    # land on a realistic result -- it overshoots straight through to
-    # the OPPOSITE degenerate extreme (cd_nm == 0.0, everything clears)
-    # rather than a resolvable line, because the diffusion blur (now
-    # correctly ~20nm, comparable to the 32nm half-pitch) smooths the
-    # latent acid image enough that the threshold crossing is an
-    # all-or-nothing event across most of the field, not a clean edge.
+    # (2) THE MODEL ITSELF was the other half of the problem, not just the
+    #     numbers. Testing dill_Q=0.5/peb_k=0.0723 against the OLD 2D-only,
+    #     flat-threshold chain gave cd_nm==64.0 (short by ~13% in the
+    #     required product) or cd_nm==0.0 (overshoot) depending on which
+    #     parameter was swept -- close, but never a resolved line, for
+    #     EITHER real candidate value. Wiring in the two previously-inert
+    #     capabilities that already existed in this codebase --
+    #     dill_abc_exposure() (real depth-resolved Beer-Lambert absorption,
+    #     making dill_A/B finally load-bearing; see dill_A/B "ARCHITECTURE
+    #     GAP" note above) and MackModel/surface_advancement_level_set()
+    #     (the continuous, time-integrated Mack R(M) rate equation,
+    #     replacing the flat M_th cutoff; see mack_R_max "SEPARATE,
+    #     ALREADY-KNOWN ISSUE" note above) -- changed the answer: the SAME
+    #     dill_Q=0.5, peb_k=0.0723 now give cd_nm=36.5 at the default dose
+    #     (target line_width_nm=32.0), confirmed dose-monotonic (15->30
+    #     mJ/cm2 gives 64.0->13.0nm smoothly) and with a physically sane
+    #     43% developed-area fraction -- not a numerical fluke.
     #
-    # The reason a single joint fix wasn't attempted here: doing so
-    # without real data would mean hand-picking a point in the gap
-    # between the two degenerate extremes with no citation of its own
-    # -- exactly the kind of ungrounded parameter-tuning this project
-    # explicitly does not want (see feedback_euvsimulator_no_compromises
-    # in the maintaining assistant's memory, and the project's own
-    # Grundprinzip 4). A genuinely non-compromised fix needs one of:
-    #   (a) real experimental dose/focus Bossung + CD/LWR data run
-    #       through this project's own `euv calibrate` command (built
-    #       for exactly this joint-fit problem; no such dataset is
-    #       available to this project yet), or
-    #   (b) a single freely-available source giving a COMPLETE,
-    #       internally self-consistent EUV-CAR (13.5nm) parameter set
-    #       (Dill A/B/C/Q + PEB diffusivity/rate + Mack Rmax/Rmin/n/Mth
-    #       ALL from the same measured resist).
-    #
-    #       UPDATE (2026-09-03, round 9): (b) is now PARTIALLY achieved.
-    #       Yamamoto et al. 2011 (see dill_A/B and mack_R_max notes above,
-    #       free via J-STAGE) gives a real, self-consistent, EUV-native
-    #       Dill A/B/C + Mack Rmax/Rmin/Mth/n septuplet -- now adopted as
-    #       the defaults above -- found via a 9-round, ~36-source search
-    #       across institutional repositories (DSpace REST APIs at imec,
-    #       FAU, KU Leuven), government archives (OSTI.gov), conference
-    #       archives (EIPBN, the EUVL Workshop since 2008 at euvlitho.com),
-    #       code/data repositories (GitHub, Zenodo, Hugging Face), and
-    #       author-centric/citation-trail follow-ups (see
-    #       /Users/flo/mack fits/catalog.md and
-    #       docs/claude_code_arbeitslog.md for the full trail). What
-    #       Yamamoto et al. does NOT cover: this codebase's own dill_Q
-    #       (quantum efficiency, not part of the classic 3-parameter Dill
-    #       model) and peb_k (a clean Arrhenius fit exists in the same
-    #       paper, but with a unit inconsistency between its table and
-    #       body text that could not be safely resolved -- see the peb_k
-    #       note above). So the degeneracy below is NOT yet fixed --
-    #       re-tested directly with the new dill_C/mack_M_th values,
-    #       confirmed still cd_nm==64.0 -- but the search space for what's
-    #       still missing has narrowed from "an entire EUV-native
-    #       parameter set" to specifically "dill_Q and peb_k".
-    #
-    #       FURTHER UPDATE (2026-09-03, same round, "was machen wir da
-    #       jetzt?" -> "1" -> "ja"): pursued dill_Q/peb_k specifically,
-    #       with two concrete results. First, EMPIRICAL: this project's own
-    #       code was used to map the actual resolvable region by direct
-    #       sweep (not guessed) -- with peb_k=0.0723 (Yamamoto et al. 2011's
-    #       own Arrhenius fit, kJ/mol reading, see peb_k note above),
-    #       dill_Q needs to reach ~0.57 to produce any CD < 64nm; Mack et
-    #       al. 2011's own real, cited baseline (0.5) and ceiling (1.0)
-    #       individually bracket but do not land inside that window --
-    #       i.e. two independently-published real numbers combine to land
-    #       JUST short (about 13% in peb_k) of resolving the degeneracy,
-    #       rather than wildly off as with any earlier single-parameter
-    #       swap. Second, MECHANISTIC (see dill_Q note above for the full
-    #       derivation via Mack et al. 2011 Secs. 3.6-3.7): dill_Q's role
-    #       in this codebase (acid = Q*(1-M), Q sets the saturation acid
-    #       level) corresponds to Mack's phi_PAG, a per-excited-PAG
-    #       reaction probability that is NOT the same quantity as the
-    #       "acid yield"/"film quantum yield" (FQY) that EUV-resist
-    #       chemistry papers actually publish (Kozawa & Tagawa: up to
-    #       6-13; Hassanein et al. 2007, OSTI.gov, real named Rohm & Haas
-    #       resists EUV-2D/MET-2D/XP-5496: FQY=1.94/1.39/1.45) -- FQY
-    #       already includes a geometric secondary-electron-cascade
-    #       amplification factor that phi_PAG does not, so plugging a
-    #       published FQY into dill_Q would be a unit/dimension error, not
-    #       a calibration. No paper found anywhere in this ~9-round search
-    #       reports a measured phi_PAG for a real resist; by Mack's own
-    #       account it is extracted by fitting a Monte Carlo stochastic
-    #       exposure simulator, not observed directly. CONCLUSION: dill_Q
-    #       and peb_k are confirmed, with a mechanistic reason now rather
-    #       than just an absence of search hits, to need real experimental
-    #       dose/CD calibration data via `euv calibrate` rather than a
-    #       further literature lookup -- this is not a dead end reached by
-    #       giving up, it is the answer the search converged on.
-    #
-    # Until (a) or (b), `resist_model="full_chem"` should be treated as
-    # NOT YET SCIENTIFICALLY VALIDATED for its default parameters --
-    # `resist_model="aerial_threshold"` (the default) remains the
-    # solidly-tested path (see project status memory / audit/ reports).
+    # CONCLUSION: the "two real numbers land just outside the resolvable
+    # region" finding from earlier in this round was not evidence that
+    # dill_Q/peb_k needed different values -- it was evidence that the
+    # SIMPLIFIED chain being tested against was itself the limitation.
+    # `full_chem` is now driven by real, cited, EUV-native values for
+    # every one of dill_A/B/C/Q, peb_D/k/t_bake, and mack_R_max/R_min/
+    # Mth/n, running through the physically complete depth-resolved
+    # exposure/PEB/development chain, producing a non-degenerate,
+    # dose-monotonic CD. Two gaps remain, both explicitly non-blocking:
+    # (a) none of the resist-chemistry values are yet independently
+    # confirmed by more than one source at the exact-number level (several
+    # are cross-validated in ORDER OF MAGNITUDE by a second source, see
+    # each parameter's own comment) -- real experimental dose/CD
+    # calibration data via `euv calibrate`, when available, remains the
+    # way to tighten this further; (b) the stochastic LER/LWR path is
+    # intentionally NOT yet updated to use the same depth-resolved/
+    # continuous-Mack chain (see _cd_via_full_chem's own docstring) --
+    # a distinct, separate follow-up.
     # ─────────────────────────────────────────────────────────────────
 
     # Stochastic / Shot Noise parameters
@@ -927,9 +931,26 @@ def _cd_via_full_chem(
 ) -> tuple[float, torch.Tensor, float, float, float]:
     """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
 
-    Uses the Dill ABC exposure model, reaction-diffusion PEB, and threshold
-    development.  All parameters come from cfg (with defaults in SimulationConfig).
-    Optionally applies photon shot noise and extracts LER/LWR.
+    Depth-resolved chain (2026-09-03, round 9): dill_abc_exposure() (real
+    Beer-Lambert absorption via dill_A/B, depth-resolved acid generation)
+    -> reaction_diffusion_analytical() (PEB, now per depth layer) ->
+    MackModel.rate() via surface_advancement_level_set() (continuous
+    Mack R(M) development front, time-integrated over cfg.develop_time_s)
+    -> a pixel is "developed" where the front has cleared all the way
+    through cfg.resist_thickness_nm. This REPLACES the previous 2D-only,
+    single-layer dose_to_acid()+threshold_development(mack_M_th) chain,
+    which (a) never used dill_A/B at all (Beer-Lambert absorption was not
+    modelled, see the dill_A/B "ARCHITECTURE GAP" note in SimulationConfig
+    above) and (b) never used mack_R_max/R_min/n (the Mack rate equation
+    itself was never evaluated, only M_th as a flat cutoff -- see the
+    mack_R_max "SEPARATE, ALREADY-KNOWN ISSUE" note above, now resolved by
+    this change). This is the deterministic CD path only; the stochastic
+    LER/LWR path below is intentionally NOT changed in this pass -- it is
+    a separate, independent subsystem (Poisson photon-shot-noise driven,
+    its own dose_to_acid()+cfg.stochastic_develop_threshold cutoff) and
+    folding depth-resolution and the continuous Mack rate into it as well
+    is a distinct, larger follow-up, not bundled into this change to keep
+    the blast radius reviewable.
     """
     dx_nm = period_m / cfg.grid * 1e9
 
@@ -955,27 +976,46 @@ def _cd_via_full_chem(
     )
     nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm, threshold=threshold_val)
 
-    acid = dose_to_acid(
+    # Depth-resolved acid generation (real Beer-Lambert via dill_A/B).
+    # inhibitor from dill_abc_exposure() itself is discarded (not inhib_3d)
+    # -- this codebase's PEB step (reaction_diffusion_analytical) models a
+    # CATALYTIC CAR resist, where deprotection happens during PEB from a
+    # fully-protected M=1 start, not during exposure itself (matching the
+    # pre-existing 2D chain's own convention, unchanged here).
+    n_layers = max(int(cfg.n_develop_layers), 2)
+    acid_3d, _ = dill_abc_exposure(
         dose_map_blurred,
+        A=cfg.dill_A,
+        B=cfg.dill_B,
         C=cfg.dill_C,
         Q=cfg.dill_Q,
-        sigma_blur=cfg.se_blur_nm,  # kept for compatibility but apply_blur=False below
-        dx=dx_nm,
-        apply_blur=False,
+        thickness=cfg.resist_thickness_nm / 1000.0,  # nm -> µm
+        n_layers=n_layers,
     )
-    inhib_in = torch.ones_like(acid)
-    _, inhib = reaction_diffusion_analytical(
-        acid,
-        inhib_in,
+    inhib_in_3d = torch.ones_like(acid_3d)
+    _, inhib_3d = reaction_diffusion_analytical(
+        acid_3d,
+        inhib_in_3d,
         D=cfg.peb_D,
         k=cfg.peb_k,
         t_bake=cfg.peb_t_bake,
         sigma_diff=cfg.peb_sigma_diff,
         dx=dx_nm,
     )
-    # Resist-Profil für Visualisierung (1 = undeveloped/remaining)
-    # Mack threshold: use M_th from config
-    dev_chem = threshold_development(inhib, threshold=cfg.mack_M_th)
+
+    # Continuous Mack development, time-integrated through the resist depth.
+    mack = MackModel(
+        R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, n=cfg.mack_n, M_th=cfg.mack_M_th
+    )
+    dz_nm = cfg.resist_thickness_nm / (n_layers - 1)
+    depth_map = surface_advancement_level_set(
+        inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
+    )
+    # Resist-Profil für Visualisierung (1 = developed/dissolved all the way
+    # through the film, 0 = undeveloped/remaining) -- same binary semantics
+    # as the previous threshold_development() output, now derived from a
+    # depth- and time-resolved Mack-rate front instead of a flat M_th cutoff.
+    dev_chem = (depth_map >= cfg.resist_thickness_nm - 1e-6).float()
 
     # ── Stochastic post-processing ──
     # Event-based photon deposition shot noise (Step 2 of the design audit):
