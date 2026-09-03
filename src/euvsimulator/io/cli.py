@@ -130,12 +130,6 @@ def simulate(
     stochastic_n_realisations: int = typer.Option(
         1, "--stochastic-realisations", help="Number of independent noise realisations"
     ),
-    stochastic_develop_threshold: float = typer.Option(
-        0.3, "--stochastic-dev-threshold", help="Development threshold for LER/LWR [0-1]"
-    ),
-    stochastic_quantum_efficiency: float = typer.Option(
-        0.04, "--stochastic-q", help="Quantum efficiency (acid per absorbed photon)"
-    ),
     stochastic_seed: Optional[int] = typer.Option(
         None, "--stochastic-seed", help="RNG seed for reproducibility"
     ),
@@ -232,8 +226,6 @@ def simulate(
             # Stochastic / Shot Noise parameters
             enable_stochastic=enable_stochastic,
             stochastic_n_realisations=stochastic_n_realisations,
-            stochastic_develop_threshold=stochastic_develop_threshold,
-            stochastic_quantum_efficiency=stochastic_quantum_efficiency,
             stochastic_seed=stochastic_seed,
             # Mask-3D / RCWA parameters (Phase 4)
             use_rcwa=use_rcwa,

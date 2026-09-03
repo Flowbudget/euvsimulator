@@ -342,23 +342,64 @@ def surface_advancement_level_set(
         profile_3d = (cum_time <= t_vals[-1]).float()
         return profile_3d
     else:
-        # developed depth: deepest layer where cum_time <= t_develop
-        # use binary search / argmax
+        # Developed depth: fully-cleared layers, PLUS a linearly-interpolated
+        # partial clearing into the next (boundary) layer using the time
+        # remaining after the last fully-cleared layer and that boundary
+        # layer's own local rate. Without this interpolation, depth is a
+        # staircase quantised to multiples of dz (only N possible output
+        # values) -- fine for a quick deterministic CD estimate, but it
+        # silently discards any variation smaller than one dz step, which
+        # matters when this function is used per-realisation with a noisy
+        # inhibitor field (photon-shot-noise-driven LER/LWR): the noise is
+        # typically much finer than dz, so the un-interpolated version was
+        # measuring near-zero LER regardless of the actual noise (found and
+        # fixed 2026-09-03 while wiring the stochastic LER/LWR path to this
+        # same chain -- see docs/claude_code_arbeitslog.md).
         developed_mask = cum_time <= t_develop  # (N, H, W) bool
-        # depth = (last True index + 1) * dz
-        # if no layer is cleared, depth = 0
-        depth_map = torch.zeros((H, W), device=inhibitor_3d.device)
-        # Vectorized: find last True along depth dimension for each (i,j)
-        # Convert bool to int for argmax
-        rev_mask = developed_mask.flip(dims=(0,)).int()
-        # first True in reversed = last True in original
-        first_true = rev_mask.argmax(dim=0)  # (H, W) - index in reversed
         has_true = developed_mask.any(dim=0)  # (H, W) bool
-        # last true index = N - 1 - first_true
-        last_true_idx = (N - 1 - first_true).float()
-        # only where at least one layer is cleared
-        depth_map = depth_map.to(dtype=last_true_idx.dtype)  # match dtype
-        depth_map[has_true] = (last_true_idx[has_true] + 1) * dz
+        rev_mask = developed_mask.flip(dims=(0,)).to(torch.int64)
+        first_true = rev_mask.argmax(dim=0)  # (H, W), index into the reversed array
+        last_cleared_idx = N - 1 - first_true  # (H, W) int64; meaningless where ~has_true
+
+        zeros_hw = torch.zeros((H, W), device=inhibitor_3d.device, dtype=cum_time.dtype)
+
+        # Time already spent clearing layers 0..last_cleared_idx (0 if none cleared).
+        gather_idx = last_cleared_idx.clamp(min=0)
+        cum_time_at_last = torch.gather(cum_time, 0, gather_idx.unsqueeze(0)).squeeze(0)
+        time_spent = torch.where(has_true, cum_time_at_last, zeros_hw)
+
+        # Boundary layer to partially clear into: the layer right after the
+        # last fully-cleared one, or layer 0 if none is fully cleared yet.
+        # Clamped to N-1 so a front already at the last layer stays there.
+        next_idx = torch.where(
+            has_true, (last_cleared_idx + 1).clamp(max=N - 1), torch.zeros_like(last_cleared_idx)
+        )
+        R_next = torch.gather(R, 0, next_idx.unsqueeze(0)).squeeze(0)  # (H, W) [nm/s]
+
+        t_remain = (t_develop - time_spent).clamp(min=0.0)
+        partial_depth = (t_remain * R_next).clamp(min=0.0, max=dz)
+        # No boundary layer left to partially clear into once every layer
+        # (0..N-1) is already fully cleared.
+        fully_cleared_all = has_true & (last_cleared_idx >= N - 1)
+        partial_depth = torch.where(fully_cleared_all, torch.zeros_like(partial_depth), partial_depth)
+
+        base_depth = torch.where(has_true, (last_cleared_idx.to(cum_time.dtype) + 1.0) * dz, zeros_hw)
+        depth_map = base_depth + partial_depth
+        # NOT clamped to (N-1)*dz (the modelled film thickness): a pixel
+        # whose front reaches the last layer WITH time to spare naturally
+        # reports up to one extra dz of "overshoot" (base_depth can reach
+        # N*dz when fully_cleared_all). This is deliberate, not an
+        # oversight -- it is the only signal callers have for "how much
+        # margin this pixel cleared with," which
+        # resist/develop.py:stochastic_development()'s drive formula
+        # ((latent-threshold)/threshold) needs to produce any nonzero
+        # event rate at all for a fully-clearing pixel. Clamping this away
+        # was tried and found to make development_stochasticity=True
+        # degenerate (zero drive everywhere a pixel fully clears) --
+        # see docs/claude_code_arbeitslog.md, 2026-09-03. Callers that
+        # want a strict "did this fully clear the real film" binary
+        # should compare with `>=` against the true thickness ((N-1)*dz),
+        # not rely on this field never exceeding it.
         return depth_map
 
 

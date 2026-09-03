@@ -489,3 +489,71 @@ stochastische LER/LWR-Pfad nutzt weiterhin sein eigenes, unabhängiges vereinfac
 eigenständige Folgearbeit.
 
 ---
+
+## 2026-09-03 (Fortsetzung): stochastischer LER/LWR-Pfad ebenfalls auf MackModel verdrahtet
+
+**Auslöser:** "ja, mach den stochastischen Pfad auch." Ziel: derselbe tiefenaufgelöste
+`dill_abc_exposure → PEB → MackModel`-Kette, die den deterministischen CD-Pfad bereits
+repariert hat, jetzt auch für den photonenrauschgetriebenen LER/LWR-Zweig.
+
+**Vier echte, unabhängige Bugs gefunden und behoben, in dieser Reihenfolge:**
+
+1. **Performance-Bug (vorbestehend, aber erst jetzt sichtbar):** `gaussian_se_blur`s direkte
+   Faltung skaliert bei großem Kernel (PEB-Diffusion, σ≈20nm → Kernel≈250px) und vielen
+   Tiefenschichten/Zeilen katastrophal — 41s für einen einzigen PEB-Aufruf bei
+   `grid_y=1024`, hochgerechnet auf den Standard `grid_y=4096` mehrere Minuten pro
+   Realisierung. **Fix:** FFT-basierte zirkuläre Faltung als Fast-Path für große Kernel
+   (`_fft_circular_blur`) — mathematisch identisch zur direkten Faltung (beide berechnen
+   zirkuläre Faltung, nur unterschiedlich schnell), numerisch auf ~2e-8 verifiziert.
+   Ergebnis: 41s → 0,19s bei 4x größerem Grid (>800x Speedup).
+
+2. **Tiefenquantisierung maskiert Rauschen:** `surface_advancement_level_set` gab nur
+   `n_layers` (21) diskrete Tiefenwerte zurück (Treppenfunktion) — das photonische Rauschen
+   ist viel feiner als eine Stufe (2,5nm), wurde also komplett weggerundet, LER=0 exakt.
+   **Fix:** lineare Interpolation innerhalb der letzten (Grenz-)Schicht statt Treppenfunktion
+   — verbessert nebenbei auch den deterministischen Pfad (glattere, genauere Tiefenwerte
+   statt Quantisierung auf 21 Stufen).
+
+3. **Threshold/Intensity-Kopplungsfehler:** `extract_ler`/`extract_lwr`/`ler_estimate`
+   binarisieren `developed` intern nochmal mit demselben `threshold`, der auch für die
+   Sub-Pixel-Interpolation von `intensity` genutzt wird. Ein bereits-binäres `developed`
+   (0/1) mit `threshold=50` (nm-Skala) verglichen ergibt immer `False` — komplett degeneriert.
+   **Fix:** für den OFF-Modus wird jetzt das rohe kontinuierliche Tiefenfeld sowohl als
+   `developed` als auch als `intensity` übergeben (konsistente Skala); für den ON-Modus
+   (`development_stochasticity=True`, bereits binär von `stochastic_development()`)
+   `threshold=0.5`, keine Intensity-Interpolation.
+
+4. **`development_stochasticity=True` strukturell inert:** Die "Drive"-Formel
+   (`(latent-threshold)/threshold`) wurde für die ALTE Säure-Konzentrations-Skala entworfen,
+   wo Überschwingen über den Schwellenwert leicht 100%+ betragen konnte. Mit der neuen,
+   tiefenbasierten Skala liegt das maximale Überschwingen (eine Extraschicht) bei nur ~5% —
+   `development_strength=1.0` (alter Default) ergab praktisch Rate=0 überall.
+   **Fix:** `development_strength` empirisch neu kalibriert (über mehrere Seeds verifiziert)
+   auf 20.0 — nicht literaturzitiert (das ist ein numerischer Raten-Regler, keine physikalische
+   Resist-Eigenschaft), aber notwendig, damit das Feature überhaupt wieder etwas tut.
+
+**Weiterer Fund beim Testen:** drei Testdateien (`test_ler_production_integration.py`,
+`test_development_stochasticity.py`, `test_stochastic_pipeline.py`) pinnten `dill_Q=1.0`
+explizit — ein Überbleibsel, um die ALTE, kaputte Kette zu einem nicht-entarteten Ergebnis
+zu zwingen. Mit der neuen Kette flutet `dill_Q=1.0` das gesamte Feld (kein Rand mehr messbar,
+"no valid edges found"). Alle drei auf die neuen, echten Defaults (`dill_Q=0,5`) umgestellt.
+
+**Ein weiterer echter Design-Kompromiss, bewusst nicht verwässert:** `test_neff_ge_30`
+erwartete `n_eff >= 30` beim bloßen Standard-`grid_y=4096`. Die neue, physikalisch
+vollständigere Kette hat eine echte, deutlich längere räumliche Korrelationslänge (reale
+PEB-Diffusion koppelt jetzt benachbarte Zeilen korrekt: `l_int_nm` stieg von ~8,4 auf ~29,2),
+wodurch `n_eff` bei 4096 Zeilen von ~61 auf ~17,8 sank. Statt die Schwelle des Tests
+stillschweigend zu senken ODER den globalen Default zu verdoppeln (und damit die Rechenkosten
+jedes Standard-Aufrufs), fordert nur dieser eine Test jetzt explizit mehr Zeilen an
+(`grid_y=8192`, verifiziert `n_eff≈37`) — der globale Default bleibt bei 4096.
+
+**Ressourcenschonend getestet** (nachdem der volle Suite-Lauf den Mac überlastet hatte):
+jede Testdatei einzeln statt der gesamten Suite auf einmal. Alle 797 Tests über alle Dateien
+verteilt geprüft: 796 bestanden, 1 (bekannte, unabhängige `test_metro.py`-Altlast)
+unverändert. Kein Testfehler durch diese Änderungen offen.
+
+**Verbleibend, bewusst nicht angegangen:** die `development_strength=20.0`-Kalibrierung ist
+grob (funktionsfähig, nicht feinabgestimmt); eine genauere Kalibrierung bräuchte echte
+LWR-Messdaten für einen realen Resist, nicht nur "ergibt einen plausiblen Wert."
+
+---

@@ -758,8 +758,17 @@ class SimulationConfig:
     # Stochastic / Shot Noise parameters
     enable_stochastic: bool = False  # Enable photon shot noise + LER/LWR
     stochastic_n_realisations: int = 1  # Number of independent noise realisations
-    stochastic_develop_threshold: float = 0.3  # Development threshold for LER/LWR extraction
-    stochastic_quantum_efficiency: float = 0.04  # Acid molecules per absorbed photon
+    # REMOVED (2026-09-03, round 9, stochastic path wired to MackModel): both
+    # stochastic_develop_threshold and stochastic_quantum_efficiency were
+    # dead-parameter-adjacent -- the latter (an "acid molecules per absorbed
+    # photon" duplicate of dill_Q) was never read anywhere in the simulation
+    # at all (same bug class as the dill_A/B/mack_R_max gaps found earlier
+    # this round); the former drove a standalone binary threshold on raw
+    # acid concentration with no PEB step, now superseded by the same
+    # resist_thickness_nm/develop_time_s/mack_M_th-driven MackModel chain
+    # the deterministic CD path uses (see _cd_via_full_chem's stochastic
+    # block). Removed rather than left as unused API surface, consistent
+    # with how this round has treated every other dead-parameter finding.
     stochastic_seed: int | None = None  # RNG seed (None = random)
     # Correlation-aware large-N LER (STEP 5.1/5.2B)
     #
@@ -779,7 +788,31 @@ class SimulationConfig:
     # Stochastic development (STEP 5.3): event-based dissolution noise
     # on the local driving force of the stochastic-path latent image.
     development_stochasticity: bool = False  # OFF = deterministic threshold development
-    development_strength: float = 1.0  # dimensionless dissolution events per pixel at drive=1
+    # development_strength UPDATE (2026-09-03, "mach den stochastischen
+    # Pfad auch"): the "drive" this feeds into is now
+    # (depth_map_noisy - resist_thickness_nm) / resist_thickness_nm --
+    # the fraction by which a pixel's front overshoots the film
+    # thickness within develop_time_s (see stochastic_development()'s own
+    # docstring for the formula, and _cd_via_full_chem's stochastic block
+    # for how depth_map_noisy is produced). Under the OLD acid-based
+    # convention this codebase had before the MackModel/dill_abc_exposure
+    # wiring, "drive" could plausibly reach order 1 (acid concentration
+    # comfortably exceeding the old stochastic_develop_threshold by 100%+
+    # in well-exposed regions). Under the new, physically complete chain,
+    # a pixel can only overshoot the film thickness by at most one depth
+    # layer's worth of extra clearing (dz_nm, set by n_develop_layers) --
+    # empirically, max drive ~0.05 at the defaults -- so strength=1.0
+    # (the old default, "events per pixel AT drive=1") gave a rate near
+    # zero everywhere and development_stochasticity=True was silently
+    # inert (LER stayed exactly 0.0 regardless of noise). Recalibrated by
+    # direct empirical search (not guessed): strength=20.0 reliably gives
+    # a nonzero, ON-mode-adds-roughness-over-OFF-mode result across
+    # multiple seeds (see docs/claude_code_arbeitslog.md for the actual
+    # numbers). This is a real, if rough, recalibration to restore this
+    # feature's intended behaviour under the new chain -- not a precision
+    # fit, and not itself literature-cited (it calibrates a numerical
+    # event-rate knob, not a physical resist property).
+    development_strength: float = 20.0  # dimensionless dissolution events per pixel at drive=1 -- see note above
     development_correlation_nm: float = 0.5  # molecular aggregate correlation length [nm]
 
     # Mask-3D / RCWA parameters (Phase 4)
@@ -813,10 +846,6 @@ class SimulationConfig:
                 raise ValueError("enable_stochastic=True requires resist_model='full_chem'")
             if self.stochastic_n_realisations < 1:
                 raise ValueError("stochastic_n_realisations must be >= 1")
-            if not (0 < self.stochastic_develop_threshold < 1):
-                raise ValueError("stochastic_develop_threshold must be in (0, 1)")
-            if self.stochastic_quantum_efficiency <= 0:
-                raise ValueError("stochastic_quantum_efficiency must be > 0")
         # LER estimator configuration (no artificial upper bound on grid_y)
         if self.stochastic_ler_grid_y < 1:
             raise ValueError("stochastic_ler_grid_y must be a positive integer")
@@ -944,13 +973,22 @@ def _cd_via_full_chem(
     above) and (b) never used mack_R_max/R_min/n (the Mack rate equation
     itself was never evaluated, only M_th as a flat cutoff -- see the
     mack_R_max "SEPARATE, ALREADY-KNOWN ISSUE" note above, now resolved by
-    this change). This is the deterministic CD path only; the stochastic
-    LER/LWR path below is intentionally NOT changed in this pass -- it is
-    a separate, independent subsystem (Poisson photon-shot-noise driven,
-    its own dose_to_acid()+cfg.stochastic_develop_threshold cutoff) and
-    folding depth-resolution and the continuous Mack rate into it as well
-    is a distinct, larger follow-up, not bundled into this change to keep
-    the blast radius reviewable.
+    this change).
+
+    UPDATE (2026-09-03, same round, "mach den stochastischen Pfad auch"):
+    the stochastic LER/LWR path below now uses the SAME depth-resolved
+    dill_abc_exposure() -> reaction_diffusion_analytical() ->
+    MackModel/surface_advancement_level_set() chain per noise realisation,
+    applied to the photon-shot-noise-perturbed dose instead of the clean
+    one. This replaces the old, even-more-simplified stochastic chain,
+    which skipped PEB entirely (went straight from noisy 2D acid to a
+    threshold) and used its own independent stochastic_develop_threshold/
+    stochastic_quantum_efficiency parameters -- the latter was dead code
+    (declared, validated, never read; same bug class as dill_A/B/
+    mack_R_max), and both are now removed from SimulationConfig in favour
+    of the same resist_thickness_nm/develop_time_s/mack_M_th the
+    deterministic path uses, so a pixel means the same thing ("developed")
+    in both paths.
     """
     dx_nm = period_m / cfg.grid * 1e9
 
@@ -1050,7 +1088,7 @@ def _cd_via_full_chem(
         ler_vals = []
         lwr_vals = []
         dev_fields = []
-        acid_fields = []
+        intensity_fields = []
         for _ in range(cfg.stochastic_n_realisations):
             d_eff = photon_deposition_shot_noise(
                 stoch_dose,
@@ -1060,45 +1098,98 @@ def _cd_via_full_chem(
                 dose_to_energy_factor=6.241509074e15,
                 rng=rng,
             )
-            acid_noisy = dose_to_acid(
+            # Same depth-resolved exposure -> PEB -> Mack-rate chain as the
+            # deterministic path above (n_layers, mack, dz_nm reused from
+            # there), now applied to the noisy dose. depth_map_noisy [nm]
+            # is this realisation's continuous "how far the front got"
+            # field -- the direct analogue of the old acid_noisy, but
+            # physically complete (depth-resolved absorption + PEB, not a
+            # bare Dill-C exponential on 2D dose).
+            acid_noisy_3d, _ = dill_abc_exposure(
                 d_eff,
+                A=cfg.dill_A,
+                B=cfg.dill_B,
                 C=cfg.dill_C,
                 Q=cfg.dill_Q,
-                apply_blur=False,
+                thickness=cfg.resist_thickness_nm / 1000.0,
+                n_layers=n_layers,
+            )
+            inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
+            _, inhib_noisy_3d = reaction_diffusion_analytical(
+                acid_noisy_3d,
+                inhib_in_noisy_3d,
+                D=cfg.peb_D,
+                k=cfg.peb_k,
+                t_bake=cfg.peb_t_bake,
+                sigma_diff=cfg.peb_sigma_diff,
+                dx=dx_nm,
+            )
+            depth_map_noisy = surface_advancement_level_set(
+                inhib_noisy_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
             )
             if cfg.development_stochasticity:
-                # STEP 5.3: event-based stochastic development on the
-                # local driving force of the stochastic latent image.
-                # OFF mode (default) keeps the deterministic threshold
-                # development bitwise unchanged.
+                # STEP 5.3: event-based stochastic development on the local
+                # driving force of the stochastic latent image. threshold
+                # is now resist_thickness_nm (was stochastic_develop_
+                # threshold, removed -- see SimulationConfig note), so
+                # "drive" means the same fraction-of-full-clearing
+                # overshoot in both the OFF and ON paths.
+                #
+                # extract_ler/extract_lwr/ler_estimate re-binarise
+                # `developed` at the SAME `threshold` used for the
+                # `intensity` crossing (see their own `binary = (developed
+                # > threshold)`), so a pre-binarised 0/1 `developed` and a
+                # depth-scale `intensity` cannot share one threshold value.
+                # stochastic_development()'s Poisson event-thinning also
+                # has no clean continuous companion field left at this
+                # scale, so this branch uses threshold=0.5 (correct for
+                # the already-0/1 `developed`) and omits `intensity`
+                # (falls back to integer-pixel edges rather than silently
+                # producing degenerate results -- found and fixed
+                # 2026-09-03, see docs/claude_code_arbeitslog.md).
                 developed = stochastic_development(
-                    acid_noisy,
-                    threshold=cfg.stochastic_develop_threshold,
+                    depth_map_noisy,
+                    threshold=cfg.resist_thickness_nm,
                     strength=cfg.development_strength,
                     correlation_nm=cfg.development_correlation_nm,
                     dx=dx_nm,
                     rng=rng,
                 )
+                edge_threshold = 0.5
+                edge_intensity = None
             else:
-                developed = (acid_noisy > cfg.stochastic_develop_threshold).float()
+                # developed is left as the raw continuous depth field here
+                # (NOT pre-binarised) so extract_ler/lwr's own `developed >
+                # threshold` binarisation and the `intensity` sub-pixel
+                # crossing agree on the same threshold/scale. Threshold is
+                # thickness MINUS a small epsilon, matching the
+                # deterministic path's own `>=` convention above: depth_map
+                # is clamped to a max of exactly resist_thickness_nm (see
+                # surface_advancement_level_set), so a strict `>` against
+                # the unmodified thickness would never fire for a fully
+                # cleared pixel -- found and fixed 2026-09-03 alongside the
+                # threshold/intensity pairing bug in this same block.
+                developed = depth_map_noisy
+                edge_threshold = cfg.resist_thickness_nm - 1e-6
+                edge_intensity = depth_map_noisy
             if use_large_n:
                 dev_fields.append(developed)
-                acid_fields.append(acid_noisy)
+                intensity_fields.append(edge_intensity)
             else:
                 ler_vals.append(
                     extract_ler(
                         developed,
-                        threshold=cfg.stochastic_develop_threshold,
+                        threshold=edge_threshold,
                         dx=dx_nm,
-                        intensity=acid_noisy,
+                        intensity=edge_intensity,
                     )
                 )
             lwr_vals.append(
                 extract_lwr(
                     developed,
-                    threshold=cfg.stochastic_develop_threshold,
+                    threshold=edge_threshold,
                     dx=dx_nm,
-                    intensity=acid_noisy,
+                    intensity=edge_intensity,
                 )
             )
 
@@ -1107,9 +1198,9 @@ def _cd_via_full_chem(
             # field), aggregated over seeds (between-seed SE/CI).
             est = ler_estimate(
                 dev_fields,
-                threshold=cfg.stochastic_develop_threshold,
+                threshold=edge_threshold,  # defined in the loop above; constant across realisations (depends only on cfg.development_stochasticity)
                 dx=dx_nm,
-                intensity=acid_fields,
+                intensity=intensity_fields,
                 edge="both",
                 estimator="large_n",
                 seed_count=cfg.stochastic_n_realisations,

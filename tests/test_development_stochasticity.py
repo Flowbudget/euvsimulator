@@ -47,24 +47,25 @@ SEED = 42
 # increases LER/LWR values.  This is a documented physics fix.
 #
 # Golden values updated again for the EUV-native Yamamoto et al. 2011
-# dill_C adoption (2026-09-03, see pipeline.py dill_C comment and
-# test_ler_production_integration.py for the matching update there):
-# dill_C rose from 0.05 to 0.08997 cm2/mJ (a real, cited EUV resist
-# measurement replacing an independently-sourced default), which
-# directly changes dose_to_acid()'s output feeding the stochastic
-# LER/LWR path -- a documented model-input change, not a calibration or
-# a regression. NOTE (correcting an earlier version of this comment):
-# dill_A and dill_B were changed in the same commit but are NOT the
-# cause -- confirmed by isolating each change independently: dill_A/
-# dill_B currently have ZERO effect on any simulation output anywhere
-# in this codebase (declared in SimulationConfig and exposed as CLI
-# flags, but never read by pipeline.py or resist/*.py -- the one
-# function that would use them, dill_abc_exposure() in
-# resist/exposure.py, is never called). Re-measured reproducibly
-# (seed=42, se_blur=5, _car_cfg() defaults with dill_Q=1.0 pinned as
-# before).
-GOLDEN_LARGE_N_LER = 0.3065865934  # was 0.3539170623 (pre Yamamoto dill_A/B/C)
-GOLDEN_LARGE_N_LWR = 0.4227482378  # was 0.5123765469 (pre Yamamoto dill_A/B/C)
+# dill_C adoption (2026-09-03): dill_C rose from 0.05 to 0.08997 cm2/mJ,
+# directly changing dose_to_acid()'s output feeding the stochastic
+# LER/LWR path. (An earlier version of this comment incorrectly
+# attributed this shift to dill_A/dill_B -- at that time those two
+# fields really were dead code everywhere, corrected in commit 510e9ad;
+# superseded by the next update below, where they became load-bearing.)
+#
+# Golden values updated a THIRD time (2026-09-03, "mach den
+# stochastischen Pfad auch," see test_ler_production_integration.py for
+# the matching update and full explanation): the stochastic LER/LWR path
+# itself was rewired to use the same depth-resolved dill_abc_exposure()
+# -> reaction_diffusion_analytical() -> MackModel/
+# surface_advancement_level_set() chain as the deterministic CD path,
+# making dill_A/dill_B load-bearing here too. _car_cfg()'s dill_Q=1.0
+# pin was also removed (floods the field with the new chain); _car_cfg()
+# now uses the plain SimulationConfig default (dill_Q=0.5). Re-measured
+# reproducibly (seed=42, se_blur=5, plain _car_cfg() defaults).
+GOLDEN_LARGE_N_LER = 0.3251749642  # was 0.3065865934 (pre stochastic-path MackModel wiring)
+GOLDEN_LARGE_N_LWR = 0.6158645956  # was 0.4227482378 (pre stochastic-path MackModel wiring)
 
 
 def _car_cfg(**kw):
@@ -74,7 +75,11 @@ def _car_cfg(**kw):
         stochastic_n_realisations=1,
         stochastic_seed=SEED,
         se_blur_nm=5.0,
-        dill_Q=1.0,  # explicit Q=1.0 for golden-value compatibility; re-benchmark with Q=0.04
+        # dill_Q no longer pinned to 1.0 here (2026-09-03) -- see the
+        # matching note in test_ler_production_integration.py's _car_cfg:
+        # that override was needed for the OLD, un-wired full_chem chain;
+        # with MackModel/dill_abc_exposure now wired in, dill_Q=1.0 floods
+        # the whole field instead. Just use cfg defaults now.
     )
     base.update(kw)
     return SimulationConfig(**base)
@@ -216,7 +221,7 @@ def test_on_cd_nils_unchanged():
     assert r_off.nils_value == r_on.nils_value
     # and identical to the deterministic (non-stochastic) path
     r_det = run_simulation(SimulationConfig(resist_model="full_chem",
-                                            enable_stochastic=False, se_blur_nm=5.0, dill_Q=1.0))
+                                            enable_stochastic=False, se_blur_nm=5.0))
     assert r_det.cd_nm == r_on.cd_nm
     assert r_det.nils_value == r_on.nils_value
 
@@ -247,12 +252,14 @@ def test_legacy_off_golden_unchanged():
     # calibration.  Pre-Option-C values: LER=0.0925884545,
     # LWR=0.1459884644.
     r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
-    # Golden values updated for P1-1 TCC correction (2026-09-01), then
-    # again for the EUV-native Yamamoto et al. 2011 dill_A/B/C adoption
-    # (2026-09-03, see pipeline.py dill_A/B/C comments) -- was
-    # LER=0.2726584375, LWR=0.2833657265 before this change.
-    assert abs(r.ler_nm - 0.2835345566) <= 1e-9
-    assert abs(r.lwr_nm - 0.2572942674) <= 1e-9
+    # Golden values updated for P1-1 TCC correction (2026-09-01), then for
+    # the EUV-native Yamamoto et al. 2011 dill_C adoption (was
+    # LER=0.2726584375, LWR=0.2833657265), then for the stochastic-path
+    # MackModel wiring (2026-09-03, "mach den stochastischen Pfad auch"
+    # -- see the GOLDEN_LARGE_N_LER note above) -- was LER=0.2835345566,
+    # LWR=0.2572942674 before this last change.
+    assert abs(r.ler_nm - 0.0860674324) <= 1e-9
+    assert abs(r.lwr_nm - 0.1297861139) <= 1e-9
 
 
 def test_legacy_mode_applies_development_switch():

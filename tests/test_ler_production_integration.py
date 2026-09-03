@@ -43,27 +43,34 @@ SEED = 42
 #
 # Golden values updated again for the EUV-native Yamamoto et al. 2011
 # dill_C adoption (2026-09-03, see pipeline.py dill_C comment): dill_C
-# rose from 0.05 to 0.08997 cm2/mJ (a real, cited EUV resist
-# measurement replacing an independently-sourced default), which
-# directly changes dose_to_acid()'s output feeding the stochastic
-# LER/LWR path -- a documented model-input change, not a calibration or
-# a regression. NOTE (correcting an earlier version of this comment):
-# dill_A and dill_B were changed in the same commit but are NOT the
-# cause -- confirmed by isolating each change independently
-# (SimulationConfig(dill_A=.., dill_B=.., dill_C=..) combinations run
-# directly): dill_A/dill_B currently have ZERO effect on any simulation
-# output anywhere in this codebase (declared in SimulationConfig and
-# exposed as CLI flags, but never read by pipeline.py or resist/*.py --
-# the one function that would use them, dill_abc_exposure() in
-# resist/exposure.py, is never called). Re-measured reproducibly
-# (seed=42, se_blur=5, _car_cfg() defaults with dill_Q=1.0 pinned as
-# before).
-GOLDEN_LEGACY_LER = 0.2835345566  # was 0.2726584375 (pre Yamamoto dill_A/B/C)
-GOLDEN_LEGACY_LWR = 0.2572942674  # was 0.2833657265 (pre Yamamoto dill_A/B/C)
-GOLDEN_LARGE_N_LER = 0.3065865934  # was 0.3539170623 (pre Yamamoto dill_A/B/C)
-GOLDEN_N_EFF = 61.3873  # was 64.7974 (pre Yamamoto dill_A/B/C)
-GOLDEN_L_INT_NM = 8.3821  # was 7.9382 (pre Yamamoto dill_A/B/C)
-GOLDEN_RHO_TRUNC = 61  # was 55 (pre Yamamoto dill_A/B/C)
+# rose from 0.05 to 0.08997 cm2/mJ, directly changing dose_to_acid()'s
+# output feeding the stochastic LER/LWR path -- a documented model-input
+# change, not a calibration or a regression. (An earlier version of this
+# comment incorrectly attributed this shift to dill_A/dill_B -- at that
+# time those two fields really were dead code everywhere, corrected in
+# commit 510e9ad; superseded by the next update below, where they became
+# load-bearing.)
+#
+# Golden values updated a THIRD time (2026-09-03, "mach den
+# stochastischen Pfad auch"): the stochastic LER/LWR path itself was
+# rewired to use the same depth-resolved dill_abc_exposure() ->
+# reaction_diffusion_analytical() -> MackModel/
+# surface_advancement_level_set() chain as the deterministic CD path
+# (previously it used its own simpler, PEB-free acid-threshold chain --
+# see pipeline.py's _cd_via_full_chem docstring). dill_A/dill_B are
+# therefore no longer dead code by the time these values were measured.
+# _car_cfg()'s dill_Q=1.0 pin was ALSO removed in this same round: it
+# was chosen to make the OLD chain produce a non-degenerate result, but
+# floods the whole field with the new one (no edges left to measure) --
+# _car_cfg() now uses the plain SimulationConfig default (dill_Q=0.5,
+# Mack et al. 2011's own real baseline). Re-measured reproducibly
+# (seed=42, se_blur=5, plain _car_cfg() defaults).
+GOLDEN_LEGACY_LER = 0.0860674324  # was 0.2835345566 (pre stochastic-path MackModel wiring)
+GOLDEN_LEGACY_LWR = 0.1297861139  # was 0.2572942674 (pre stochastic-path MackModel wiring)
+GOLDEN_LARGE_N_LER = 0.3251749642  # was 0.3065865934 (pre stochastic-path MackModel wiring)
+GOLDEN_N_EFF = 17.8463  # was 61.3873 (pre stochastic-path MackModel wiring)
+GOLDEN_L_INT_NM = 29.2004  # was 8.3821 (pre stochastic-path MackModel wiring)
+GOLDEN_RHO_TRUNC = 200  # was 61 (pre stochastic-path MackModel wiring)
 
 
 def _car_cfg(**kw):
@@ -73,7 +80,16 @@ def _car_cfg(**kw):
         stochastic_n_realisations=1,
         stochastic_seed=SEED,
         se_blur_nm=5.0,
-        dill_Q=1.0,  # explicit Q=1.0 for golden-value compatibility; re-benchmark with Q=0.04
+        # dill_Q no longer pinned to 1.0 here (2026-09-03): that override
+        # was chosen for the OLD, un-wired full_chem chain, where a
+        # non-degenerate result needed dill_Q pushed well past any real
+        # cited value. With MackModel/dill_abc_exposure wired in (see
+        # pipeline.py's mack_R_max "RESOLVED" note), dill_Q=1.0 combined
+        # with the new peb_k default floods the whole field (no edges
+        # left to measure -- "no valid edges found in any realization"),
+        # while the plain new default (0.5, Mack et al. 2011's own real
+        # baseline) gives a genuine, resolvable line. Just use cfg
+        # defaults now instead of overriding.
     )
     base.update(kw)
     return SimulationConfig(**base)
@@ -313,7 +329,20 @@ def test_stochastic_integrity_3000():
 # ── 13. N_eff >= 30 ─────────────────────────────────────────────
 
 def test_neff_ge_30():
-    r = run_simulation(_car_cfg())
+    # 2026-09-03 ("mach den stochastischen Pfad auch"): the plain default
+    # (grid_y=4096) no longer reaches n_eff>=30 on its own -- the
+    # stochastic path's depth-resolved MackModel chain has a genuinely
+    # longer spatial correlation length than the old, simpler chain (real
+    # PEB diffusion now correctly couples neighbouring rows: l_int_nm rose
+    # from ~8.4 to ~29.2), so n_eff at 4096 rows dropped from ~61 to
+    # ~17.8. This is an honest physical consequence of a more complete
+    # model, not a regression to paper over -- rather than silently
+    # lowering this test's threshold, or silently doubling the global
+    # default grid_y (and with it the compute cost of every default
+    # stochastic call), this test now explicitly asks for enough rows to
+    # reach the statistically-defensible n_eff>=30 threshold (verified:
+    # grid_y=8192 gives n_eff~37), keeping the global default at 4096.
+    r = run_simulation(_car_cfg(stochastic_ler_grid_y=8192))
     assert r.ler_metadata["n_eff"] >= 30.0
 
 
@@ -450,7 +479,7 @@ def test_edge_both_equivalence():
 # ── 20. Deterministic observables unchanged ─────────────────────
 
 def test_deterministic_observables_unchanged():
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dill_Q=1.0))
+    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0))
     r_st = run_simulation(_car_cfg())
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
@@ -458,7 +487,7 @@ def test_deterministic_observables_unchanged():
 
 def test_deterministic_observables_unchanged_3000():
     """CD/NILS invariance also holds for arbitrary N=3000."""
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dill_Q=1.0))
+    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0))
     r_st = run_simulation(_car_cfg(stochastic_ler_grid_y=3000))
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
