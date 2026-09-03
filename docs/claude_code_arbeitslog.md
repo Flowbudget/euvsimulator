@@ -557,3 +557,52 @@ grob (funktionsfähig, nicht feinabgestimmt); eine genauere Kalibrierung bräuch
 LWR-Messdaten für einen realen Resist, nicht nur "ergibt einen plausiblen Wert."
 
 ---
+
+## 2026-09-03 (Fortsetzung): Realitätscheck — simulierte LWR gegen echte Vesters-Messdaten
+
+**Auslöser:** "wie gehts weiter?" → Vorschlag, die gerade reparierten LER/LWR-Ausgaben gegen
+echte publizierte Messdaten zu prüfen. Nutzer: "ja, mach." Datenquelle: Vesters' Dissertation
+(KU Leuven 2019, Table 4.2, bereits in Runde 6 katalogisiert) — echte Dosis-zu-Größe- und
+LWR-Werte für 6 reale EUV-CAR-Resist-Formulierungen (A0/ALow/AHigh, B0/BLow/BHigh) bei 22nm
+Halbraster (44nm Pitch) auf einem echten ASML-NXE3300-Scanner: Dosis 8–16 mJ/cm², LWR
+6,5–10,3nm.
+
+**Befund 1 — Dosis-Verschiebung (erklärbar, kein Alarmsignal):** Bei denselben Prozess-
+bedingungen (44nm Pitch, 22nm Ziel-Linienbreite) entwickelt unser aktuelles "Polymer
+A"-Modell (Yamamoto et al. 2011) bei Vesters' realen Dosen (8–16 mJ/cm²) **gar nicht**
+(CD bleibt beim Periodenwert, komplett unentwickelt). Das auflösbare Fenster unseres Modells
+liegt bei dieser Geometrie erst bei ~22–27 mJ/cm² — grob 40–70% höher als die realen,
+dosisoptimierten Produktionsresists brauchen. Physikalisch gut erklärbar: "Polymer A" ist in
+der Originalarbeit selbst ein Forschungs-/Prototyp-Resist (PHS-Derivat, Standard-
+Schutzgruppen-Chemie), während Vesters' Resists gezielt über Quencher-Beladung auf niedrige
+Dosis hin optimierte Produktionsformulierungen sind (genau das ist der Kern ihrer eigenen
+Arbeit — "ALow"/"AHigh" als Dosis-vs-LWR-Tradeoff-Varianten).
+
+**Befund 2 — LWR-Größenordnung (echte, quantifizierte Lücke):** Im eigenen auflösbaren
+Dosisfenster (22–25 mJ/cm²) liefert unser Simulator LWR≈1,8–2,3nm — real gemessen sind es
+6,5–10,3nm. **Unser Simulator unterschätzt reales LWR um Faktor ~3–5x.**
+`development_stochasticity=True` (molekulare Auflösungsgranularität, siehe oben) schließt
+diese Lücke nur marginal (2,44 statt 2,34nm bei Dosis 22) — die fehlende Rauschquelle liegt
+also nicht primär dort.
+
+**Ehrliche Einordnung der Lücke (nicht weiter verifizierte Arbeitshypothese, keine
+bestätigte Erklärung):** Unser stochastischer Belichtungspfad (`photon_deposition_shot_noise`)
+modelliert nur Photonen-Zählstatistik, nicht die nachgelagerte PAG-/Quencher-Molekülzahl-
+Diskretheit (bei EUV eine bekannte, dominante zusätzliche Rauschquelle — siehe die in Runde 9
+gefundene Literatur zu Sekundärelektronen-Kaskaden und Photonen-zu-Säure-Verstärkung). Zudem
+enthält real gemessenes LWR typischerweise auch SEM-Messrauschen (Metrologie-Beitrag), das
+eine reine Physik-Simulation naturgemäß nicht hat — ein Teil der 3-5x-Lücke könnte allein
+daher stammen. Keines von beidem wurde in dieser Runde weiter untersucht oder bestätigt.
+
+**Einordnung:** Das ist ein echter, sauber quantifizierter Befund — kein Fehlschlag, sondern
+eine ehrliche Charakterisierung der aktuellen Grenzen des stochastischen Modells (fehlende
+PAG/Quencher-Diskretheit im Belichtungsschritt, nicht im Entwicklungsschritt). Nicht in Code
+umgesetzt (reine Validierungs-/Charakterisierungsarbeit, keine Änderung an Pipeline/Tests).
+
+**Nächster möglicher Schritt, falls gewünscht:** die PAG-/Quencher-Molekülzahl-Diskretheit
+tatsächlich in den Belichtungsschritt einbauen (analog zu `sample_species()`-artigen Modellen,
+die Photonen→PAG→Säure als getrennte Poisson-/Binomial-Stufen behandeln, nicht nur Photonen-
+Schrotrauschen) — würde die LWR-Lücke wahrscheinlich (nicht sicher) weiter schließen, ist aber
+ein neuer, nicht-trivialer Architektur-Baustein, kein einfacher Parameter-Fix.
+
+---
