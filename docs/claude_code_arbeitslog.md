@@ -242,3 +242,69 @@ und diesen Log-Eintrag aktualisieren, "PROVISIONAL" entfernen.
 siehe nächster Eintrag/Commit).
 
 ---
+
+## 2026-09-03 (Fortsetzung): GitHub/Code-Repo-Suche + zweite EUV-native Quelle für mack_n
+
+**Auslöser:** Nutzer wies zurecht darauf hin, dass ich Suchkanäle (GitLab, Firmen-GitHub-Orgs,
+Kaggle) nur *vorgeschlagen*, aber nicht tatsächlich durchsucht hatte ("du schlägst mir Quellen
+vor aber durchsuchst sie nicht?!"). Danach explizite Anweisung, überall weiterzusuchen, bis wir
+die Daten haben.
+
+**Ergebnislos, aber tatsächlich durchsucht:** GitLab (API verlangt Auth), Kaggle, Hugging-Face-
+Datasets (ein Fund — `carbon-lab/xrr-photoresist`, echte Synchrotron-XRR-Rohdaten zu einem
+TOK-Resist, aber keine Dill/Mack-Parameter), PyPI, GitHub-Orgs von imec/LamResearch/Inpria/
+merckgroup/zeiss (keine lithografierelevanten Repos — der "imec"-Treffer war ein
+namensgleiches, unabhängiges Kollektiv), CORE.ac.uk (Bot-Schutz), CiNii/japanische Suche.
+
+**Neuer Kanal — euvlitho.com (EUVL Workshop, jährliche Konferenz seit 2008, komplett frei):**
+Über ein GitHub-Topic-Suche gefundenes fremdes High-NA-EUV-Simulatorprojekt
+(`JiSeok1579/high-na-euv-sim`) verwies in seiner Literaturliste auf diese bisher nie durchsuchte
+Konferenzarchiv-Site. Systematisch durchsucht: Sitemap → alle Jahres-Abstracts/Proceedings-PDFs
+2008–2021 → einzelne nummerierte Paper. Mehrere Multi-Trigger-Resist-Paper (Vesters/Popescu/
+Robinson, teils mit De Simone) gefunden und frei geladen (Birmingham-PURE-Repository, J-STAGE,
+PSI-DORA-Repository) — keines enthielt eine numerische Mack-Tabelle. Eine KI-Websuch-
+zusammenfassung behauptete einen Mack-Fit mit Entwicklertemperatur-Abhängigkeit für ein
+MTR-Paper — **in keinem tatsächlich gelesenen Original verifizierbar, daher explizit NICHT
+übernommen** (mutmasslich eine Konflation der Suchzusammenfassung).
+
+**🏆 Fund: Itani, Kaneyama, Kozawa, Tagawa (Selete/Osaka University), EIPBN 2008, frei via
+eipbn.org.** Eine echte, explizite Zahlentabelle (nicht aus einem Diagramm rekonstruiert) für
+zwei mit echtem EUV-Licht belichtete, real entwickelte Resists:
+- PHS-Resist (Standard-CAR-Polymerbasis): Rmax=85nm/s, Rmin=0.0017nm/s, Steigung m=2.5
+- Molekularer Resist: Rmax=93nm/s, Rmin=0.1nm/s, m=7.0
+
+Beide Rmax/Rmin-Werte bestätigen unabhängig die Größenordnung der bereits verwendeten
+Vesters-2017-Werte (anderes Institut, anderes Instrument, 9 Jahre Abstand). **m=2.5 (PHS) ist
+der erste echte EUV-native Wert für `mack_n` im gesamten Projekt** — bisher stand dort nur
+Mack's generischer Lehrbuchwert 5.0.
+
+**Umgesetzt in `pipeline.py`/`cli.py`:**
+- `mack_n: 5.0 → 2.5` (PROVISIONAL, Itani et al. 2008, PHS-Resist-Wert gewählt statt des
+  molekularen Resists, da PHS die mainstream-CAR-Chemieklasse ist)
+- `mack_R_max`/`mack_R_min`-Kommentar um die Kreuzvalidierung durch Itani ergänzt (Zahlenwerte
+  selbst unverändert — Vesters' NXE1716/1717 bleiben näher an einem echten Produktresist als
+  Itanis generische Resistklassen)
+
+**Nebenfund beim Bearbeiten (echter, bisher unentdeckter Bug):** `cli.py`s
+`--mack-R-max`/`--mack-R-min`/`--mack-n`-CLI-Defaults sowie die Fallback-Werte im
+`calibrate`-Befehl (`initial_params`, `pipeline_fn`) waren seit der letzten Runde (Commit
+`ed40397`) nie mit `pipeline.py`s `SimulationConfig`-Defaults synchronisiert worden — die CLI
+hätte ohne explizite Flags stillschweigend die alten Werte (100.0/0.1/5.0) benutzt. Jetzt
+konsistent.
+
+**Neuer paywalled Fund (nicht adoptiert, nur dokumentiert):** Vesters/De Simone/De Gendt,
+"Influence of Post Exposure Bake time on EUV photoresist RLS trade-off", Proc. SPIE 10143
+(2017) — echte PEB-Kinetik-Studie an 6 realen EUV-CAR-Resists, aber via lirias.kuleuven.be-API
+bestätigt: kein PDF hinterlegt, auch im eigenen Institutsrepository nur Metadaten.
+
+**Verifiziert:** `uv run python -c "SimulationConfig()"` lädt fehlerfrei mit den neuen Werten.
+Vollständige Testsuite: 796/797 bestanden, die eine Fehlschlag ist die bereits bekannte,
+unabhängige `test_metro.py`-Altlast (verwaister `import euv.metro` aus der OpEnUV-Umbenennung)
+— keine Regression durch diese Änderungen.
+
+**Verbleibende Lücke unverändert:** `mack_M_th` weiterhin ohne EUV-native Quelle (weder
+Vesters noch Itani geben einen Schwellenwert an) — nach wie vor der größte offene Punkt im
+Mack-Parametersatz. Vollständiger Suchverlauf (jetzt 35 katalogisierte Quellen über 9 Runden)
+in `/Users/flo/mack fits/search_log.md` und `catalog.json`.
+
+---

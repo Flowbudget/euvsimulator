@@ -376,17 +376,67 @@ class SimulationConfig:
     # documented below at mack_M_th (that issue is about the PEB/
     # threshold step, not about these development-rate parameters).
     #
-    # mack_n and mack_M_th are UNCHANGED (still the "Inside PROLITH"
-    # illustrative values) -- Fig. 6 only gives two plateau data points
-    # per curve, not enough to independently fit the sigmoid's steepness
-    # (n) or switching threshold (Mth) without also reconstructing the
-    # authors' own dose-to-protection-level model, which was not
-    # published and would require a new modeling assumption of our own to
-    # invert -- exactly the kind of shaky derivation this project does not
-    # want. Left as explicitly-flagged textbook values rather than guessed.
-    mack_R_max: float = 205.0  # Max development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); see note above, currently has no effect on simulation output
-    mack_R_min: float = 0.0143  # Min development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); see note above, currently has no effect on simulation output
-    mack_n: float = 5.0  # Dissolution selectivity (contrast) -- matches one of the illustrative cases in Mack's "Inside PROLITH" (1997) Fig. 7-2, not an EUV-specific fit; see note above
+    # UPDATE 2 (2026-09-03, round 9 -- GitHub/code-repo + conference-archive
+    # search, triggered by the user explicitly rejecting "search but don't
+    # verify" and demanding every proposed avenue actually be searched):
+    # found a SECOND, INDEPENDENT, EUV-native Rmax/Rmin source, and the
+    # first EUV-native source for mack_n found in this entire project.
+    # Itani, T.; Kaneyama, K.; Kozawa, T.; Tagawa, S. "Dissolution
+    # characteristics of chemically amplified EUV resist," Selete / Osaka
+    # University, EIPBN 2008 conference paper, freely hosted:
+    # https://eipbn.org/abstracts/2008/papers/P-6B-12.pdf
+    # (fetched and read directly -- not a search-summary claim). Real EUV
+    # exposure (Energetiq EQ-10MR EUV source), real 2.38wt% TMAH
+    # development, dissolution rate measured with a Litho-tech Japan RDA
+    # (resist development analyzer) instrument -- not a graph reading,
+    # this is the authors' own Table 1, verbatim:
+    #   PHS resist:       Rmax = 8.5e1 nm/s (85),    Rmin = 1.7e-3 nm/s, slope m = 2.5
+    #   Molecular resist: Rmax = 9.3e1 nm/s (93),    Rmin = 1.0e-1 nm/s, slope m = 7.0
+    # ("slope m" is Selete's label for the Mack contrast/selectivity
+    # exponent -- the same role as "n" in the Original Mack model used
+    # elsewhere in this file.) PHS = polyhydroxystyrene, the standard
+    # polymer backbone of mainstream chemically-amplified positive
+    # resists (the closer analogue to a generic commercial CAR); the
+    # "molecular resist" is a distinct, smaller-molecule resist class,
+    # kept separate below rather than averaged with PHS since they are
+    # different chemistries (unlike Vesters' NXE1716/1717, which are the
+    # same resist family at two quencher loadings and so were legitimately
+    # averaged).
+    # CROSS-VALIDATION: both Rmax values (85, 93 nm/s) and both Rmin
+    # values (0.0017, 0.1 nm/s) sit within the same order of magnitude as
+    # the independently-derived Vesters et al. 2017 values above (Rmax
+    # 174-241 nm/s, Rmin 0.012-0.017 nm/s) -- two unrelated EUV
+    # measurements, 9 years apart, different institutions (Selete/Osaka
+    # vs. imec/KU Leuven), different instruments, agreeing on the
+    # magnitude of both plateaus. This does not replace the Vesters-based
+    # Rmax/Rmin defaults (NXE1716/1717 are named, production-representative
+    # ASML resists -- a closer match to "a real commercial EUV CAR" than
+    # Selete's generic PHS/molecular classes), but it substantially
+    # de-risks them: the PROVISIONAL flag above is about awaiting De
+    # Simone's own fitted numbers for THIS SPECIFIC curve, not about
+    # whether the values are physically plausible for an EUV resist --
+    # that plausibility now has independent, cited support.
+    # mack_n IS updated below, from Mack's generic "Inside PROLITH"
+    # illustration to the real, EUV-measured PHS-resist value (2.5) --
+    # this is the first non-illustrative, EUV-native n found. Judgment
+    # call: PHS (mainstream CAR backbone) chosen over "molecular resist"
+    # (7.0, a different, non-mainstream chemistry) as the more
+    # representative default; flagged as PROVISIONAL for the same reason
+    # as Rmax/Rmin (a single 2008 conference-abstract table, not a
+    # multiply-confirmed value) -- update if a better EUV-native n
+    # surfaces (e.g. if De Simone's reply includes one for NXE1716/1717).
+    #
+    # mack_M_th remains UNCHANGED (still the "Inside PROLITH" illustrative
+    # value) -- neither Vesters et al. 2017 nor Itani et al. 2008 report a
+    # threshold parameter (Vesters' Fig. 6 only gives two plateau points
+    # per curve, not enough to fit Mth without inventing a dose-to-M model
+    # of our own; Itani's Table 1 reports Rmax/Rmin/slope only, no Mth
+    # column at all). Left as an explicitly-flagged textbook value rather
+    # than guessed -- still the single biggest remaining gap in this
+    # parameter set.
+    mack_R_max: float = 205.0  # Max development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); cross-validated in order of magnitude by Itani et al. 2008 (85-93 nm/s, independent EUV measurement); see note above, currently has no effect on simulation output
+    mack_R_min: float = 0.0143  # Min development rate [nm/s] -- PROVISIONAL, Vesters et al. 2017 (EUV-native, pixel-calibrated, geometric mean of 2 real resists); cross-validated in order of magnitude by Itani et al. 2008 (0.0017-0.1 nm/s, independent EUV measurement); see note above, currently has no effect on simulation output
+    mack_n: float = 2.5  # Dissolution selectivity (contrast) -- PROVISIONAL, Itani et al. 2008 EIPBN (Selete/Osaka Univ.), real EUV-exposed PHS resist, measured "slope m" of the dissolution-rate curve; first EUV-native (not generic textbook) value found for this parameter; see note above
     mack_M_th: float = 0.5  # Threshold inhibitor concentration -- Mack's own "Inside PROLITH" (1997) Fig. 7-1 illustrative example value, not an EUV-specific fit; see note above
 
     # ─────────────────────────────────────────────────────────────────

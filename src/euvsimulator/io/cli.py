@@ -146,10 +146,13 @@ def simulate(
     mask_sidewall_roughness_nm: float = typer.Option(
         0.0, "--mask-sidewall-roughness", help="Sidewall roughness sigma [nm]"
     ),
-    # Mack development options
-    mack_R_max: float = typer.Option(100.0, "--mack-R-max", help="Max development rate [nm/s]"),
-    mack_R_min: float = typer.Option(0.1, "--mack-R-min", help="Min development rate [nm/s]"),
-    mack_n: float = typer.Option(5.0, "--mack-n", help="Dissolution selectivity (contrast)"),
+    # Mack development options -- defaults match SimulationConfig in pipeline.py;
+    # see that file's mack_R_max/mack_R_min/mack_n comments for full sourcing
+    # (PROVISIONAL, EUV-native: Vesters et al. 2017 for Rmax/Rmin, Itani et al.
+    # 2008 for n).
+    mack_R_max: float = typer.Option(205.0, "--mack-R-max", help="Max development rate [nm/s]"),
+    mack_R_min: float = typer.Option(0.0143, "--mack-R-min", help="Min development rate [nm/s]"),
+    mack_n: float = typer.Option(2.5, "--mack-n", help="Dissolution selectivity (contrast)"),
     mack_M_th: float = typer.Option(
         0.5, "--mack-M-th", help="Threshold inhibitor concentration [0-1]"
     ),
@@ -718,9 +721,9 @@ def calibrate(
             "peb_k": 0.3,
             "peb_t_bake": 60.0,
             "peb_sigma_diff": 20.0,  # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference" formulations cluster 17-35nm
-            "mack_R_max": 100.0,
-            "mack_R_min": 0.1,
-            "mack_n": 5.0,
+            "mack_R_max": 205.0,  # Vesters et al. 2017, EUV-native (see pipeline.py mack_R_max comment)
+            "mack_R_min": 0.0143,  # Vesters et al. 2017, EUV-native (see pipeline.py mack_R_min comment)
+            "mack_n": 2.5,  # Itani et al. 2008 EIPBN, EUV-native PHS resist (see pipeline.py mack_n comment)
             "mack_M_th": 0.5,
         }
 
@@ -762,9 +765,9 @@ def calibrate(
             peb_k=params.get("peb_k", 0.3),
             peb_t_bake=params.get("peb_t_bake", 60.0),
             peb_sigma_diff=params.get("peb_sigma_diff", 20.0),
-            mack_R_max=params.get("mack_R_max", 100.0),
-            mack_R_min=params.get("mack_R_min", 0.1),
-            mack_n=params.get("mack_n", 5.0),
+            mack_R_max=params.get("mack_R_max", 205.0),
+            mack_R_min=params.get("mack_R_min", 0.0143),
+            mack_n=params.get("mack_n", 2.5),
             mack_M_th=params.get("mack_M_th", 0.5),
         )
         result = run_simulation(cfg)
