@@ -884,3 +884,90 @@ getroffener Vergleichspunkt) erklärt wird, ist nicht untersucht. Kein Code geä
 Runde (reine Charakterisierung); nur Dokumentation aktualisiert.
 
 ---
+
+## 2026-09-04 (Fortsetzung 2): SEM-Metrologie-Hypothese verifiziert — Vesters' Table 4.2 ist NACHWEISLICH SEM-rauschbehaftet
+
+**Auslöser:** "ja, geh der SEM-Metrologie-Hypothese nach" — Überprüfung, ob die verbleibende
+Faktor-1,25-2x-LWR-Lücke (voriger Eintrag) dadurch erklärt wird, dass unsere reine
+Physik-Simulation (kein SEM-Messrauschen) gegen SEM-Messwerte verglichen wird, die selbst
+Messrauschen enthalten.
+
+**Primärquelle direkt geprüft:** `Vesters_2019_PhD_Thesis_KULeuven.pdf` liegt lokal vor
+(`/Users/flo/mack fits/pdfs/`), als Volltext extrahiert und durchsucht.
+
+**Zentraler Fund — Abschnitt 1.8.2 "Scanning Electron Microscopy" (S. 59-62) der Thesis,
+wörtlich:** CD-SEM-Detektoren erzeugen ein "white noise signal... even for a perfectly flat
+surface". Dieses Rauschen kann durch PSD-Analyse als "background noise" identifiziert und
+abgezogen werden, was einen sogenannten **"unbiased"** LER/LWR-Wert liefert, der SYSTEMATISCH
+NIEDRIGER ist als der rohe ("biased") SEM-Messwert. Wörtliches Zitat der Thesis: **"the
+roughness results from the start of the thesis (Chap. 3 and Chap. 4) are presenting only
+biased measurements, while for data obtained later (Chap. 5 and Chap. 7) unbiased
+measurements were possible."**
+
+**Table 4.2 — unsere gesamte Vergleichsreferenz (LWR 6,5-10,3nm) — liegt in Kapitel 4** und ist
+laut diesem wörtlichen Zitat der Thesis selbst **explizit NUR als "biased" (SEM-rauschbehaftet)
+gemessen worden.** Die Tabellenüberschrift selbst bestätigt das: "LWR values as measured by
+CD-SEM" (S. 103), ohne jede Unbiasing-Korrektur — zum Zeitpunkt von Kapitel 3/4 existierte die
+dafür nötige Software (Fractilia metroLER) am imec noch nicht in der Autorin eigenen Aussage.
+
+**Größenordnung des reinen Metrologie-Rauschbeitrags (Thesis, Fig. 1.62, S. 61):** bei
+IDENTISCHEM SEM-Bild variiert der gemessene LWR-Wert allein durch die Wahl der
+Filterbox-Größe des Kantenerkennungs-Algorithmus zwischen **3,4nm und 11,2nm** — ein Faktor
+3,3x, ausschließlich durch Metrologie-Einstellungen, NICHT durch reale Resist-Rauheit
+verursacht (Quelle dort: Mack & Bunday 2017, SPIE, DOI 10.1117/12.2258631). Das zeigt: ein
+"biased" CD-SEM-LWR-Wert kann NICHT direkt als physikalische Wahrheit interpretiert werden.
+
+**Näherungsweise Kalibrierung der "unbiased" Größenordnung für vergleichbare EUV-CAR-Resists**
+(aus DERSELBEN Thesis, Kapitel 5, wo Fractilia-Unbiasing bereits verfügbar war — andere
+Resist-Serie [MTR statt Sensitizer A/B], aber gleiche Messmethodik/gleicher Autor/gleiches
+Labor, daher der bestverfügbare Vergleichsmaßstab):
+
+| Sample/Bedingung | unbiased LWR [nm] |
+|---|---|
+| MTR2204, 16nm HP | 3,7 (LER, nicht LWR) |
+| MTR2204, 20nm HP, 34nm FT, 44,5mJ/cm² | 2,9 |
+| MTR2200, 20nm HP, 33nm FT, 28mJ/cm² | 3,2 |
+
+Diese unbiased-Werte liegen bei **2,9-3,2nm für vergleichbare 20nm-HP-Strukturen** — DEUTLICH
+NÄHER an unserem simulierten, rein physikalischen LWR (5,17nm bei CD≈17-23nm, voriger
+Eintrag) als an Vesters' eigenen BIASED Table-4.2-Werten (6,5-10,3nm). Kein exakter
+Same-Sample-Biased/Unbiased-Vergleich für die Table-4.2-Proben selbst verfügbar (die Thesis
+sagt ausdrücklich, dass diese Proben nie unbiased nachgemessen wurden) — daher bleibt dies
+eine PLAUSIBILISIERUNG per Analogie, keine exakte Korrektur.
+
+**Ergänzende Quelle (Severi et al. 2022, "Chemically amplified resist CDSEM metrology
+exploration for high NA EUV lithography," J. Micro/Nanopattern. 21(2), 021207, lokal
+vorliegend):** bestätigt unabhängig, dass unbiased-LWR-Bestimmung SNR-abhängig und bei
+niedrigem Signal-Rausch-Verhältnis unzuverlässig ist, und dass rohe (biased) CD-SEM-Werte
+generell NICHT direkt mit physikalischer Resist-Rauheit gleichgesetzt werden können.
+
+**Schlussfolgerung:** Die SEM-Metrologie-Hypothese ist NICHT nur plausibel, sondern durch die
+Primärquelle selbst BESTÄTIGT: unser Vergleichsmaßstab (Table 4.2) enthält nachweislich
+SEM-Rauschen, das unsere reine Physik-Simulation naturgemäß nicht hat. Der Vergleich
+"5,17nm simuliert vs. 6,5-10,3nm real gemessen" war von Anfang an (seit der ursprünglichen
+Validierung bdea3b6) ein Äpfel-Birnen-Vergleich (unbiased-Simulation gegen biased-Messung).
+Bei einem fairen Vergleich gegen unbiased-Referenzwerte für vergleichbare EUV-CAR-Resists
+(2,9-3,2nm bei ähnlicher Feature-Größe, aus derselben Thesis) liegt unsere Simulation (5,17nm)
+sogar EHER ÜBER dem, was man von echter physikalischer Rauheit erwarten würde — die
+verbleibende "Lücke" könnte also GAR KEINE fehlende Physik in unserem Modell sein, sondern
+größtenteils oder vollständig ein Artefakt des Vergleichs gegen die falsche (rauschbehaftete)
+Referenzgröße.
+
+**Wichtiger Vorbehalt:** dies ist eine Plausibilisierung per Analogie (andere Resist-Serie,
+gleiche Thesis/Methodik), KEINE exakte quantitative Korrektur für die Table-4.2-Proben selbst
+— eine solche existiert laut der Thesis nicht, da diese Proben nie unbiased nachgemessen
+wurden. Die tatsächliche SEM-Rauschkomponente für die SPEZIFISCHEN Sensitizer-A/B-Proben bei
+44nm Pitch/16mJ könnte kleiner oder größer sein als die hier als Analogie herangezogenen
+MTR-Werte (andere Resist-Chemie, andere Pitch/Dosis-Kombination). Keine weitere Verifikation
+in dieser Runde möglich (kein Zugriff auf Rohdaten/PSD-Kurven der Table-4.2-Messungen).
+
+**Empfehlung:** die "Faktor 2-3x zu klein"-Charakterisierung aus der ursprünglichen Validierung
+(bdea3b6) sollte NICHT mehr als offene, ungeklärte Modell-Schwäche behandelt werden, sondern
+als wahrscheinlich größtenteils durch einen Referenz-Metrik-Fehler (biased statt unbiased
+Vergleichsdaten) erklärt. Ein sauberer nächster Schritt (falls gewünscht) wäre, gezielt nach
+UNBIASED LWR-Referenzdaten bei genau 44nm Pitch/22nm HP zu suchen (z.B. weitere imec/SPIE-
+Veröffentlichungen mit Fractilia-metroLER-Angaben bei dieser Geometrie), statt Table 4.2
+direkt weiterzuverwenden. Kein Code geändert in dieser Runde (reine Literaturrecherche/
+Charakterisierung).
+
+---
