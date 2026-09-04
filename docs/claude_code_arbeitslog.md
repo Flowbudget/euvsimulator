@@ -1404,3 +1404,74 @@ Eintrag zur Quenching-Quelle, um C=0,08652/δ0-Dosis=3,43mJ/cm² als neuen, veri
 Fund zu sichern (nicht nur PAG/Quencher-Dichte/Rate wie zuvor).
 
 ---
+
+## 2026-09-04 (Fortsetzung 8): Vesters-Lücke mit development_strength=15,0 neu vermessen — negatives Ergebnis
+
+**Auslöser:** Neue Session, Übergabeprompt Punkt D. Die im Arbeitslog dokumentierte
+Vesters-Lücke ("Faktor ~1,1–2,4x") stammte aus einer Ablation, die mit dem damaligen Default
+`development_strength=20,0` lief. Commit `76c27e0` hat diesen Default auf 15,0 rekalibriert,
+die daraus folgende Lücke wurde danach aber **nie neu gemessen** — die dokumentierte Kennzahl
+war damit veraltet. Das zu korrigieren ist eine reine Messaufgabe, kein Code-Eingriff.
+
+**Methodik / Kontamintationsschutz:** Exakte Reproduktion der Ablation aus dem Eintrag
+"2026-09-04 (Fortsetzung): LWR-Ursache systematisch isoliert" (Commit `7198423`):
+`period_nm=44,0`, `line_width_nm=22,0`, `se_blur_nm=5,0`, `stochastic_seed=42`,
+`stochastic_n_realisations=3`, `stochastic_ler_grid_y=4096`, Dosen 22/24/25 mJ/cm².
+Vorher per `git diff 7198423..HEAD -- src/` verifiziert, dass in der Zwischenzeit
+**ausschließlich** `development_strength` verhaltensrelevant geändert wurde (alles andere:
+Kommentare, Docstrings, der tote `__main__`-uvicorn-Pfad, sowie der `ler_estimate`-NaN-Fix,
+der nur im Kein-Kante-Fall greift). Zusätzlich als eingebaute Kontrolle alle vier
+Konfigurationen gemessen: A (nur Photon) und C (nur `exposure_stochasticity`) nutzen
+`development_stochasticity` nicht und MUSSTEN daher unverändert reproduzieren.
+
+**Kontrolle bestanden:** A und C reproduzierten alle sechs Werte innerhalb ≤0,0044 nm der
+Arbeitslog-Werte — das ist reines Rundungsrauschen gegenüber den dort auf 2 Nachkommastellen
+angegebenen Referenzwerten (max. möglicher Rundungsfehler 0,005). (Anmerkung zur eigenen
+Methodik: das Messskript hatte eine unpassend enge Toleranz von 1e-6 gegen gerundete
+Referenzwerte gesetzt und meldete deshalb zunächst falsche "Abweichung"-Flags — Skriptfehler,
+kein Messproblem.)
+
+**Ergebnis** (Konfiguration D = beide Stochastikquellen, der für Vesters relevante Fall):
+
+| Dosis [mJ/cm²] | CD [nm] | LWR alt (s=20) | LWR neu (s=15) | Faktor alt | Faktor neu |
+|---|---|---|---|---|---|
+| 22 | 30,25 | 3,69 | 3,4248 | 1,07–1,70x | 1,00–1,58x |
+| 24 | 17,19 | 5,17 | 5,3183 | 1,51–2,39x | 1,55–2,45x |
+| 25 | 10,31 | 4,83 | 4,7431 | 1,41–2,23x | 1,38–2,19x |
+
+(Faktor = simulierter 1σ-LWR geteilt durch den auf 1σ umgerechneten Vesters-Zielbereich
+2,167–3,433 nm, d.h. 6,5–10,3 nm ÷ 3.)
+
+**Befund — die Rekalibrierung hat die Vesters-Lücke NICHT geschlossen.** Gesamtspanne
+1,07–2,39x (alt) → **1,00–2,45x** (neu), also minimal *breiter* statt kleiner. Die
+Einzelwerte bewegten sich in beide Richtungen (Dosis 22 runter, 24 hoch, 25 leicht runter) —
+kein systematischer Trend. Der für den Vesters-Vergleich relevanteste Punkt (Dosis 24,
+CD=17,19 nm, am nächsten an Vesters' Ziel-CD von 22 nm) wurde sogar geringfügig schlechter
+(1,51→1,55x an der Untergrenze). Die alte Reproduktion traf die dokumentierte "1,1–2,4x"
+exakt (berechnet: 1,07–2,39x), womit die Nachstellung der Originalbedingungen validiert ist.
+
+**Dokumentierte Kennzahl hiermit aktualisiert:** die Vesters-Lücke beträgt mit den aktuellen
+Defaults **1,0–2,5x Überschätzung** (nicht 1,1–2,4x). Der bereits dokumentierte Vorbehalt
+bleibt vollumfänglich bestehen: Vesters' Table-4.2-Werte sind "biased" (SEM-Rauschen
+enthalten, siehe Eintrag "Fortsetzung 2"), die *wahre* physikalische Zielrauheit liegt also
+noch niedriger — die tatsächliche Überschätzung ist entsprechend größer als diese Faktoren
+zeigen.
+
+**Nebenbefund (neu, physikalisch kohärent):** `development_strength` wirkt sehr unterschiedlich
+je nach aktiver Rauschquelle. In Konfiguration B (nur `development_stochasticity`) änderte der
+Wechsel 20→15 das LWR massiv (Dosis 24: 1,80→2,3787, +32 %; Dosis 25: 2,26→2,9404, +30 %),
+in der kombinierten Konfiguration D dagegen kaum (Dosis 24: +3 %). `exposure_stochasticity`
+dominiert dort und maskiert den Entwicklungs-Beitrag — konsistent mit der bereits
+dokumentierten Nicht-Additivität der Stochastikquellen (Eintrag "Fortsetzung 6"). Bei Dosis 22
+blieb B praktisch unverändert (2,84→2,8414), was zur ebenfalls dokumentierten
+nicht-monotonen `development_strength`-Antwort passt.
+
+**Einordnung:** Ein sauberes negatives Ergebnis. Es bestätigt, dass die verbleibende
+Vesters-Lücke **nicht** von `development_strength` getrieben wird — die Rekalibrierung war
+(gemessen an der Lücke) wirkungslos, was rückblickend zur Ablationserkenntnis passt, dass
+`development_stochasticity` bei dieser Geometrie ohnehin der schwächere der beiden
+Mechanismen ist. Kein Code geändert, kein Parameter angepasst; die Rekalibrierung aus
+`76c27e0` bleibt gültig (sie war gegen den korrigierten 1σ-Zielbereich für die
+`development_stochasticity`-allein-Konfiguration begründet, nicht gegen die kombinierte).
+
+---

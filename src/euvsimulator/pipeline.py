@@ -908,9 +908,17 @@ class SimulationConfig:
     # 1-sigma (divide by 3), the real range is ~2.2-3.4nm, and this
     # codebase's simulated LWR (with exposure_stochasticity on, at the
     # correct 44nm-pitch/22nm-HP geometry) turned out to OVERshoot that
-    # range by roughly 1.1-2.4x, not undershoot it -- see the arbeitslog
-    # entry dated 2026-09-04 ("KRITISCHE KORREKTUR") for the full
-    # corrected numbers. This does not mean the physics implemented below
+    # range by roughly 1.0-2.5x, not undershoot it -- see the arbeitslog
+    # entry dated 2026-09-04 ("KRITISCHE KORREKTUR") for the derivation,
+    # and the later entry "Fortsetzung 8" for this specific figure, which
+    # was re-measured after development_strength was recalibrated 20.0 ->
+    # 15.0 in commit 76c27e0 (the earlier "1.1-2.4x" figure predated that
+    # recalibration; re-measuring changed it only marginally, 1.07-2.39x
+    # -> 1.00-2.45x, confirming the remaining gap is NOT driven by
+    # development_strength). Note the target range itself is still the
+    # BIASED (SEM-noise-included) one -- the true physical roughness is
+    # lower, so the real overshoot is larger than these factors show.
+    # This does not mean the physics implemented below
     # is wrong (independently verified as real and non-degenerate, see
     # the same day's other arbeitslog entries) -- only that the
     # quantitative target this feature was originally motivated against
