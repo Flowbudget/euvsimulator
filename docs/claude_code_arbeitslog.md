@@ -1120,3 +1120,104 @@ aber gegen einen korrekt umgerechneten externen Zielwert geprüft statt nur gege
 überhaupt ein Ergebnis".
 
 ---
+
+## 2026-09-04 (Fortsetzung 5): Wissenschaftliches Entwicklungsmandat — Phase 3, drei Prüfungen
+
+**Auslöser:** Nutzer erteilt ein umfassendes "Master-Prompt"-Mandat (siehe volle Anweisung in
+der Session), das eine sehr strenge wissenschaftliche/softwaretechnische Weiterentwicklung von
+euvsimulator fordert: keine Parameteranpassung, um Testwerte zu treffen; strikte Trennung von
+Kalibrierung und Validierung; jede physikalische Annahme muss dokumentiert und, wo möglich,
+gegen Primärquellen verifiziert werden. Phase 1 (Zustandsreproduktion) und Phase 2 (sichere
+mechanische Fixes: `euv`→`euvsimulator`-Altlasten, alle 6 Notebooks repariert, `ler_estimate`-
+Robustheitsfix) sind in separaten Commits dokumentiert (`144a803`, `56e2ca0`, `b40ae8f`,
+`4749088`). Dieser Eintrag deckt Phase 3 (wissenschaftliche Prüfungen) ab.
+
+### Prüfung 1: `mack_n=18,2` gegen Primärquelle — siehe Commit `f2292e8` für den vollen,
+im Code selbst dokumentierten Befund. Kurzfassung: Yamamoto et al. 2011 direkt von J-STAGE
+erneut geladen und selbst gelesen (nicht nur dem Katalog-Eintrag vertraut), Tabelle 2 (S. 409)
+bestätigt n=18,2 exakt. Eigene `MackModel`-Formel verifiziert identisch zur klassischen
+Mack-Konvention. Berechnet: `a=(n+1)/(n-1)*(1-Mth)^n = 1,38e-4` — extrem klein, was den
+10%→90%-Übergang von R(M) auf nur ΔM≈0,14 komprimiert. Das ist die mathematisch zwingende,
+korrekte Ursache der seit Tagen beobachteten extremen CD-Empfindlichkeit — kein Bug, keine
+Fehlübertragung. PDF jetzt lokal archiviert (`/Users/flo/mack fits/pdfs/`, vorher nur als
+URL referenziert).
+
+### Prüfung 2: Multilayer-Parameter-Quellenlage — siehe Commit `f2292e8`. Bilayer-Periode
+(6,9nm) via Bragg-Bedingung verifiziert (6,787nm Vakuum-Näherung, 1,66% Abweichung, konsistent
+mit erwarteter Brechzahlkorrektur). Mo/Si-Aufteilung, Bilagenzahl (50), Ru-Capping-Dicke:
+KEINE spezifische Primärquelle gefunden oder verifiziert (Websuche fand nur ähnliche Werte in
+nicht zurückverfolgten Papers/Patenten) — laut Mandat explizit als "physikalisch plausibler
+Ingenieurs-Default, NICHT literaturbelegt" dokumentiert, statt zu spekulieren oder eine Quelle
+zu erfinden.
+
+### Prüfung 3: PSI-HP13/14nm-Re-Validierung mit der aktuellen Resist-Kette
+
+**Ziel:** die alte, im August gefundene Diskrepanz (`STEP_5.2C_FIRST_EXPERIMENTAL_VALIDATION_
+REPORT.txt`: Simulator-LER 160x unter PMMA-Literaturwert) mit der seither komplett
+überarbeiteten `full_chem`-Kette (MackModel-Verdrahtung, PAG/Quencher-Diskretheit, 3σ/1σ-Fix)
+neu bewerten.
+
+**PMMA-Vergleich (Kim et al. 2022):** bewusst NICHT wiederholt — PMMA ist kein chemisch
+verstärkter Resist (löst durch Kettenspaltung, nicht säurekatalysierte Entschützung), die
+gesamte `full_chem`-Kette modelliert explizit CAR-Chemie. Dieser Vergleich war und bleibt
+strukturell "NOT_COMPARABLE", unabhängig von der Modellgüte — erneutes Testen hätte keinen
+Erkenntniswert.
+
+**PSI-Vergleich (Develioglu et al. 2023, Proc. SPIE 12498, 1249805, DOI 10.1117/12.2660859,
+lokal archiviert unter `references/euv_experimental/source_02_psi_resist_screening/`) —
+diesmal sinnvoll, da echte CAR-Vendoren, dieselbe Resist-Klasse wie unser Modell:**
+
+Direkt aus dem Original-PDF gelesen (Tabelle 3/4, S. 5-6):
+
+| HP [nm] | Vendor (CAR) | Dose-to-Size [mJ/cm²] | LWR_unb [nm] |
+|---|---|---|---|
+| 14 | A | 53,85 | 2,51 |
+| 14 | B | 38,9 | 2,63 |
+| 14 | D | 36,95 | 2,40 |
+| 13 | A | 51,25 | 2,84 |
+| 13 | B | 41,2 | 2,58 |
+| 13 | D | 26,38 | 2,97 |
+
+**Sigma-Konvention verifiziert (S. 2, Abschnitt 1.2, wörtlich):** "The SEM parameters have
+been set along the same lines as the roughness protocol of IMEC" — dasselbe Protokoll, das
+in Vesters' Thesis (vorheriger Eintrag) explizit als 3σ dokumentiert ist. Kein expliziter
+"3σ"-String in diesem spezifischen PDF gefunden, aber die direkte Protokoll-Referenz ist ein
+starkes Indiz, kein Beweis — als Annahme, nicht als Fakt, gekennzeichnet. Umgerechnet auf 1σ
+(÷3, falls die Annahme zutrifft): **0,80–0,99nm** Zielbereich, nicht 2,4–2,97nm. LWR ist
+zusätzlich bereits "unbiased" (SEM-Rauschen per PSD-Fit entfernt, PSI-eigene Software "SMILE")
+— ein saubererer Vergleichspunkt als Vesters' biased Table 4.2.
+
+**Eigener Test der aktuellen `full_chem`-Kette bei HP14nm (period_nm=28, line_width_nm=14):**
+
+| Konfiguration | Dosis-Scan | Ergebnis |
+|---|---|---|
+| resist_thickness_nm=50 (unser Default) | 26–54 mJ/cm² (deckt den realen PSI-DtS-Bereich ab) | CD=28 (unentwickelt) oder CD=0 (durchentwickelt) bei fast jeder Dosis; nur bei dose=32mJ/cm² ein einzelner Zwischenwert (CD=7,66nm) — ein Fenster von **~1mJ/cm² Breite** |
+| resist_thickness_nm=25 (PSI's tatsächliche Filmdicke, 20-30nm laut Paper Tabelle 2) | 20–54 mJ/cm² | AUSSCHLIESSLICH CD=28 oder CD=0 gefunden — kein auflösender Punkt in der getesteten Auflösung identifiziert |
+
+**Befund:** bei HP13/14nm-Geometrie hat das aktuelle "Polymer A"-Modell **praktisch kein
+nutzbares Prozessfenster** — das Modell ist bei dieser Pitch-Größe fast überall binär
+(voll entwickelt oder gar nicht), unabhängig von der Dosis. Das ist **kein Bug**, sondern
+dieselbe, in Prüfung 1 quantifizierte `mack_n=18,2`-Steilheit, die bei sehr engem Pitch
+(wo die Aerial-Image-Dosis-Modulation über eine kürzere Distanz komprimiert ist) noch
+extremer wirkt als bei den bisher getesteten 44-64nm-Pitches. Ein sinnvoller
+LWR-Vergleich gegen die PSI-HP13/14nm-Daten ist mit diesem Chemie-Parametersatz **nicht
+durchführbar** — nicht weil das Modell "falsch" ist, sondern weil "Polymer A" (kalibriert
+bei 50nm-Pitch/32nm-CD, Yamamoto et al. 2011) außerhalb seines validierten
+Geltungsbereichs eingesetzt würde. Das deckt sich mit der PSI-Studie selbst, die explizit
+feststellt, dass bei diesen Auflösungen spezialisierte Chemie (Multi-Trigger Resist,
+"MTRs demonstrated better Z-factor values owing to their high sensitivity") nötig ist,
+nicht einfache Single-PAG-CAR-Chemie wie "Polymer A".
+
+**Einordnung — dritte unabhängige Bestätigung eines bereits etablierten Musters:** wie
+bei der Vesters-Validierung (44nm Pitch) und der PMMA-Prüfung (falsche Resist-Klasse) zeigt
+sich erneut: der Geltungsbereich von "Polymer A"/Yamamoto et al. 2011 ist eng (grob 44-64nm
+Pitch, CD-Bereich ~15-40nm bei den bisher getesteten Dosen) und generalisiert nicht auf
+aggressivere Nodes. Das ist eine ehrliche Charakterisierungsgrenze des aktuell verwendeten
+Parametersatzes, keine Modell-Fehlfunktion.
+
+**Nicht umgesetzt in dieser Runde:** kein Code geändert (reine Charakterisierung); keine
+neue Chemie/Kalibrierung für HP13/14nm eingeführt (wäre eine echte Kalibrierungsaufgabe mit
+eigenem Datensatz, nicht Teil dieser Prüfung, und laut Mandat streng von Validierung zu
+trennen).
+
+---
