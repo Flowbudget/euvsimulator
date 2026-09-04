@@ -1475,3 +1475,131 @@ Mechanismen ist. Kein Code geändert, kein Parameter angepasst; die Rekalibrieru
 `development_stochasticity`-allein-Konfiguration begründet, nicht gegen die kombinierte).
 
 ---
+
+## 2026-09-04 (Fortsetzung 9): URSACHE GEFUNDEN — warum das Modell zu viel Rauheit erzeugt
+
+**Auslöser:** Nach dem negativen Ergebnis der `development_strength`-Nachmessung (Eintrag 8)
+lautete die offene Frage: das Modell **überschätzt** LWR (1,0–2,5x gegenüber dem bereits
+biased Zielband, real also mehr) — warum? Reine Untersuchung, kein Codeeingriff.
+
+### Ausgangslokalisierung (aus der bestehenden Ablation)
+
+Photon-Schrotrauschen allein (Konfig A) liegt mit 1,5–1,7 nm bereits **im oder unter** dem
+Zielband (2,17–3,43 nm, 1σ, biased). Erst `exposure_stochasticity` (Konfig C: 5,1–5,3 nm)
+treibt darüber. Der Überschuss stammt also spezifisch aus der PAG/Quencher-Diskretheit.
+
+### Hypothese 1 (Diskretisierungsabhängigkeit) — WIDERLEGT
+
+Analytische Vorhersage vorab: `n_acid ~ Poisson(λp)` (Poisson-Thinning), also
+`Var[acid] = p/λ ∝ 1/V_voxel`. Bei rein linearer Weiterverarbeitung kürzt sich V_voxel gegen
+die Mittelung über V_blur/V_voxel Voxel heraus (Ergebnis gitterkonvergent); die *nichtlineare*
+Quenching-Stufe dazwischen sollte diese Kürzung brechen (Jensen-Bias ∝ Var) und damit eine
+Gitterabhängigkeit erzeugen.
+
+**Erster Messversuch war fehlerhaft** und wird hier zur Transparenz mitdokumentiert:
+`stochastic_ler_grid_y` wurde fest gelassen, während `grid` variierte. Da die physikalische
+Messlänge = `ler_grid_y · dx` ist, schrumpfte sie dabei von 352 auf 88 nm — doppelter
+Konfound: statistisch (n_eff fiel auf 4–11, Projektziel ≥30) und physikalisch (LWR ist
+bandbreitenabhängig, kürzere Linie = anderes Ortsfrequenzband). Ergebnis war nicht auswertbar.
+
+Korrigierter Aufbau (`ler_grid_y ∝ grid`, Messlänge konstant 352 nm), dose=24, seed=42:
+
+| Konfig | grid=128 | grid=256 | grid=512 | Streuung |
+|---|---|---|---|---|
+| A (Photon) | 1,4930 | 1,6299 | 1,6839 | ~13 % |
+| C (exposure_stoch) | 5,2177 | 5,2903 | 5,1166 | **~3 %** |
+
+Bei 4-facher Variation der Voxelgröße bleibt C konstant → **gitterkonvergent, Hypothese
+widerlegt.** Positiver Qualitätsbefund über den Code: die Diskretheitsmodellierung ist sauber
+normiert. (Erklärung, warum der Jensen-Bias nicht durchschlägt: das Säurefeld ist ein dünner
+Punktprozess; dessen Faltung mit einem großen Kern hängt nur von der Punktdichte ab, nicht von
+der Binning-Größe.) Auch die Tiefenauflösung (`n_develop_layers` 11/21/41) zeigte keinen
+systematischen Trend (4,82 / 5,15 / 4,55 nm, ±7 % Streuung).
+
+### Rauschzerlegung (Monkey-Patch-Varianten, kein Repo-Code geändert)
+
+Basis: Konfig C, grid=256, ler_grid_y=2048, dose=24, seed=42, Baseline-LWR = 5,2903 nm.
+
+| Variante | LWR [nm] | Beitrag |
+|---|---|---|
+| V0 Baseline | 5,2903 | — |
+| V1 Quencher deterministisch (kein Quencher-Zählrauschen) | 5,2757 | **+0,015** |
+| V2 Säure deterministisch (Mean-Field), nur Quencher-Rauschen | 1,5509 | **+3,739** |
+| V3 50 % der Diffusionsvarianz VOR dem Quenching | **0,0000** | −5,290 |
+| V4 90 % der Diffusionsvarianz VOR dem Quenching | **0,0000** | −5,290 |
+
+- **Quencher-Zählrauschen ist irrelevant** (+0,015 nm). Der Quencher wirkt rein als Schwelle.
+- **PAG-Zählrauschen ist der Treiber** (~3,7 der 5,3 nm). V2 landet bei 1,55 nm, praktisch auf
+  Photon-Niveau (1,63 nm bei gleichem Gitter).
+- Die Reihenfolge Quenching/Diffusion ist **keine glatte Interpolation, sondern eine Klippe**:
+  schon 50 % Vorglättung (σ_pre ≈ 14 nm) kollabiert das Ergebnis auf exakt 0,0 (n_eff = 2048
+  = völlig uniformes Feld). Deckt sich mit dem früheren Befund, dass Blur-vor-Reaktion alles
+  auf ~1e-21 zusammenbrechen ließ (Eintrag "Fortsetzung 2", 2026-09-03).
+
+### Direkte Feldstatistik — die Ursache, quantifiziert
+
+Echte Zwischenwerte aus der laufenden Pipeline abgegriffen (dose=24, grid=256):
+
+| Größe | Wert |
+|---|---|
+| Mittlere PAG-Zahl pro Voxel λ = ρ_PAG·V_voxel | **0,0148** → 99,76 % der Voxel sind leer |
+| Quencher-Schwelle q₀ = ρ_Q/ρ_PAG | 0,250 |
+| Mean-Field-Säure: Mittel / Maximum | 0,1635 / **0,2712** |
+| Anteil des Mean-Field-Feldes über q₀ | 13,87 % |
+| Gesampelte Säure: Anteil Voxel mit Säure > 0 | **0,24 %** |
+| Anteil Voxel über q₀ | 0,24 % (identisch — ein Molekül genügt) |
+| Diskrete Stufenhöhe 1/λ | **67,7 = 271× die Schwelle** |
+
+**Mechanismus:** Die Mean-Field-Chemie funktioniert bei dieser Parameterkombination praktisch
+nicht — die maximal erreichbare mittlere Säure (0,2712) liegt nur **8 % über** der
+Quencher-Schwelle (0,25). Das Modell erzeugt überhaupt nur deshalb Signal, weil das diskrete
+Sampling seltene Spikes erzeugt, die mit einem einzigen Molekül sofort 271-fach über der
+Schwelle liegen. Das Quenching ist damit keine chemische Teil-Neutralisation, sondern ein
+**binärer Spike-Filter** (Voxel mit Molekül überlebt massiv, Voxel ohne wird genullt). Die
+nachfolgende PEB-Diffusion mittelt diese Spikes, sodass das resultierende Säurefeld im
+Wesentlichen die **lokale Spike-Dichte** abbildet — ein Schrotrauschen seltener Ereignisse,
+dessen Amplitude von der Spärlichkeit und der Schwellenhöhe gesetzt wird, **nicht** von einem
+physikalisch kalibrierten Rauschprozess.
+
+### Einordnung — eine Ursache erklärt vier bisher unverbundene Beobachtungen
+
+1. **Zu viel Rauheit** (diese Untersuchung): entsteht durch Spike-Gleichrichtung.
+2. **Vorglättung kollabiert auf 0** (V3/V4 oben, und Eintrag "Fortsetzung 2"): geglättete
+   Spikes fallen unter die Schwelle.
+3. **Großzahlgrenzfall konvergiert nicht gegen Mean-Field** (Eintrag "Fortsetzung 6"): mehr
+   Moleküle → glatteres Feld → Mean-Field kann die Schwelle nicht überqueren → Signal stirbt.
+   Die damalige Deutung "Rauschen geht wie erwartet gegen 0" war unvollständig; die
+   vollständige Erklärung ist diese hier.
+4. **Quencher-Rauschen irrelevant** (V1): er ist reiner Schwellwertgeber.
+
+Und es ist die direkte, jetzt **quantifizierte** Konsequenz der bereits in Eintrag
+"Fortsetzung 7" dokumentierten Quellen-Inkompatibilität: `dill_Q = 0,5` deckelt die Säure
+asymptotisch bei 0,5 (`h = Q·(1−e^{−CE}) → Q`), während `ρ_Q/ρ_PAG = 0,25` aus einer
+**anderen** synthetischen Tabelle die Hälfte dieses Spielraums wegnimmt. Der verbleibende
+Spielraum reicht der Mean-Field-Chemie nicht.
+
+### Was daraus NICHT folgt
+
+Die implementierte Physik ist nicht "falsch programmiert": Poisson/Binomial-Sampling ist
+korrekt (Mittelwert = Mean-Field, Varianz = p/λ, unabhängig verifiziert), gitterkonvergent,
+und die Quenching-Kinetik ist die zitierte geschlossene Lösung. Das Problem ist die
+**Parameterkombination**, die das Modell in ein Regime zwingt, in dem der beabsichtigte
+Mechanismus (molekulares Schrotrauschen auf funktionierender Chemie) durch einen anderen
+(Gleichrichtung seltener Spikes an einer unerreichbaren Schwelle) ersetzt wird.
+
+### Offen — bewusst nicht einseitig entschieden (Stop-Regel)
+
+Ein Fix erfordert eine Entscheidung über die Parameterbasis, nicht über den Code:
+- **(i)** `ρ_Q/ρ_PAG` als Kalibrierparameter behandeln (wie `dill_Q`/`peb_k` bereits
+  klassifiziert sind) und auf einen Wert senken, der der Mean-Field-Chemie echten Spielraum
+  lässt — mit vollständig dokumentiertem Kalibrierverfahren.
+- **(ii)** Den in Eintrag "Fortsetzung 7" gefundenen selbstkonsistenten Belichtungswert
+  (C = 0,08652 aus derselben Tabelle I wie ρ_PAG/ρ_Q) verwenden statt Yamamotos dill_C —
+  löst die Belichtung/Quenching-Konsistenz, aber nicht PEB/Entwicklung (dort empirisch
+  getestet und weiterhin degeneriert).
+- **(iii)** Quenching bei dieser Parameterlage als nicht anwendbar kennzeichnen und
+  `exposure_stochasticity` ohne Quencher-Subtraktion anbieten (reines PAG-Zählrauschen).
+
+Kein Code, kein Parameter geändert. Verifikationsskripte lagen im Scratchpad, nicht im Repo.
+
+---
