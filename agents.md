@@ -182,7 +182,11 @@ Any PR changing physics must pass:
 2. **NILS Gate:** `|euvsimulator - Reference| < 0.3` for sinusoidal grating
 3. **Notebook Execution:** All 6 notebooks execute without error
 
-Reference model: `scripts/reference_model.py` (pure NumPy/SciPy, no euvsimulator imports).
+Reference model: inlined in `tests/test_reference_nils.py` (pure NumPy/SciPy Hopkins/TCC
+implementation, no euvsimulator imports — correction 2026-09-04: this used to live in a
+standalone `scripts/reference_model.py`; that file no longer exists in the repository, the
+reference implementation was consolidated directly into the test module instead. This
+document was not updated at the time of that consolidation).
 
 ---
 
@@ -221,7 +225,7 @@ pytest tests/ -x -q
 git add .
 git commit -m "feat(scope): description"
 git push origin feat/your-change
-# Open PR at https://github.com/Flowbudget/OpEnUV/pulls
+# Open PR at https://github.com/Flowbudget/euvsimulator/pulls
 ```
 
 **PR Requirements:**
@@ -249,15 +253,19 @@ src/euvsimulator/
 
 tests/              789 tests (unit + integration)
 notebooks/          6 verified notebooks
-scripts/            gen_notebooks.py, validate_nils.py
+scripts/            gen_notebooks.py, download_cxro.py/.sh, run_tests.sh, setup_github.sh
+                    (correction 2026-09-04: a `validate_nils.py` was referenced here
+                    previously but does not exist in the repository; NILS cross-validation
+                    against the reference model actually lives in
+                    tests/test_reference_nils.py, see Section 5 above)
 ```
 
 ---
 
 ## 9. Contact & Community
 
-- **Issues:** https://github.com/Flowbudget/OpEnUV/issues
-- **Discussions:** https://github.com/Flowbudget/OpEnUV/discussions
+- **Issues:** https://github.com/Flowbudget/euvsimulator/issues
+- **Discussions:** https://github.com/Flowbudget/euvsimulator/discussions
 - **Security:** See SECURITY.md
 
 ---

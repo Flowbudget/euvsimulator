@@ -356,8 +356,8 @@ class TestSEMRender:
 
 class TestModuleInterface:
     def test_all_exports_exist(self):
-        """All expected names are in the `euv.metro` namespace."""
-        import euv.metro as metro
+        """All expected names are in the `euvsimulator.metro` namespace."""
+        import euvsimulator.metro as metro
 
         for name in [
             "extract_cd_1d",

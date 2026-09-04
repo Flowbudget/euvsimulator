@@ -51,7 +51,7 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run pytest -x -v --tb=short -n auto --cov=src/euv --cov-report=xml --cov-report=term-missing ${{ matrix.os == 'windows-latest' && '-k "not (TestPlotting or test_export_gds)"' || '' }}
+          uv run pytest -x -v --tb=short -n auto --cov=src/euvsimulator --cov-report=xml --cov-report=term-missing ${{ matrix.os == 'windows-latest' && '-k "not (TestPlotting or test_export_gds)"' || '' }}
         env:
           PYTHONPATH: src
           MPLBACKEND: Agg
@@ -103,12 +103,12 @@ jobs:
 
       - name: Run mypy (type check)
         run: |
-          uv run mypy src/euv --strict --show-error-codes --pretty --python-version 3.12 || true
+          uv run mypy src/euvsimulator --strict --show-error-codes --pretty --python-version 3.12 || true
 
       - name: Run pyright (optional, non-blocking)
         continue-on-error: true
         run: |
-          uv run pyright src/euv || true
+          uv run pyright src/euvsimulator || true
 
   notebooks:
     name: Execute Notebooks

@@ -29,7 +29,7 @@ Four levels of etch bias modelling are provided:
    development chain.
 
 All operations use PyTorch tensors to maintain compatibility with the
-existing :mod:`euv.resist` module and the GPU-accelerated simulation
+existing :mod:`euvsimulator.resist` module and the GPU-accelerated simulation
 pipeline.
 
 References

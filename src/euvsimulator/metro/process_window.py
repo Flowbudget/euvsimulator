@@ -42,7 +42,7 @@ def dose_matrix(
     pipeline_fn : Callable
         Function ``fn( dose_mj_cm2, focus_nm )`` that returns a dict
         with key ``'cd_nm'`` (float).  Typically the project's
-        ``euv.pipeline.run_simulation`` wrapped to accept focus.
+        ``euvsimulator.pipeline.run_simulation`` wrapped to accept focus.
     doses : list of float
         Dose values [mJ/cm²].
     focuses : list of float

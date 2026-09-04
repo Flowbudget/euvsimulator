@@ -9,7 +9,7 @@ incidence (≈ 6° for the NXE scanner).
 This module provides:
 
 - ``MoSiStack`` — convenience builder that returns the refractive
-  indices and thicknesses arrays needed by :mod:`euv.optics.tmm`.
+  indices and thicknesses arrays needed by :mod:`euvsimulator.optics.tmm`.
 - ``interdiffusion_correction`` — Debye-Waller damping of the
   Fresnel coefficients at each interface to account for Mo-on-Si
   interdiffusion (MoSi₂ formation) and interface roughness.

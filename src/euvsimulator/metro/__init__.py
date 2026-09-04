@@ -6,7 +6,7 @@ analysis, and SEM-image rendering for verification of simulated EUV
 lithography profiles.
 
 It is designed as the proper metrology replacement for the basic
-:func:`~euv.resist.develop.extract_cd` function, offering:
+:func:`~euvsimulator.resist.develop.extract_cd` function, offering:
 
 - Sub-pixel interpolated threshold crossing for 1D line-cuts.
 - 2D edge detection with line-edge roughness (LER) characterisation.

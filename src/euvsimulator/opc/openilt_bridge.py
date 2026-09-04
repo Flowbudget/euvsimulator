@@ -38,7 +38,7 @@ class EUVForwardModel(torch.nn.Module):
         Target binary resist contour ``(H, W)`` in {0, 1}.
     pipeline_fn : callable, optional
         A function ``mask_params → resist_contour`` compatible with
-        ``euv.pipeline.run_simulation``.  Defaults to ``None`` (use
+        ``euvsimulator.pipeline.run_simulation``.  Defaults to ``None`` (use
         the built-in forward pass).
     loss_fn : callable, optional
         Loss function between predicted and target resist.
