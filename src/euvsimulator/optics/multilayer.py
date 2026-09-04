@@ -125,6 +125,33 @@ def mo_si_stack(
     and Si (low electron density) layers.  The bilayer period is
     approximately λ/(2 cos θ) ≈ 6.9 nm for λ = 13.5 nm at θ = 6°.
 
+    SOURCE STATUS of the default d_mo_nm/d_si_nm/n_bilayers/capping values
+    (checked 2026-09-04, scientific-development mandate Phase 3): the
+    bilayer PERIOD (d_mo_nm + d_si_nm = 6.9 nm) is directly verifiable by
+    the Bragg relation above -- computed independently here: d = λ /
+    (2 sin θ_grazing) with θ_grazing = 90° - 6° gives 6.787 nm in the
+    vacuum approximation, 1.66% below this codebase's 6.9 nm, consistent
+    with the expected small correction from the multilayer's own
+    refractive index (n slightly < 1 for EUV, not accounted for in the
+    vacuum formula) -- so the PERIOD is physically consistent, not an
+    arbitrary number.
+    However, the individual Mo/Si SPLIT (Γ = d_Mo/(d_Mo+d_Si) ≈ 0.406),
+    n_bilayers=50, and the Ru capping layer/thickness are NOT derivable
+    from the Bragg condition alone (that only fixes the period, not how
+    it is divided between the two materials, nor the number of periods
+    needed for a given reflectivity target) -- these are real-EUV-mirror
+    engineering choices, in the same range reported across the published
+    EUV multilayer-mirror literature generally (a web search 2026-09-04
+    found several papers/patents citing near-identical Mo/2.8-2.9nm,
+    Si/4.1-4.2nm, ~40-60 bilayers, ~2nm Ru cap figures), but this project
+    has NOT verified and pinned one specific primary citation for this
+    exact numeric combination -- unlike dill_A/B/C/mack_* (Yamamoto et
+    al. 2011, primary-source re-verified) or the CXRO n,k data (Henke,
+    Gullikson & Davis 1993), these four multilayer-geometry defaults
+    should be treated as physically-reasonable engineering defaults, not
+    as literature-cited values, until a specific source is found and
+    verified by directly reading it (not just an AI web-search summary).
+
     Parameters
     ----------
     n_bilayers : int

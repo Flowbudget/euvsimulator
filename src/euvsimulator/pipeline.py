@@ -666,7 +666,45 @@ class SimulationConfig:
     # it does not silently change any already-reported simulation result.
     mack_R_max: float = 68.6  # Max development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_min/Mth/n); cross-validated in order of magnitude by Vesters et al. 2017 (174-241 nm/s) and Itani et al. 2008 (85-93 nm/s). Wired into the level-set development front via MackModel/surface_advancement_level_set since round 9's CD=64nm degeneracy fix (see note below) -- DOES affect simulation output (verified: mack_R_max=68.6/10/200 -> CD=36.5/64.0/29.5nm at defaults); an earlier version of this comment ("currently has no effect") predated that wiring and was stale, corrected 2026-09-04
     mack_R_min: float = 0.10  # Min development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/Mth/n); matches Itani et al. 2008's molecular-resist value (0.1) exactly, within Vesters et al. 2017's order of magnitude (0.012-0.017). DOES affect simulation output (verified: mack_R_min=0.10/1.0/5.0 -> CD=36.5/30.5/0.0nm at defaults); see mack_R_max comment above for why an older "no effect" claim here was stale and has been corrected
-    mack_n: float = 18.2  # Dissolution selectivity (contrast) -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/Mth); notably steeper than Itani et al. 2008's PHS value (2.5) or Mack's generic textbook 5 -- flagged, not silently trusted. DOES affect simulation output (verified: mack_n=18.2/5.0/40.0 -> CD=36.5/0.0/60.0nm at defaults); see mack_R_max comment above for why an older "no effect" claim here was stale and has been corrected
+    # PRIMARY-SOURCE RE-VERIFICATION (2026-09-04, scientific-development mandate
+    # Phase 3): re-fetched Yamamoto et al. 2011 directly from J-STAGE (open
+    # access, https://www.jstage.jst.go.jp/article/photopolymer/24/4/24_4_405/_pdf)
+    # and re-read Table 2 ("Calculation parameters of Polymer A on PROLITH",
+    # p.409) myself, independent of the prior session's catalog entry --
+    # n=18.2 is confirmed correct, exactly as printed there, alongside all six
+    # other Table 2 values this file adopts. IMPORTANT CAVEAT found while doing
+    # this: the paper itself never writes out the Mack rate equation or defines
+    # how its "a" parameter relates to n/M_th -- Table 2 is presented purely as
+    # "parameters fed into PROLITH", assuming the reader already knows
+    # PROLITH's (i.e. Mack's own) standard formula. Verified this codebase's
+    # own MackModel.rate() (resist/develop.py) uses that same standard,
+    # textbook form -- a = (n+1)/(n-1)*(1-M_th)^n, R(M) = R_max*(a+1)*(1-M)^n /
+    # (a+(1-M)^n) + R_min -- so the n=18.2 read from this table is being used
+    # in the same mathematical context PROLITH itself would use it in, not
+    # silently reinterpreted under a different "a" convention.
+    #
+    # Quantified consequence of n=18.2 (not previously computed, only
+    # qualitatively described as "notably steeper" before this check): with
+    # M_th=0.39, a = (n+1)/(n-1)*(1-M_th)^n = 1.38e-4 -- an extremely small
+    # value, meaning R(M) transitions from 10% to 90% of R_max over just
+    # ΔM ≈ 0.14 (M=0.31 to M=0.45). This -- not a numerical artefact or
+    # mis-transcription -- is the direct, mathematically inevitable root cause
+    # of the extreme CD-vs-dose/CD-vs-parameter sensitivity documented
+    # elsewhere in this file and in docs/claude_code_arbeitslog.md (e.g. a
+    # 0.1 mJ/cm^2 dose step or the uncited se_blur_nm value alone shifting CD
+    # by 5+ nm near the resist's resolution edge): a small shift in the
+    # depth-resolved, time-integrated M(t) field near M_th gets amplified by
+    # this near-step-function rate response. Independently corroborated by
+    # the paper's own Figure 6/text: at 26nm film thickness Polymer A shows
+    # "considerable bridge of pattern side walls" (i.e. a narrow, finicky
+    # process window even in the original 2011 measurement), vs. "almost
+    # vertical" profiles only at the 50nm thickness this codebase's own
+    # resist_thickness_nm default already uses.
+    #
+    # Conclusion: KEPT UNCHANGED. This is a correctly-sourced, correctly-used
+    # real value; the sensitivity it produces is a genuine property of this
+    # specific resist's contrast, not a bug to fix or a number to adjust.
+    mack_n: float = 18.2  # Dissolution selectivity (contrast) -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/Mth); notably steeper than Itani et al. 2008's PHS value (2.5) or Mack's generic textbook 5 -- flagged, not silently trusted. DOES affect simulation output (verified: mack_n=18.2/5.0/40.0 -> CD=36.5/0.0/60.0nm at defaults); see mack_R_max comment above for why an older "no effect" claim here was stale and has been corrected; see the primary-source re-verification note directly above for the quantified reason this value makes CD so sensitive
     mack_M_th: float = 0.39  # Threshold inhibitor concentration -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/n); first real EUV-native value found for this parameter (previously Mack's own generic textbook illustration, 0.5); used by the full_chem development step
 
     # Depth-resolved exposure/development parameters (2026-09-03, round 9 --
