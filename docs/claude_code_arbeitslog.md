@@ -1320,3 +1320,87 @@ Tests und die heute reparierten Notebooks; das wäre der "riesige Misch-Commit",
 Mandat explizit warnt. Als eigener, klar abgegrenzter Schritt vorgeschlagen, falls gewünscht.
 
 ---
+
+## 2026-09-04 (Fortsetzung 7): exposure_stochasticity-Inkonsistenz — echte Literatursuche, Teilerfolg, ehrliches Ende
+
+**Auslöser:** Fortsetzung des vorigen Befunds (Großzahlgrenzfall-Inkonsistenz zwischen
+`exposure_stochasticity`s Chemie und dem deterministischen `full_chem`-Basispfad). Nutzer bat
+um Entscheidungshilfe; auf meine Empfehlung (Option A jetzt, Option B als eigenes Projekt)
+antwortete der Nutzer mit dem Wunsch nach "korrekt funktionierender" Software. Daraufhin
+empirisch getestet, ob Option B (Quenching in den deterministischen Pfad) einfach umsetzbar
+ist — war es nicht (siehe unten) —, danach explizit Option 2 (echte neue Literatursuche nach
+einem selbstkonsistenten Einzelquellen-Parametersatz) angefordert und durchgeführt.
+
+### Empirischer Test von Option B (Quenching deterministisch einbauen)
+
+Mit den AKTUELLEN Defaults (`dill_Q=0,5`, `pag_density=0,2/nm³`, `quencher_density=0,05/nm³`)
+über die echte Pipeline getestet (Monkey-Patch auf `reaction_diffusion_analytical`, echte
+Aerial-Dosisverteilung, nicht synthetisch nachgebaut — Lektion aus einer früheren
+Fehleinschätzung in dieser Sitzung beherzigt): mittlere Säure vor Quenching = 0,151, Maximum =
+0,325 — beide nahe an oder nur knapp über der Quencher-Baseline (0,25). `dill_Q`-Sweep bei
+dose=20 zeigt: ein nicht-degeneriertes CD braucht `dill_Q≥1,0` — **physikalisch unmöglich**
+(dill_Q ist eine Wahrscheinlichkeit, ≤1 per Definition). Dosis-Sweep bei zitiertem `dill_Q=0,5`
+zeigt: brauchbares CD erst ab Dosis≈150mJ/cm² (weit jenseits jedes realistischen
+EUV-Budgets von 10-40mJ/cm²), weil die maximal erreichbare Säure asymptotisch gegen `dill_Q=0,5`
+selbst läuft (`h=Q·(1-e^(-CE))→Q`) und davon nur 0,25 Überschuss über die Quencher-Baseline
+übrigbleiben. **Option B ist mit den aktuellen Defaults nicht einfach umsetzbar** — bestätigt
+empirisch, nicht nur vermutet.
+
+### Literatursuche (deep-research-escalation-Methodik) nach einer selbstkonsistenten Quelle
+
+**Zwischenfund (nicht die Lösung, aber wichtige Cross-Validierung):** Mack, Biafore & Smith
+2013, "Stochastic exposure kinetics of extreme ultraviolet photoresists: Trapping model," J.
+Vac. Sci. Technol. B 31(6), 06F603 (frei via lithoguru.com, bereits lokal archiviert als
+`2013_Stochastic_exposure_kinetics_of_EUV_photoresists-Trapping_model.pdf`) — bestätigt
+PAG-Dichte 0,2/nm³ als über mehrere Paper dieser Autorengruppe wiederverwendeten Baseline-Wert
+(Fig. 5: φ_trap=0,8, φ_e=0,9, r=2nm, P0=0,2nm⁻³). Enthält aber keine Quencher-Physik.
+
+**Hauptfund:** Die eigene Quelle von `pag_density`/`quencher_density`/`quench_rate` — Mack,
+Biafore & Smith 2011, "Stochastic Acid-Base Quenching...", Proc. SPIE 7972, 797202 — liefert
+im FLIESSTEXT direkt bei ihrer Tabelle I einen dazugehörigen, selbstkonsistenten
+Belichtungsparameter: *"These values result in an exposure rate constant of **C = 0,08652
+cm²/mJ**."* Und: *"Note that for the parameters of Table I, δ0 = 0 requires a dose of **3,43
+mJ/cm²**."* — d.h. bei DIESEM (aus derselben Tabelle I stammenden) C-Wert gibt es bei
+realistischen EUV-Dosen einen echten, robusten Säureüberschuss. Das ist die erste tatsächlich
+gefundene Einzelquelle, die Belichtung UND Quenching selbstkonsistent für dieselbe
+(illustrative) Konfiguration liefert.
+
+**Wichtige Einschränkung:** Tabelle I ist explizit ein **idealisierter, synthetischer
+Testfall** der Autoren (PAG-Molarabsorptivität = 0 → keine Beer-Lambert-Tiefenabsorption
+überhaupt; Resistdicke 10nm statt Yamamotos reale 50nm) — kein realer, gemessener Resist.
+
+**Empirischer Test dieses selbstkonsistenten Teilsatzes durch die volle Pipeline** (dill_C=
+0,08652, dill_A=dill_B≈0, resist_thickness_nm=10, restliche Quenching-Parameter wie Tabelle I,
+ABER `peb_D`/`peb_t_bake` weiterhin aus Lavery et al. 2006/Anderson et al. 2009 und
+`mack_R_max/R_min/n/M_th`/`peb_k` weiterhin aus Yamamoto et al. 2011 — beides unabhängige,
+NICHT zu Tabelle I gehörige Quellen): CD blieb bis Dosis=40mJ/cm² weiterhin degeneriert
+(unentwickelt). Diagnose: die PEB-Diffusionslänge (σ≈20nm aus Lavery/Anderson) verschmiert das
+ohnehin schmale Säureüberschuss-Signal aus Tabelle I fast vollständig über den 64nm-Pitch,
+bevor die Entwicklungsstufe (Yamamoto-Mack-Modell) überhaupt greift.
+
+### Ehrliches Fazit
+
+Es gibt **keine einzige frei zugängliche Quelle**, die den gesamten Belichtung+PEB+Quenching+
+Entwicklung-Parametersatz für einen realen Resist liefert. Das bestätigt und erweitert die
+bereits sehr gründliche, 9-Runden-Literatursuche aus früheren Sitzungen (siehe `/Users/flo/mack
+fits/search_log.md`) explizit auf die Belichtung+Quenching-Kombination, die dort noch nicht
+geprüft worden war. Der aktuelle `full_chem`-Stack mischt jetzt nachweislich **fünf
+unabhängige Quellen**: Yamamoto et al. 2011 (dill_A/B, mack_R_max/R_min/n/M_th, peb_k,
+resist_thickness_nm, develop_time_s), Mack/Biafore/Smith "Stochastic exposure kinetics" 2011
+(dill_Q=0,5, als synthetischer Testfall, nicht realer Resist), Mack/Biafore/Smith "Stochastic
+Acid-Base Quenching" 2011 (pag_density/quencher_density/quench_rate, ebenfalls synthetischer
+Testfall), Lavery et al. 2006/Anderson et al. 2009 (peb_D), und implizit CXRO/Henke et al. 1993
+(Brechzahlen).
+
+**Umgesetzt:** `pipeline.py`s `exposure_stochasticity`-Kommentar um diesen vollständigen
+Befund erweitert (Option A, wie vom Nutzer bestätigt) — inklusive Hinweis, dass Nutzer, die
+wenigstens Belichtung+Quenching intern konsistent haben möchten, `dill_C=0,08652` explizit
+setzen können (kein neues Feld nötig, `dill_C` ist bereits voll konfigurierbar). Kein
+Default-Verhalten geändert. `test_full_chem_config.py` weiterhin grün (7/7, reiner
+Kommentar-Zusatz).
+
+**Für zukünftige Sitzungen im externen Katalog vermerkt:** `/Users/flo/mack fits/catalog.json`,
+Eintrag zur Quenching-Quelle, um C=0,08652/δ0-Dosis=3,43mJ/cm² als neuen, verifizierten
+Fund zu sichern (nicht nur PAG/Quencher-Dichte/Rate wie zuvor).
+
+---

@@ -941,6 +941,72 @@ class SimulationConfig:
     # adopted here -- peb_t_bake keeps its own Anderson-et-al.-2009-cited
     # 60s default rather than switching to this paper's own value, to
     # stay consistent with the rest of this project's PEB timing).
+    #
+    # KNOWN ARCHITECTURAL INCONSISTENCY, investigated 2026-09-04
+    # (scientific-development mandate Phase 3, falsification testing):
+    # enabling exposure_stochasticity does NOT just add noise around the
+    # SAME mean prediction as the deterministic full_chem baseline -- it
+    # silently changes the MEAN CHEMISTRY too. Verified via a large-N
+    # limit test (pag_density swept 0.2->200/nm^3, quencher/PAG ratio held
+    # fixed): LER/LWR correctly -> 0 as expected, but CD does NOT converge
+    # to the deterministic baseline's CD (stayed at 17.19nm vs. the
+    # baseline's 23.03nm at a fixed test config, even fully noise-free).
+    # Root cause: the deterministic path (dill_abc_exposure ->
+    # reaction_diffusion_analytical) has no acid-base quenching mechanism
+    # at all, while this flag's own chain (sample_pag_quencher_acid ->
+    # reaction_diffusion_with_quenching) always includes a quencher
+    # subtraction, independent of molecular discreteness. Both halves are
+    # individually real and cited; the inconsistency is architectural, not
+    # a coding bug.
+    #
+    # Considered and rejected (2026-09-04) adding quenching to the
+    # deterministic baseline instead of just documenting this: tested
+    # directly (via the real pipeline, not a synthetic mock) -- at this
+    # codebase's own dill_Q=0.5/pag_density=0.2/quencher_density=0.05
+    # defaults, mean-field acid never clears the quencher baseline (0.25)
+    # by a usable margin at realistic EUV doses; dill_Q would need to
+    # exceed 1.0 (physically impossible -- it is a probability) or dose
+    # would need to exceed ~150 mJ/cm^2 (far outside any realistic EUV
+    # budget) to get a non-degenerate CD. Followed up with a real
+    # literature search (deep-research-escalation) for a single source
+    # providing self-consistent exposure+quenching parameters together --
+    # found one: Table I above ALSO states, in its own text, "these
+    # values result in an exposure rate constant of C = 0.08652 cm^2/mJ"
+    # (a self-consistent exposure rate constant for this exact
+    # PAG/quencher/quench-rate combination, distinct from this codebase's
+    # default dill_C=0.08997 from the unrelated Yamamoto et al. 2011 real-
+    # resist fit) and states plainly that at these Table-I values,
+    # "delta0 = 0 requires a dose of 3.43 mJ/cm2" -- i.e. a real, usable
+    # acid excess at realistic doses, IN THIS PAPER'S OWN idealized test
+    # case (PAG molar absorptivity = 0, i.e. no Beer-Lambert depth
+    # attenuation at all, and a 10nm resist thickness, not this codebase's
+    # real 50nm Yamamoto film). Verified empirically through this
+    # codebase's actual pipeline (dill_C=0.08652, dill_A=dill_B=0,
+    # resist_thickness_nm=10, all other quenching params as above): CD
+    # still stayed degenerate (undeveloped) up to dose=40 mJ/cm^2, because
+    # this codebase's peb_D/peb_t_bake (Lavery et al. 2006/Anderson et al.
+    # 2009, a REAL EUV resist's diffusion blur) and mack_R_max/R_min/n/
+    # M_th/peb_k (Yamamoto et al. 2011, the REAL "Polymer A" resist) are
+    # themselves from two MORE unrelated sources -- the PEB diffusion
+    # length these imply (~20nm) smears the already-narrow acid-excess
+    # region from Table I's synthetic case across most of the 64nm pitch
+    # before development ever sees it. Conclusion: NO single freely
+    # available source provides a self-consistent exposure+PEB+quenching+
+    # development parameter set for one real resist (consistent with, and
+    # extending, the exhaustive ~9-round prior literature search
+    # documented in the project's external research catalog) -- this
+    # codebase's full_chem chain necessarily mixes five distinct sources'
+    # baseline/illustrative parameters, and exposure_stochasticity's mean-
+    # chemistry mismatch with the deterministic baseline is a genuine,
+    # currently-unresolved consequence of that, not something a quick
+    # parameter change fixes. A user who wants exposure_stochasticity's
+    # exposure+quenching sub-chain to be internally self-consistent (not
+    # the full chain -- PEB/development remain independently sourced
+    # either way) can explicitly pass dill_C=0.08652 (dill_C is already a
+    # normal, user-controllable field, so no new parameter was added for
+    # this). Left as an open, documented finding rather than a forced fix
+    # -- see docs/claude_code_arbeitslog.md 2026-09-04 for the full,
+    # dated derivation and all intermediate numbers.
     exposure_stochasticity: bool = False  # ON = sample discrete PAG/quencher populations instead of mean-field acid; see note above
     pag_density_per_nm3: float = 0.2  # Initial PAG number density [nm^-3] -- Mack, Biafore & Smith 2011 Table I; see note above
     quencher_density_per_nm3: float = 0.05  # Initial quencher number density [nm^-3] -- same source/table
