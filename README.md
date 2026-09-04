@@ -69,7 +69,7 @@
 69|in real EUV processes.
 70|
 71|```python
-72|from euv.pipeline import SimulationConfig, RESIST_PRESETS
+72|from euvsimulator.pipeline import SimulationConfig, RESIST_PRESETS
 73|
 74|# Ideal optical image (unrealistically high NILS)
 75|cfg = SimulationConfig(se_blur_nm=0.0)
@@ -246,7 +246,7 @@
 246||-----------|--------|
 247|| Project scaffold & CXRO materials | ✅ |
 248|| Multilayer optics (S-matrix TMM) | ✅ |
-249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), taper/undercut, integrated via `use_rcwa=True` |
+249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), integrated via `use_rcwa=True`. ⚠️ `absorber_taper_deg`/`mask_undercut_nm` exist as config fields but are currently silently ignored in the RCWA geometry path (`pipeline.py:1516`, `pass  # Taper/undercut grid geometry is not yet implemented` — verified 2026-09-04; correction of a previous, inaccurate "✅ taper/undercut integrated" claim here) |
 250|| Aerial image (Abbe/Hopkins + SE blur) | ✅ |
 251|| High-NA imaging (anamorphic) | ✅ |
 252|| End-to-end pipeline | ✅ |

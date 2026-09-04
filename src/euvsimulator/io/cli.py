@@ -63,7 +63,8 @@ def info():
     print("  • materials/  — CXRO material database")
     print("  • optics/     — TMM multilayer reflectivity")
     print("  • mask3d/     — RCWA Fourier modal method")
-    print("  • aerial/     — Abbe imaging + pupil + source shapes")
+    print("  • aerial/     — Hopkins/TCC aerial imaging (abbe.py::aerial_from_orders);")
+    print("                  pupil.py/source.py exist but are not wired into run_simulation()")
     print("  • source/     — LPP tin-plasma model")
     print("  • resist/     — Exposure, PEB, development, stochastics")
     print("  • io/         — GDSII layout I/O, rasterization")
@@ -74,7 +75,9 @@ def info():
     print("  • etch/       — Etch bias model")
     print("  • calibrate/  — Wafer calibration pipeline")
     print()
-    print("Tests:     534 / 534 passing")
+    print("Tests:     run `pytest tests/` (dev/test extra) for the current pass/fail count —")
+    print("           not tracked here to avoid a stale hardcoded number (see CHANGELOG.md")
+    print("           and docs/claude_code_arbeitslog.md for known issues)")
     print("License:   Apache-2.0")
 
 
