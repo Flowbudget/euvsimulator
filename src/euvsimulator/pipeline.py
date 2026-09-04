@@ -46,6 +46,16 @@ from euvsimulator.resist.stochastic import (
 )
 
 # Resist presets — typical SE blur sigma [nm] for different resist types
+# Reference dose of the aerial_threshold resist model [mJ/cm²]. That model
+# has no chemistry: it prints wherever the aerial intensity exceeds a fixed
+# fraction (resist_threshold_norm) of the image's mean intensity AT THIS
+# REFERENCE DOSE, so the threshold in absolute units is
+# resist_threshold_norm · mean(I) · (REFERENCE / dose). The number is a
+# model-definition constant (it fixes what "threshold_norm = 0.5" means),
+# not a physical or calibrated quantity; it was previously an unnamed
+# literal in two places.
+AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 = 20.0
+
 RESIST_PRESETS = {
     "CAR": 5.0,  # Chemically Amplified Resist (typical EUV)
     "nonCAR": 2.5,  # Non-chemically amplified / metal resist
@@ -69,6 +79,14 @@ class SimulationResult:
         Normalised Image Log-Slope at line edge.
     absorber_reflectivity : float
         Reflectivity of the absorber region (normalised).
+    clear_field_reflectivity : float
+        Intensity reflectivity |r_ML|² of the absorber-free multilayer at
+        the chief-ray angle (unpolarised average when use_rcwa=True). The
+        aerial image is divided by this value so that an open frame
+        exposes the resist to exactly ``dose_mj_cm2`` (see
+        ``SimulationConfig.dose_mj_cm2``); it is reported here so the
+        mask-level intensity can be recovered as
+        ``aerial_image * clear_field_reflectivity``.
     ler_nm : float
         Line-edge roughness [nm] (1σ). Only populated when enable_stochastic=True.
     lwr_nm : float
@@ -82,6 +100,7 @@ class SimulationResult:
     absorber_reflectivity: float = 0.0
     ler_nm: float = 0.0
     lwr_nm: float = 0.0
+    clear_field_reflectivity: float = 1.0
     ler_metadata: dict | None = None  # Structured LER metadata (large_n estimator)
     # Populated when stochastic_ler_estimator="large_n".  Keys: ler_nm,
     # n_rows, n_eff, l_int_px, l_int_nm, uncertainty_nm, ci95_low_nm,
@@ -113,8 +132,6 @@ class SimulationConfig:
         RCWA Fourier orders (default: 21).
     dose_mj_cm2 : float
         Exposure dose [mJ/cm²] (default: 20).
-    resist_threshold : float
-        Development threshold (default: 0.5).
     grid : int
         Simulation grid size (default: 256).
     device : str
@@ -140,8 +157,38 @@ class SimulationConfig:
     absorber_height_nm: float = 60.0
     absorber_material: str = "Ta"
     n_rcwa_orders: int = 21
+    # Projection demagnification (mask-to-wafer). period_nm/line_width_nm are
+    # WAFER-scale; the physical mask carries mask_demagnification × larger
+    # features and is what the RCWA solver must see: the diffraction angles
+    # at the mask are asin(sin θ_CRA − m·λ/(M·P)), and only at these angles is
+    # the Mo/Si Bragg mirror's angular acceptance (≈ ±10° about the 6° chief
+    # ray for the default stack) correctly applied to each order. Running the
+    # RCWA at wafer scale (the behaviour before 2026-09-04) put the ±1 orders
+    # of a 64 nm-pitch grating at +18°/−6°, where the mirror reflects 0.08 vs
+    # 0.65, and produced a 10.8× (instead of the physical ≈1.2×) ±1-order
+    # asymmetry. 4× is the NXE/EXE isotropic value (constants.DEMAGNIFICATION);
+    # High-NA EXE:5000 is anamorphic 4×(x)/8×(y) -- this 1D line/space model
+    # resolves x only, so 4× is also correct there. Not used by the thin-mask
+    # path, whose Fourier coefficients are scale-free.
+    mask_demagnification: float = 4.0
+    # Exposure dose [mJ/cm²] in the STANDARD lithographic convention: the
+    # energy density delivered to the resist at the wafer in a large clear
+    # (absorber-free) area. Mack, "Inside PROLITH" (1997), ch. 9: "Let E be
+    # the nominal exposure energy (i.e., the intensity in a large clear
+    # area times the exposure time), I(x) the normalized image intensity
+    # ... the exposure energy as a function of position within the resist
+    # is just E·I(x)·I(z)." This is the same scale on which dose-to-clear
+    # (E0), dose-to-size and dill_C [cm²/mJ] are defined and published, so
+    # values from the literature (Yamamoto 2011, Vesters 2019, PSI resist
+    # screening) are directly comparable. run_simulation() enforces it by
+    # dividing the Hopkins image (which is relative to unit illumination of
+    # the MASK, i.e. an open frame comes out at |r_ML|² ≈ 0.65) by the
+    # multilayer's clear-field reflectivity -- see the normalisation block
+    # there. Before 2026-09-04 this division was missing and the resist saw
+    # only 0.647 × the nominal dose (docs/audit_2026-09-04_vollpruefung.md, A2).
     dose_mj_cm2: float = 20.0
-    resist_threshold: float = 0.5
+    # (resist_threshold, a field that was never read, removed 2026-09-04;
+    # resist_threshold_norm below is the one the aerial_threshold model uses.)
     resist_model: str = "aerial_threshold"
     resist_threshold_norm: float = 0.5
     se_blur_nm: float = 0.0
@@ -260,102 +307,17 @@ class SimulationConfig:
     # mack_M_th/mack_n from one real EUV measurement rather than picked
     # independently.
     dill_C: float = 0.08997  # Photo-rate constant [cm²/mJ] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B and mack_* below); within the ~0.010-0.43 cm²/mJ range independently spanned by Fallica et al. 2016 / Kazazis et al. 2017; see note above
-    #
-    # dill_Q STATUS (2026-09-02, third research pass; deepened 2026-09-03,
-    # round 9): the previous "typical range 0.02-0.10 for EUV CAR" claim below
-    # was UNCITED (traced back through resist/exposure.py, which also gives no
-    # source) -- flagging that explicitly rather than silently inheriting an
-    # unsourced number.
-    #
-    # WHAT THIS PARAMETER ACTUALLY IS, mechanistically (round 9, after reading
-    # Mack, Biafore & Smith, "Stochastic exposure kinetics of extreme
-    # ultraviolet photoresists: a simulation study," J. Micro/Nanolith. MEMS
-    # MOEMS 10(3), 033019 (2011), free via lithoguru.com/scientist/
-    # litho_papers/2011_EUV_Stochastic_Exposure_Kinetics.pdf -- read directly,
-    # Secs. 3.6-3.7): in resist/exposure.py, acid = Q*(1-M) where (1-M) in
-    # [0,1] is the classic Dill-C conversion fraction, so Q sets the
-    # SATURATION acid level in this model's own normalised units -- i.e. this
-    # codebase's Q plays the role of Mack's phi_PAG (his own term: "PAG
-    # quantum efficiency," "an acid is generated with probability equal to
-    # phi_PAG" GIVEN a PAG has already received above-threshold energy), NOT
-    # the "acid yield" / "film quantum yield" (FQY, "average number of
-    # generated acids per absorbed photon") that EUV-resist chemistry papers
-    # actually publish. Mack's own Eqs. 9-13 show WHY these are different
-    # quantities, not just different names for the same thing: FQY = Y0 can
-    # exceed 1 at EUV specifically because one 92 eV photon's secondary
-    # electrons can each independently excite a DIFFERENT nearby PAG molecule
-    # within an "electron blur" radius (Mack's own fit: 2.1-3.3nm) -- Y0
-    # scales with how many PAGs are geometrically in reach, while phi_PAG is
-    # the probability of successful conversion for ONE already-excited PAG,
-    # bounded to [0,1] by definition and INDEPENDENT of that geometric
-    # amplification. Mack's Eq. 13 (C = Cmax*(1-exp(-gamma*phi_PAG))) is
-    # exactly the deconvolution from one to the other.
-    #
-    # CONSEQUENCE, confirmed by checking every "quantum yield"/"FQY" EUV
-    # source found in this entire project: Kozawa & Tagawa (radiolysis
-    # measurements, up to ~6, and up to 8-13 for ultrahigh-PAG-loading
-    # resists) and Hassanein et al., "Film Quantum Yields of EUV & Ultra-High
-    # PAG Photoresists," freely hosted at osti.gov/servlets/purl/1004159-
-    # nvjrXh (real, NAMED Rohm & Haas resists -- EUV-2D, MET-2D/XP5271D,
-    # XP-5496 -- Table 3, FQY = 1.94/1.39/1.45 respectively, verified via a
-    # -layout PDF re-extraction after an initial column-misread nearly
-    # attributed a DIFFERENT column, "Transmittance" 0.56-0.71, to Quantum
-    # Yield -- caught before use) ALL report the Y0/FQY quantity, ALL are
-    # >1, and NONE of them is phi_PAG. No paper found in this project reports
-    # a measured phi_PAG for a real resist -- by Mack's own account, phi_PAG
-    # is extracted by fitting Eq. 13 against a Monte Carlo stochastic
-    # exposure simulator (his PROLITH SRM), not something a titration or
-    # dose-to-clear experiment observes directly. His own Table 2 "baseline"
-    # phi_PAG=0.5 is one illustrative simulation input, not a fit to a named
-    # resist; Figure 9/11 explore 0.25/0.5/1.0 as a parametric sweep across
-    # the full physically-possible range, not a claim that any one of them
-    # is correct for a specific material.
-    #
-    # PRACTICAL UPSHOT: this is a genuine, structural reason further
-    # literature search for dill_Q is unlikely to succeed -- the EUV-resist
-    # literature overwhelmingly reports the OTHER quantity (Y0/FQY), and the
-    # one quantity that IS conceptually right (phi_PAG) is a model-internal,
-    # fitted constant by construction, not a directly citable measurement.
-    # This reinforces (with a mechanistic reason now, not just an absence of
-    # hits) the pre-existing conclusion below: dill_Q and peb_k need real
-    # experimental dose/CD calibration data via `euv calibrate`, not a
-    # literature lookup.
-    #
-    # EMPIRICAL CHARACTERISATION (round 9, tested directly, not guessed):
-    # with the Yamamoto-et-al.-2011 defaults above, dill_Q must be roughly in
-    # [0.14, 0.22] (at peb_k=0.3) or, using peb_k=0.0723 -- itself Yamamoto et
-    # al. 2011's own Arrhenius fit, see peb_k note below -- dill_Q must be
-    # roughly in [0.57, 0.95] for `full_chem` to produce a non-degenerate CD
-    # at all; Mack's baseline 0.5 and ceiling 1.0 individually bracket but do
-    # not land inside this second window. Recorded here as a target range for
-    # any future candidate value or calibration run to be checked against --
-    # NOT as license to pick an arbitrary point inside it, which would still
-    # be exactly the ungrounded tuning this project does not want.
-    #
-    # RESOLVED (2026-09-03, same round, "wire it in properly"): the windows
-    # above were measured against the OLD full_chem chain -- 2D-only,
-    # single-layer dose_to_acid()+threshold_development(mack_M_th), which
-    # never evaluated the actual Mack R(M) rate equation or depth-resolved
-    # Beer-Lambert absorption at all (see the dill_A/B and mack_R_max
-    # "ARCHITECTURE GAP"/"SEPARATE, ALREADY-KNOWN ISSUE" notes -- both now
-    # fixed in this same commit: dill_abc_exposure() and
-    # surface_advancement_level_set()/MackModel are wired into
-    # _cd_via_full_chem). Re-tested against the NEW, physically complete
-    # chain: dill_Q=0.5 (Mack et al. 2011's own real, cited baseline
-    # phi_PAG -- not a new number, the exact same one investigated and
-    # shelved above) combined with peb_k=0.0723 (Yamamoto et al. 2011's own
-    # real, cited Arrhenius fit -- see peb_k note below) now gives
-    # cd_nm=36.5 at the default dose (target line_width_nm=32.0) -- a real,
-    # non-degenerate, physically sensible result, confirmed monotonic in
-    # dose (dose 15->30 mJ/cm2 gives CD 64.0->13.0nm, smoothly decreasing,
-    # not a numerical artifact) and with a sane developed-area fraction
-    # (43%). ADOPTED as the new default: two independently-published real
-    # numbers, previously shelved because the SIMPLIFIED model couldn't
-    # resolve a line with them, now work once the model itself is correct
-    # -- this is the single biggest confirmation in the whole project that
-    # "wire the physics in properly" was the right call, not premature
-    # optimisation.
-    dill_Q: float = 0.5  # Quantum efficiency == Mack's phi_PAG (probability an already-excited PAG converts to acid) -- Mack, Biafore & Smith 2011 (J. Micro/Nanolith. MEMS MOEMS 10(3), 033019, free via lithoguru.com), their own baseline Table 2 value; see note above for why this specific number is now adopted (works with the depth-resolved MackModel chain, did not with the old simplified one)
+    # dill_Q -- REMOVED 2026-09-04. The former field multiplied the Dill
+    # acid yield, acid = Q·(1 − e^{−C·E}), capping it at Q = 0.5. That
+    # double-counts the PAG quantum efficiency: in Mack's EUV exposure model
+    # (Mack, "Stochastic exposure kinetics of EUV photoresists: Trapping
+    # model", 2013, Eqs. 8 and 10) φ_PAG is a FACTOR INSIDE the Dill C
+    # parameter, C ∝ φ_PAG·σ_e-PAG·…, and the acid concentration saturates
+    # at 1 (every PAG converts at infinite dose). dill_C here is Yamamoto
+    # et al. 2011's PROLITH-fitted value, which already contains φ_PAG. A
+    # separate Q therefore has no physical place; it was calibration by
+    # another name (docs/audit_2026-09-04_vollpruefung.md, A5, and
+    # docs/claude_code_arbeitslog.md "Fortsetzung 9/10").
 
     # PEB (reaction-diffusion) parameters.
     #
@@ -1024,7 +986,8 @@ class SimulationConfig:
     use_rcwa: bool = False  # Use full RCWA instead of thin-mask analytic
     absorber_taper_deg: float = 90.0  # Sidewall angle from horizontal (90 = vertical)
     mask_undercut_nm: float = 0.0  # Undercut at absorber base [nm]
-    mask_sidewall_roughness_nm: float = 0.0  # Sidewall roughness sigma [nm]
+    # (mask_sidewall_roughness_nm removed 2026-09-04: it was accepted by the
+    # config and the CLI but never read by any model.)
 
     def __post_init__(self):
         # Validate dose
@@ -1033,8 +996,6 @@ class SimulationConfig:
         # Validate resist parameters
         if self.dill_C <= 0:
             raise ValueError("dill_C must be > 0")
-        if self.dill_Q <= 0:
-            raise ValueError("dill_Q must be > 0")
         if self.peb_k <= 0:
             raise ValueError("peb_k must be > 0")
         if self.peb_t_bake <= 0:
@@ -1088,9 +1049,10 @@ def _cd_via_aerial_threshold(
     # c0 is the mean reflectivity (a·duty + b·(1−duty)); reconstructed here from
     # the aerial DC level.
     dc_level = float(aerial.mean())
-    nominal_dose = 20.0
     threshold_val = (
-        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+        cfg.resist_threshold_norm
+        * dc_level
+        * (AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 / max(cfg.dose_mj_cm2, 1e-9))
     )
     dx_nm = cfg.period_nm / G
     device = aerial.device
@@ -1213,9 +1175,10 @@ def _cd_via_full_chem(
     #   thr = resist_threshold_norm * mean(field) * (20 / dose)
     # so NILS and CD share one printed edge even in the full_chem path.
     dc_level = float(dose_map_blurred.mean())
-    nominal_dose = 20.0
     threshold_val = (
-        cfg.resist_threshold_norm * dc_level * (nominal_dose / max(cfg.dose_mj_cm2, 1e-9))
+        cfg.resist_threshold_norm
+        * dc_level
+        * (AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 / max(cfg.dose_mj_cm2, 1e-9))
     )
     nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm, threshold=threshold_val)
 
@@ -1231,7 +1194,6 @@ def _cd_via_full_chem(
         A=cfg.dill_A,
         B=cfg.dill_B,
         C=cfg.dill_C,
-        Q=cfg.dill_Q,
         thickness=cfg.resist_thickness_nm / 1000.0,  # nm -> µm
         n_layers=n_layers,
     )
@@ -1294,6 +1256,24 @@ def _cd_via_full_chem(
         lwr_vals = []
         dev_fields = []
         intensity_fields = []
+        # Only ABSORBED photons generate acid, so only they contribute to
+        # the exposure shot noise (Mack, Biafore & Smith 2011, J. Micro/
+        # Nanolith. MEMS MOEMS 10(3), 033019: the absorbed photon density is
+        # D·α/E_ph). With the same Beer-Lambert coefficient the depth-
+        # resolved chain uses (α = dill_A + dill_B, treated as unbleached --
+        # see dill_abc_exposure), the fraction of incident photons absorbed
+        # in the film is 1 − exp(−α·t). Sampling the 2D incident field with
+        # this fraction reproduces the Poisson statistics of the COLUMN
+        # total of absorbed photons exactly; it does not resolve the (small)
+        # depth dependence of the relative noise, which would need a per-
+        # layer draw. Before 2026-09-04 absorption was left at its default
+        # of 1.0 (every incident photon counted): with the default 50 nm /
+        # 1.06 µm⁻¹ film that is 19× too many photons and a 4.4× (linear)
+        # to 7.9× (measured, through the Mack nonlinearity) under-estimate
+        # of the photon-shot-noise LWR -- docs/audit_2026-09-04_vollpruefung.md, A1.
+        alpha_per_um = cfg.dill_A + cfg.dill_B
+        thickness_um = cfg.resist_thickness_nm / 1000.0
+        absorbed_fraction = 1.0 - math.exp(-alpha_per_um * thickness_um)
         for _ in range(cfg.stochastic_n_realisations):
             d_eff = photon_deposition_shot_noise(
                 stoch_dose,
@@ -1301,6 +1281,7 @@ def _cd_via_full_chem(
                 dx_nm=dx_nm,
                 photon_energy_eV=energy_eV,  # from wavelength via HC_EV_NM
                 dose_to_energy_factor=6.241509074e15,
+                absorption=absorbed_fraction,
                 rng=rng,
             )
             # Same depth-resolved exposure -> PEB -> Mack-rate chain as the
@@ -1313,14 +1294,11 @@ def _cd_via_full_chem(
             if cfg.exposure_stochasticity:
                 # PAG/quencher molecular discreteness (see SimulationConfig's
                 # exposure_stochasticity note for the full citation/model).
-                # dill_Q plays the SAME role as in the mean-field path here
-                # (per-molecule conversion probability Q*(1-exp(-C*dose)),
-                # applied inside sample_pag_quencher_acid's Binomial draw --
-                # see that function's own Q docstring for why this is the
-                # right way to carry dill_Q into a per-molecule model, not
-                # just reused for convenience). dill_A/dill_B still drive
-                # the depth-resolved Beer-Lambert dose (dose_z below), same
-                # as the mean-field path.
+                # The per-molecule conversion probability is 1 − exp(−C·E),
+                # the same Dill-C law as the mean-field path (no separate
+                # quantum-efficiency factor -- see the dill_Q REMOVED note in
+                # SimulationConfig). dill_A/dill_B drive the depth-resolved
+                # Beer-Lambert dose (dose_z below), same as the mean-field path.
                 alpha = cfg.dill_A + cfg.dill_B  # [1/um]
                 thickness_um = cfg.resist_thickness_nm / 1000.0
                 z_um = torch.linspace(0.0, thickness_um, n_layers, device=d_eff.device)
@@ -1328,7 +1306,6 @@ def _cd_via_full_chem(
                 acid_noisy_3d, quencher_noisy_3d = sample_pag_quencher_acid(
                     dose_z,
                     C=cfg.dill_C,
-                    Q=cfg.dill_Q,
                     pag_density=cfg.pag_density_per_nm3,
                     quencher_density=cfg.quencher_density_per_nm3,
                     dx=dx_nm,
@@ -1346,6 +1323,7 @@ def _cd_via_full_chem(
                     t_bake=cfg.peb_t_bake,
                     sigma_diff=cfg.peb_sigma_diff,
                     dx=dx_nm,
+                    pag_density=cfg.pag_density_per_nm3,  # k_Q [nm³/s] -> k_Q·G0 [1/s]
                 )
             else:
                 acid_noisy_3d, _ = dill_abc_exposure(
@@ -1353,7 +1331,6 @@ def _cd_via_full_chem(
                     A=cfg.dill_A,
                     B=cfg.dill_B,
                     C=cfg.dill_C,
-                    Q=cfg.dill_Q,
                     thickness=cfg.resist_thickness_nm / 1000.0,
                     n_layers=n_layers,
                 )
@@ -1579,6 +1556,28 @@ def run_simulation(
     )
     r0_space = r_space[0]
 
+    # Clear-field (open-frame) intensity reflectivity of the bare mirror,
+    # TE and TM, used below to put the aerial image on the exposure-dose
+    # scale (see SimulationConfig.dose_mj_cm2). TM is only needed for the
+    # RCWA path's unpolarised average but is cheap, so compute both here.
+    _, r_space_tm = reflectivity(
+        ml_stack.n_layers,
+        ml_stack.thicknesses,
+        wl_t,
+        theta0,
+        n_substrate=n_sub,
+        te=False,
+        roughness_nm=cfg.ml_roughness_nm,
+    )
+    R_clear_te = float((abs(r0_space) ** 2).real)
+    R_clear_tm = float((abs(r_space_tm[0]) ** 2).real)
+    if R_clear_te <= 1e-12 or R_clear_tm <= 1e-12:
+        raise ValueError(
+            "Multilayer clear-field reflectivity is ~0 (TE "
+            f"{R_clear_te:.3e}, TM {R_clear_tm:.3e}); the exposure dose is "
+            "defined relative to the open frame and cannot be applied."
+        )
+
     # TMM: absorber-on-ML reflectivity (absorber lines)
     n_ta_c, k_ta_c = table.refractive_index(cfg.absorber_material, energy_eV)
     n_abs = torch.tensor(complex(n_ta_c, k_ta_c), dtype=torch.complex128)
@@ -1623,18 +1622,37 @@ def run_simulation(
                 etched=True,
             ),
         ]
-        # Apply taper/undercut if specified (stored in cfg, not yet implemented)
+        # Absorber taper / undercut are NOT implemented in
+        # build_permittivity_profile (it builds a binary, vertical-sidewall
+        # grating). Refuse non-default values instead of silently ignoring
+        # them (behaviour before 2026-09-04): a parameter that is accepted
+        # and does nothing misrepresents the model.
         if cfg.absorber_taper_deg != 90.0 or cfg.mask_undercut_nm != 0.0:
-            pass  # Taper/undercut grid geometry is not yet implemented in build_permittivity_profile
+            raise NotImplementedError(
+                "absorber_taper_deg / mask_undercut_nm are not implemented in the "
+                "RCWA mask geometry (binary vertical-sidewall grating only); got "
+                f"taper={cfg.absorber_taper_deg}, undercut={cfg.mask_undercut_nm}. "
+                "Use the defaults (90.0, 0.0) or implement the sloped-sidewall "
+                "multi-slice profile in mask3d/geometry.py first."
+            )
 
+        # The RCWA sees the PHYSICAL mask: wafer dimensions × demagnification
+        # (see SimulationConfig.mask_demagnification). Order index m is the
+        # same on both sides -- the mask spatial frequency m/(M·P) maps to
+        # m/P at the wafer -- so the amplitudes feed aerial_from_orders()
+        # with the wafer period unchanged.
+        M_demag = float(cfg.mask_demagnification)
+        if M_demag <= 0.0:
+            raise ValueError(f"mask_demagnification must be > 0, got {M_demag}")
+        period_mask_m = period_m * M_demag
         mask = MaskStack(
             absorber_layers=layers,
             multilayer_bilayers=cfg.ml_n_bilayers,
             d_mo_nm=cfg.ml_d_mo_nm,
             d_si_nm=cfg.ml_d_si_nm,
             substrate_nk=complex(n_si, k_si),
-            period_nm=cfg.period_nm,
-            line_width_nm=cfg.line_width_nm,
+            period_nm=cfg.period_nm * M_demag,
+            line_width_nm=cfg.line_width_nm * M_demag,
         )
 
         eps_profile, thicknesses, eps_sub = build_permittivity_profile(
@@ -1653,7 +1671,7 @@ def run_simulation(
         orders_te = solver.solve(
             eps_profile,
             thicknesses,
-            period_m,
+            period_mask_m,
             n_incident=torch.tensor(
                 [1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128, device=device
             ),
@@ -1671,7 +1689,7 @@ def run_simulation(
         orders_tm = solver_tm.solve(
             eps_profile,
             thicknesses,
-            period_m,
+            period_mask_m,
             n_incident=torch.tensor(
                 [1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128, device=device
             ),
@@ -1682,7 +1700,16 @@ def run_simulation(
         # polarization states.  The physical average is applied AFTER
         # aerial (intensity) reconstruction, NOT on the complex fields
         # (P1 fix, 2026-08-31).  Intensity maps are averaged below.
-        solver_m = torch.arange(-cfg.n_rcwa_orders // 2, cfg.n_rcwa_orders // 2 + 1, device=device)
+        # Order labels MUST be the solver's own m-vector. The previous
+        # expression torch.arange(-cfg.n_rcwa_orders // 2, ...) used Python
+        # floor division (-11 // 2 == -6), producing 12 labels [-6..5] for 11
+        # amplitudes: every RCWA order was mislabelled by one, the 0th order
+        # was imaged as m = -1 (tilted image, TCC-damped to ~0.69 of the
+        # mirror reflectivity for an EMPTY grating). Found 2026-09-04 by the
+        # open-frame dose invariant (tests/test_dose_convention.py); the
+        # earlier RCWA/thin-mask plausibility test tolerated a 0.5-1.2 ratio
+        # and so never caught it.
+        solver_m = solver.m.to(torch.int64)
         order_indices = solver_m.tolist()
     else:
         # Thin-mask analytic Fourier coefficients (existing path)
@@ -1727,7 +1754,11 @@ def run_simulation(
             grid=cfg.grid,
             focus_nm=cfg.focus_nm,
         )
-        aerial = (aerial_te + aerial_tm) / 2.0
+        # Each polarisation is normalised to ITS OWN open-frame intensity
+        # before averaging, so an absorber-free mask yields exactly 1 for
+        # both and the unpolarised image is a clear-field-normalised image.
+        aerial = (aerial_te / R_clear_te + aerial_tm / R_clear_tm) / 2.0
+        clear_field_reflectivity = 0.5 * (R_clear_te + R_clear_tm)
     else:
         aerial = aerial_from_orders(
             amplitudes,
@@ -1740,10 +1771,25 @@ def run_simulation(
             grid=cfg.grid,
             focus_nm=cfg.focus_nm,
         )
+        # Thin-mask path: the Hopkins sum is relative to unit illumination
+        # of the mask (open frame -> |r_ML|²). Divide by the clear-field
+        # reflectivity so an open frame -> 1 (TE, the polarisation the
+        # thin-mask coefficients were computed for).
+        aerial = aerial / R_clear_te
+        clear_field_reflectivity = R_clear_te
 
-    # Normalise to dose (absolute intensity scaling, NOT max-normalisation).
-    # The threshold is a FIXED fraction of the nominal-dose intensity, so the
-    # CD becomes dose-dependent (higher dose -> narrower line for positive resist).
+    # ── Exposure-dose scale ──
+    # aerial is now the normalised image intensity I(x) of Mack's definition
+    # (open frame == 1), so multiplying by the exposure dose gives the
+    # energy density actually delivered to the resist, E·I(x) [mJ/cm²]
+    # (SimulationConfig.dose_mj_cm2 has the citation). This is an absolute
+    # scaling, NOT a max-normalisation: the aerial_threshold model's
+    # threshold is a fixed fraction of the nominal-dose intensity, so CD is
+    # dose-dependent (higher dose -> narrower line for positive resist), and
+    # the full_chem model's Dill exposure and photon counting see the
+    # physical wafer dose. Mirror losses (ml_roughness_nm, ml_n_bilayers,
+    # ...) no longer change the resist dose -- a scanner calibrates dose at
+    # the wafer -- they enter only through the image contrast.
     aerial = aerial * cfg.dose_mj_cm2
 
     # ── 6. CD Extraction from Aerial Image ──────────────────────
@@ -1770,6 +1816,7 @@ def run_simulation(
         absorber_reflectivity=absorber_reflectivity,
         ler_nm=ler_nm,
         lwr_nm=lwr_nm,
+        clear_field_reflectivity=clear_field_reflectivity,
         ler_metadata=ler_metadata,
     )
 

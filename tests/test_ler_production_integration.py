@@ -65,12 +65,22 @@ SEED = 42
 # _car_cfg() now uses the plain SimulationConfig default (dill_Q=0.5,
 # Mack et al. 2011's own real baseline). Re-measured reproducibly
 # (seed=42, se_blur=5, plain _car_cfg() defaults).
-GOLDEN_LEGACY_LER = 0.0860674324  # was 0.2835345566 (pre stochastic-path MackModel wiring)
-GOLDEN_LEGACY_LWR = 0.1297861139  # was 0.2572942674 (pre stochastic-path MackModel wiring)
-GOLDEN_LARGE_N_LER = 0.3251749642  # was 0.3065865934 (pre stochastic-path MackModel wiring)
-GOLDEN_N_EFF = 17.8463  # was 61.3873 (pre stochastic-path MackModel wiring)
-GOLDEN_L_INT_NM = 29.2004  # was 8.3821 (pre stochastic-path MackModel wiring)
-GOLDEN_RHO_TRUNC = 200  # was 61 (pre stochastic-path MackModel wiring)
+TEST_DOSE = 5.5  # mJ/cm² at the wafer, near dose-to-size of the default resist (see _car_cfg)
+# Golden values re-measured 2026-09-04 (Phase 0 of the audit, see CHANGELOG
+# "Fixed (physics)"): wafer-dose convention, absorbed-photon shot noise,
+# dill_B no longer shadowed, dill_Q removed, TEST_DOSE 20 -> 5.5. They are
+# regression pins of the test configuration (seed 42, se_blur 5, P=64),
+# measured with scratchpad/derive_goldens.py -- not calibrated to anything.
+# Previous values (pre-Phase-0): LEGACY_LER 0.0860674324, LEGACY_LWR
+# 0.1297861139, LARGE_N_LER 0.3251749642, N_EFF 17.8463, L_INT_NM 29.2004.
+# The ~9x larger photon-only LER is the expected consequence of counting only
+# the 5.2 % absorbed photons at a 2.3x lower wafer dose (see audit A1/A2).
+GOLDEN_LEGACY_LER = 0.6648028427
+GOLDEN_LEGACY_LWR = 1.2965263709
+GOLDEN_LARGE_N_LER = 2.8802534977
+GOLDEN_N_EFF = 15.7462
+GOLDEN_L_INT_NM = 33.1447
+GOLDEN_RHO_TRUNC = 200
 
 
 def _car_cfg(**kw):
@@ -80,6 +90,19 @@ def _car_cfg(**kw):
         stochastic_n_realisations=1,
         stochastic_seed=SEED,
         se_blur_nm=5.0,
+        # Operating point (2026-09-04): dose_mj_cm2 is now the WAFER dose in
+        # a clear area (pipeline.py SimulationConfig.dose_mj_cm2, Mack 1997)
+        # and the Dill acid yield saturates at 1 (former dill_Q cap removed).
+        # Under these conventions the default Yamamoto-2011 resist prints
+        # the 32 nm line of the default 64 nm pitch near 5.7 mJ/cm² (measured
+        # with se_blur=5: CD 34.0 nm at 5.5, 27.5 at 6.0, 15.5 at 7.0). The
+        # previous implicit 20 mJ/cm² was chosen when the resist saw only
+        # 0.647 × the nominal dose and half the acid; at a true 20 mJ/cm²
+        # the line is fully cleared and there is no edge to measure
+        # (LER/LWR = NaN). NOTE: the deterministic path has no quencher yet;
+        # adding it (Phase 1) is expected to move dose-to-size up by the
+        # dose the quencher neutralises (~3 mJ/cm² for Mack 2011's loading).
+        dose_mj_cm2=TEST_DOSE,
         # dill_Q no longer pinned to 1.0 here (2026-09-03): that override
         # was chosen for the OLD, un-wired full_chem chain, where a
         # non-degenerate result needed dill_Q pushed well past any real
@@ -479,7 +502,7 @@ def test_edge_both_equivalence():
 # ── 20. Deterministic observables unchanged ─────────────────────
 
 def test_deterministic_observables_unchanged():
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0))
+    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE))
     r_st = run_simulation(_car_cfg())
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
@@ -487,7 +510,7 @@ def test_deterministic_observables_unchanged():
 
 def test_deterministic_observables_unchanged_3000():
     """CD/NILS invariance also holds for arbitrary N=3000."""
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0))
+    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE))
     r_st = run_simulation(_car_cfg(stochastic_ler_grid_y=3000))
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
@@ -498,7 +521,16 @@ def test_deterministic_observables_unchanged_3000():
 def test_dose_scaling_consistent():
     aerial = _aerial()
     seeds = (90000, 90001, 90002)
-    doses = (20.0, 40.0, 80.0)
+    # Doses chosen so that this synthetic chain (dose_to_acid, C=0.05, no
+    # PEB) stays in the acid regime C·E_max ≈ 0.6-2.3 in which the slope
+    # range below was established. Since 2026-09-04 _aerial() is clear-field
+    # normalised (x 1/0.647 relative to before), so the former (20, 40, 80)
+    # now saturate the Dill term (C·E_max up to 6) and flatten the slope to
+    # ~-0.17; (13, 26, 52) = (20, 40, 80) x 0.647 restores the same physical
+    # operating point (measured slope -0.54). The slope is regime-dependent
+    # (e.g. -1.0 for (10, 20, 40), whose low point is barely resolved), so
+    # this is a regression pin of an operating point, not a physical law.
+    doses = (13.0, 26.0, 52.0)
 
     def slope_large():
         logd, logl = [], []

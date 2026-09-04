@@ -807,11 +807,11 @@ def ler_estimate(
         # same pipeline.py call site just above this one), and with the
         # per-realization math.isnan(v) filtering a few lines above: report
         # NaN rather than raising, so a caller sweeping a parameter across
-        # a resist's resolution window (e.g. a dose or dill_Q sweep that
+        # a resist's resolution window (e.g. a dose or dill_C sweep that
         # legitimately runs into fully-cleared or fully-unresolved points)
         # gets a well-formed, filterable result instead of an uncaught
         # exception aborting the whole run. Found and fixed 2026-09-04
-        # while repairing notebooks/05_stochastics.ipynb, whose dill_Q
+        # while repairing notebooks/05_stochastics.ipynb, whose (then dill_Q, now dill_C)
         # sweep hits exactly this case at its upper end.
         return LEREstimate(
             ler_nm=float("nan"),

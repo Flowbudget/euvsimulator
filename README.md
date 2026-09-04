@@ -170,7 +170,7 @@
 171|| `03_resist_chain.ipynb` | Dill ABC → PEB reaction-diffusion → Mack development → 1/√D scaling |
 172|| `04_process_window.ipynb` | DoF/EL extraction, MEEF, SE blur/NA sweeps, CSV/PNG export |
 173|| `05_stochastics.ipynb` | Poisson shot noise, LER/LWR extraction, multi-realisation stats, QE sweep |
-174|| `06_mask3d.ipynb` | Thin-mask vs RCWA, taper/undercut, best focus shift, TE/TM |
+174|| `06_mask3d.ipynb` | Thin-mask vs RCWA (mask-scale), best focus shift, TE/TM |
 175|
 176|All notebooks execute cleanly via `jupyter nbconvert --execute` (tested in CI).
 177|
@@ -245,7 +245,7 @@
 246||-----------|--------|
 247|| Project scaffold & CXRO materials | ✅ |
 248|| Multilayer optics (S-matrix TMM) | ✅ |
-249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), integrated via `use_rcwa=True`. ⚠️ `absorber_taper_deg`/`mask_undercut_nm` exist as config fields but are currently silently ignored in the RCWA geometry path (`pipeline.py:1628`, `pass  # Taper/undercut grid geometry is not yet implemented` — verified 2026-09-04; correction of a previous, inaccurate "✅ taper/undercut integrated" claim here) |
+249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), integrated via `use_rcwa=True`; runs at mask scale (`mask_demagnification`, 4×). ⚠️ `absorber_taper_deg`/`mask_undercut_nm` are **not implemented** — non-default values raise `NotImplementedError` (2026-09-04; before that they were silently ignored) |
 250|| Aerial image (Abbe/Hopkins + SE blur) | ✅ |
 251|| High-NA imaging (anamorphic) | ✅ |
 252|| End-to-end pipeline | ✅ |

@@ -113,8 +113,7 @@ def simulate(
     dill_B: float = typer.Option(
         1.06, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, Fallica et al. 2016) suggests this dominates over dill-A"
     ),
-    dill_C: float = typer.Option(0.08997, "--dill-C", help="Photo-rate constant [cm²/mJ]"),
-    dill_Q: float = typer.Option(0.5, "--dill-Q", help="PAG quantum efficiency phi_PAG (probability an already-excited PAG converts to acid, NOT acids-per-photon); Mack et al. 2011 baseline"),
+    dill_C: float = typer.Option(0.08997, "--dill-C", help="Photo-rate constant [cm²/mJ]; includes the PAG quantum efficiency (Mack 2013), no separate Q factor"),
     # PEB options
     peb_D: float = typer.Option(3.3, "--peb-D", help="Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake) unless --peb-sigma-diff overrides it directly"),
     peb_k: float = typer.Option(0.0723, "--peb-k", help="Deprotection rate constant [s⁻¹]; Yamamoto et al. 2011's own Arrhenius fit"),
@@ -145,9 +144,6 @@ def simulate(
     ),
     mask_undercut_nm: float = typer.Option(
         0.0, "--mask-undercut", help="Absorber undercut at ML interface [nm]"
-    ),
-    mask_sidewall_roughness_nm: float = typer.Option(
-        0.0, "--mask-sidewall-roughness", help="Sidewall roughness sigma [nm]"
     ),
     # Mack development options -- defaults match SimulationConfig in pipeline.py;
     # see that file's mack_R_max comment for full sourcing (EUV-native,
@@ -211,7 +207,6 @@ def simulate(
             dill_A=dill_A,
             dill_B=dill_B,
             dill_C=dill_C,
-            dill_Q=dill_Q,
             # PEB parameters
             peb_D=peb_D,
             peb_k=peb_k,
@@ -234,7 +229,6 @@ def simulate(
             use_rcwa=use_rcwa,
             absorber_taper_deg=absorber_taper_deg,
             mask_undercut_nm=mask_undercut_nm,
-            mask_sidewall_roughness_nm=mask_sidewall_roughness_nm,
         )
 
     typer.echo("[>] Running EUV lithography simulation...")
@@ -380,22 +374,18 @@ def process_window(
                 f"CD={result.cd_nm:.2f} nm, NILS={result.nils_value:.3f}"
             )
 
-    # Compute process window metrics
+    # Process-window metrics from the library routine (single definition).
+    # The previous inline copy divided the exposure latitude by the target
+    # CD in nm instead of by the dose (unit error, fixed 2026-09-04); EL is
+    # (dose_max - dose_min)/dose_best x 100 % at best focus, DoF the in-spec
+    # focus range at best dose. metro.process_window expects (N_focus, N_dose).
+    from euvsimulator.metro.process_window import process_window as _pw
+
     lo = target_cd * (1 - tolerance)
     hi = target_cd * (1 + tolerance)
-    in_spec = (cd_matrix >= lo) & (cd_matrix <= hi)
-
-    # Depth of focus
-    dof = 0.0
-    for i in range(dose_steps):
-        f_ok = focuses[in_spec[i]]
-        if len(f_ok) > 1:
-            dof = max(dof, f_ok.max() - f_ok.min())
-
-    # Exposure latitude
-    j_best = int(np.argmax(in_spec.sum(axis=0)))
-    d_ok = doses[in_spec[:, j_best]]
-    el = (d_ok.max() - d_ok.min()) / target_cd * 100 if len(d_ok) > 1 else 0.0
+    pw = _pw(cd_matrix.T, list(doses), list(focuses), target_cd=target_cd, tolerance=tolerance)
+    dof = pw["dof_nm"]
+    el = pw["el_pct"]
 
     # Print ASCII Bossung table
     print()
@@ -722,7 +712,6 @@ def calibrate(
         # Default initial guess for typical EUV CAR resist
         initial_params = {
             "dill_C": 0.08997,  # Yamamoto et al. 2011, EUV-native (see pipeline.py dill_C comment)
-            "dill_Q": 0.5,  # Mack et al. 2011 baseline phi_PAG (see pipeline.py dill_Q comment)
             "peb_k": 0.0723,  # Yamamoto et al. 2011 Arrhenius fit (see pipeline.py peb_k comment)
             "peb_t_bake": 60.0,
             "peb_sigma_diff": 20.0,  # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference" formulations cluster 17-35nm
@@ -745,7 +734,6 @@ def calibrate(
     else:
         bounds = {
             "dill_C": (0.01, 0.2),
-            "dill_Q": (0.1, 2.0),
             "peb_k": (0.05, 2.0),
             "peb_t_bake": (30.0, 120.0),
             "peb_sigma_diff": (1.0, 40.0),  # widened: Anderson et al. 2009 (OSTI 961531) measured real EUV resists up to 38.4nm -- a 20nm cap would have artificially excluded valid fits
@@ -766,7 +754,6 @@ def calibrate(
             grid=128,
             # Resist parameters from calibration
             dill_C=params.get("dill_C", 0.08997),
-            dill_Q=params.get("dill_Q", 0.5),
             peb_k=params.get("peb_k", 0.0723),
             peb_t_bake=params.get("peb_t_bake", 60.0),
             peb_sigma_diff=params.get("peb_sigma_diff", 20.0),

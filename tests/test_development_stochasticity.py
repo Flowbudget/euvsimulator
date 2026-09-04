@@ -64,8 +64,13 @@ SEED = 42
 # pin was also removed (floods the field with the new chain); _car_cfg()
 # now uses the plain SimulationConfig default (dill_Q=0.5). Re-measured
 # reproducibly (seed=42, se_blur=5, plain _car_cfg() defaults).
-GOLDEN_LARGE_N_LER = 0.3251749642  # was 0.3065865934 (pre stochastic-path MackModel wiring)
-GOLDEN_LARGE_N_LWR = 0.6158645956  # was 0.4227482378 (pre stochastic-path MackModel wiring)
+TEST_DOSE = 5.5  # mJ/cm² at the wafer, near dose-to-size of the default resist
+# Re-measured 2026-09-04 (Phase 0: wafer-dose convention, absorbed-photon
+# shot noise, dill_B fix, dill_Q removed, TEST_DOSE 20 -> 5.5); see the note
+# in test_ler_production_integration.py. Previous: LER 0.3251749642,
+# LWR 0.6158645956.
+GOLDEN_LARGE_N_LER = 2.8802534977
+GOLDEN_LARGE_N_LWR = 5.6471533713
 
 
 def _car_cfg(**kw):
@@ -75,6 +80,9 @@ def _car_cfg(**kw):
         stochastic_n_realisations=1,
         stochastic_seed=SEED,
         se_blur_nm=5.0,
+        # Operating point (2026-09-04): wafer-dose convention, see the
+        # matching note in test_ler_production_integration.py::_car_cfg.
+        dose_mj_cm2=TEST_DOSE,
         # dill_Q no longer pinned to 1.0 here (2026-09-03) -- see the
         # matching note in test_ler_production_integration.py's _car_cfg:
         # that override was needed for the OLD, un-wired full_chem chain;
@@ -221,7 +229,8 @@ def test_on_cd_nils_unchanged():
     assert r_off.nils_value == r_on.nils_value
     # and identical to the deterministic (non-stochastic) path
     r_det = run_simulation(SimulationConfig(resist_model="full_chem",
-                                            enable_stochastic=False, se_blur_nm=5.0))
+                                            enable_stochastic=False, se_blur_nm=5.0,
+                                            dose_mj_cm2=TEST_DOSE))
     assert r_det.cd_nm == r_on.cd_nm
     assert r_det.nils_value == r_on.nils_value
 
@@ -258,8 +267,10 @@ def test_legacy_off_golden_unchanged():
     # MackModel wiring (2026-09-03, "mach den stochastischen Pfad auch"
     # -- see the GOLDEN_LARGE_N_LER note above) -- was LER=0.2835345566,
     # LWR=0.2572942674 before this last change.
-    assert abs(r.ler_nm - 0.0860674324) <= 1e-9
-    assert abs(r.lwr_nm - 0.1297861139) <= 1e-9
+    # Re-measured 2026-09-04 (Phase 0, see the GOLDEN note above); previous
+    # values LER=0.0860674324, LWR=0.1297861139.
+    assert abs(r.ler_nm - 0.6648028427) <= 1e-9
+    assert abs(r.lwr_nm - 1.2965263709) <= 1e-9
 
 
 def test_legacy_mode_applies_development_switch():

@@ -350,6 +350,7 @@ def reaction_diffusion_with_quenching(
     t_bake: float,
     sigma_diff: float | torch.Tensor | None = None,
     dx: float = 1.0,
+    pag_density: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """PEB with explicit acid-base quenching, for the sampled-PAG/quencher path.
 
@@ -412,12 +413,21 @@ def reaction_diffusion_with_quenching(
         Deprotection rate constant [s⁻¹], same role as elsewhere in
         this codebase.
     quench_rate : float
-        Acid-base quenching rate constant [nm³/s] (Mack et al. 2011
-        Table I: 15 nm³/s -- note the unusual units, a bimolecular rate
-        constant in a volume-normalised relative-concentration
-        formulation, not per-molar).
+        Bimolecular acid-base quenching rate constant k_Q [nm³/s] (Mack,
+        Biafore & Smith 2011, Proc. SPIE 7972, Table I: 15 nm³/s). It acts
+        on NUMBER densities, dH/dt = −k_Q·H·Q. This function works with
+        RELATIVE concentrations h = H/G0, q = Q/G0, for which the same
+        kinetics read dh/dt = −(k_Q·G0)·h·q -- Mack et al. 2011 state the
+        baseline value explicitly as "k_Q·G0 = 3 s⁻¹". The conversion
+        therefore needs *pag_density* (G0); passing k_Q unconverted (the
+        behaviour before 2026-09-04) made the reaction G0⁻¹ = 5× too fast
+        (docs/audit_2026-09-04_vollpruefung.md, A4).
     t_bake : float
         Bake time [s].
+    pag_density : float
+        Initial PAG number density G0 [nm⁻³] used to normalise *acid* and
+        *quencher*. Required (no default): the rate conversion is
+        meaningless without it.
 
     Returns
     -------
@@ -451,7 +461,14 @@ def reaction_diffusion_with_quenching(
     # the sampled discreteness), then diffuse the reacted result
     # (representing the post-neutralisation acid profile spreading
     # during the remainder of the bake).
-    A_quenched, Q_final = _reaction_limited_quench(acid, quencher, quench_rate, t_bake)
+    if pag_density is None or pag_density <= 0.0:
+        raise ValueError(
+            "pag_density (G0, nm^-3) is required to convert k_Q [nm^3/s] to the "
+            "relative-concentration rate k_Q*G0 [1/s]; got "
+            f"{pag_density!r}"
+        )
+    rate_rel = float(quench_rate) * float(pag_density)  # k_Q·G0 [1/s]
+    A_quenched, Q_final = _reaction_limited_quench(acid, quencher, rate_rel, t_bake)
 
     blur_sigma = None
     if sigma_diff is not None and sigma_diff > 0:

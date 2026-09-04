@@ -150,6 +150,7 @@ def build_permittivity_profile(
     stack: MaskStack,
     n_samples: int = 1024,
     device: str = "cpu",
+    energy_eV: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Build the permittivity profile and layer thicknesses for RCWA.
 
@@ -164,6 +165,9 @@ def build_permittivity_profile(
     n_samples : int
         Spatial samples per period.
     device : str
+    energy_eV : float, optional
+        Photon energy for the Mo/Si constants of the effective substrate
+        permittivity. Defaults to ``constants.EUV_ENERGY_EV`` (13.5 nm).
 
     Returns
     -------
@@ -172,7 +176,12 @@ def build_permittivity_profile(
     layer_thicknesses : (1,) float64 [m]
         Absorber layer thicknesses.
     substrate_eps : () complex128
-        Effective permittivity of the multilayer substrate (blanket).
+        Thickness-weighted average Mo/Si permittivity -- a homogeneous
+        stand-in for the multilayer, NOT its Bragg response. The pipeline
+        does not use it (it passes the real ML stack as an order-diagonal
+        TMM operator to the RCWA solver); it is kept for callers that want
+        a bulk-substrate approximation. Constants come from the CXRO table
+        (previously hard-coded Mo/Si n,k literals).
     """
     period_m = stack.period_nm * 1e-9
     line_m = stack.line_width_nm * 1e-9
@@ -192,9 +201,15 @@ def build_permittivity_profile(
     eps = torch.full_like(x, space_eps, dtype=torch.complex128)
     eps[mask] = complex(line_eps)
 
-    # Effective substrate permittivity (weighted average Mo/Si)
-    n_mo, k_mo = 0.9238, 0.00637
-    n_si, k_si = 0.999, 0.00183
+    # Effective substrate permittivity (thickness-weighted average Mo/Si),
+    # optical constants from the CXRO table at the requested energy.
+    from euvsimulator.constants import EUV_ENERGY_EV
+    from euvsimulator.materials import CXROTable
+
+    table = CXROTable()
+    e_ev = EUV_ENERGY_EV if energy_eV is None else float(energy_eV)
+    n_mo, k_mo = table.refractive_index("Mo", e_ev)
+    n_si, k_si = table.refractive_index("Si", e_ev)
     d_mo, d_si = stack.d_mo_nm, stack.d_si_nm
     eps_mo = complex(n_mo + k_mo * 1j) ** 2
     eps_si = complex(n_si + k_si * 1j) ** 2

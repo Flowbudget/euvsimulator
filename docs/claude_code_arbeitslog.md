@@ -1789,3 +1789,90 @@ Kein Code, kein Parameter geändert. Drei getrennte Baustellen, jede mit Optione
    Kinetik), keine mechanische Korrektur.
 
 ---
+
+## 2026-09-04 (Fortsetzung 11): Phase 0 — Fundament (Dosisskala, Photonenzählung, Q, k_Q·G₀, tote Parameter) — und drei dabei gefundene Bugs
+
+Mandat des Nutzers: „Folge deinem Plan … falsifiziere … baue keine hardcodierten Werte ein, die
+die Physik zum Laufen bringen." Vorgehen je Punkt: Vorhersagen → Monkey-Test → Code → Invariantentest.
+
+### 0.1 Dosis-Konvention (Audit A2) — umgesetzt
+
+Primärquelle: Mack, *Inside PROLITH* (1997), Kap. 9: „Let E be the nominal exposure energy
+(i.e., the intensity in a large clear area times the exposure time), I(x) the normalized image
+intensity … the exposure energy as a function of position within the resist is just E·I(x)·I(z)."
+Preflight (`preflight_dosenorm.py`, alle 5 Vorhersagen erfüllt): offene Maske → 1,000; aerial_threshold
+CD/NILS bitgleich; full_chem CD(neu, 0,647·D) = CD(alt, D); Photon-LWR bitgleich bei gleicher
+Wafer-Dosis; Dosis-zu-Größe P=44 → **15,04 mJ/cm²** (Vesters 8–16).
+Code: `run_simulation` teilt das Hopkins-Bild durch |r_ML|² (TE; RCWA: TE/TM getrennt), neues
+Ergebnisfeld `clear_field_reflectivity`, Guard gegen |r|²→0, `dose_mj_cm2` dokumentiert.
+Tests: `tests/test_dose_convention.py` (offene Maske = Dosis; unabhängig von Spiegelverlusten;
+Photonenzahl = D·A·f/E; RCWA = Dünnmaske im offenen Feld; Guard).
+
+### Dabei gefunden: zwei RCWA-Bugs (beide vor diesem Tag in jedem `use_rcwa=True`-Lauf wirksam)
+
+- **Ordnungs-Beschriftung um eins verschoben.** `torch.arange(-cfg.n_rcwa_orders // 2, …)`:
+  Python-Floor-Division gibt für 11 Ordnungen die 12 Labels −6…5; die 0. Ordnung wurde als
+  m = −1 abgebildet und von der TCC auf 0,692 gedämpft (offene Maske: 6,92 statt 10,0).
+  Der alte Plausibilitätstest (`ratio in [0.5, 1.2]`) hat das toleriert. Fix: `solver.m`.
+- **RCWA auf Wafer- statt Maskenskala.** Periode 64 nm → ±1. Ordnungen bei +18°/−6°, wo die
+  Mo/Si-Bragg-Reflektivität 0,08 statt 0,65 beträgt (gemessen: 0°/6°: 0,647; 9°: 0,58;
+  12°: 0,16; 18°: 0,08) → ±1-Asymmetrie **10,8×**. Auf Maskenskala (256 nm, ±1 bei +9°/+3°):
+  1,19× (physikalische Abschattung). `constants.DEMAGNIFICATION` existierte, wurde nie benutzt.
+  Fix: neues Feld `mask_demagnification = 4.0` (dokumentiert, 1D-x-Skala auch für High-NA
+  korrekt), Gitter und Solver auf M·P. RCWA/Dünnmaske-Mittelwertverhältnis 0,82 → 0,95, CD
+  25,16 → 27,46 (Dünnmaske 27,58). Das RCWA-Bild bleibt bei 6° asymmetrisch (Musterverschiebung
+  ~3,8 nm) — Physik, nicht Bug; ein zunächst geschriebener Symmetrie-Test war falsch und wurde
+  durch einen Maskenskalen-/Asymmetrie-Test (Grenze 2, Regime 5× getrennt) ersetzt.
+
+### 0.2 Absorbierte Photonen (Audit A1) — umgesetzt
+
+`absorption = 1 − exp(−(A+B)·t)` an `photon_deposition_shot_noise` durchgereicht (Mack/Biafore/
+Smith 2011: n_abs = D·α·V/E_ph). Säulen-Gesamtstatistik exakt, Tiefenabhängigkeit des relativen
+Rauschens nicht aufgelöst (dokumentiert). Tests: `tests/test_photon_absorption.py` (rel. Rauschen
+= 1/√(N·η) für η = 1/0,25/0,05; Pipeline übergibt η; η konsistent mit Tiefenprofil).
+
+### Dabei gefunden: `dill_B` wurde nie benutzt
+
+`dill_abc_exposure` entpackte `B, H, W = dose.shape` — die Batchgröße (1) **überschrieb den
+Dill-B-Parameter**: α = A + 1,0 µm⁻¹ unabhängig vom konfigurierten `dill_B`. Gefunden durch den
+Konsistenztest η ↔ Tiefenprofil (erwartet 0,0564, gemessen 0,0535 → α = 1,10 = 0,1 + 1). Fix:
+`n_batch`. Folge: alle bisherigen full_chem-Ergebnisse liefen mit α = 1,0 statt 1,06 (6 %), und
+mein z-Diffusions-Monkey-Test in Fortsetzung 10 („dill_B = 8") lief faktisch mit B = 1 — sein
+Null-Ergebnis ist damit nicht belastbar und wird in Phase 2 wiederholt.
+
+### 0.3 Q-Doppelzählung (Audit A5) — `dill_Q` entfernt
+
+`acid = 1 − M` (Mack 2013 Gl. 10; φ_PAG in C, Gl. 8). Feld, Validierung, drei Aufrufstellen,
+CLI-Option, Kalibrier-Startwerte/-Grenzen, `sample_pag_quencher_acid`-Parameter entfernt;
+Notebook 05 §10 von `dill_Q`- auf `dill_C`-Sweep umgeschrieben; Tests: Konfiguration **lehnt**
+`dill_Q` ab (TypeError), Säureausbeute sättigt bei 1.
+
+### 0.3b k_Q·G₀ (Audit A4-Einheiten) — umgesetzt
+
+`reaction_diffusion_with_quenching` verlangt jetzt `pag_density` und rechnet intern
+k_Q·G₀ = 15 nm³/s · 0,2 nm⁻³ = 3 s⁻¹ (Mack 2011, Z. 555 wörtlich). Test `tests/test_quench_units.py`
+(geschlossene Form gegen k_Q·G₀; ≠ unkonvertiert; Erhaltung h−q; Gleichkonzentrationsfall 1/(1+h₀rt)).
+
+### 0.4 Tote Parameter, Magic Numbers, ehrliche Fehler
+
+- `resist_threshold` und `mask_sidewall_roughness_nm` (nie gelesen) entfernt, inkl. CLI.
+- `nominal_dose = 20.0` (2×) → `AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2` mit Erklärung
+  (Modelldefinitions-Konstante, keine Physik).
+- Taper/Undercut: `pass` → `NotImplementedError` bei Nicht-Default (Mandat §12).
+- `geometry.py`: hart codierte Mo/Si-n,k → CXRO-Tabelle; `eps_sub` als Bulk-Näherung dokumentiert.
+
+### Konsequenz für den Arbeitspunkt — und eine falsifizierbare Vorhersage für Phase 1
+
+Mit Wafer-Konvention und Säure bis 1 druckt der Yamamoto-Default die 32-nm-Linie (P=64,
+se_blur 5) bei **≈5,7 mJ/cm²** (CD 34,0 bei 5,5; 27,5 bei 6,0), bei P=44 bei ≈7 — unter Vesters'
+8–16. Das ist **kein** Anlass zum Parameterdrehen: der deterministische Pfad hat noch keinen
+Quencher. Mack 2011 (Z. 468): „for the parameters of Table I, δ₀ = 0 requires a dose of
+3.43 mJ/cm²" — die Dosis, die der Quencher neutralisiert. **Vorhersage:** Quenching konsistent in
+beiden Pfaden (Phase 1) hebt die Dosis-zu-Größe um ≈3 mJ/cm² auf ≈9–10 (P=44) — ohne
+Parameteränderung. Wird in Phase 1 vorab als Preflight geprüft.
+
+Test-Arbeitspunkt der stochastischen Regressionstests deshalb von (implizit) 20 auf
+`TEST_DOSE = 5.5` gesetzt (bei 20 ist die Linie weggebelichtet, LER = NaN); Golden-Werte neu
+abgeleitet (reine Messung der Testkonfiguration, siehe Commit).
+
+---

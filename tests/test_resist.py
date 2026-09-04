@@ -125,14 +125,21 @@ class TestDillABCExposure:
         acid2, _ = dill_abc_exposure(dose_map, A=0.1, n_layers=3)
         assert not torch.allclose(acid1, acid2)
 
-        # Also test C and Q with single layer
+        # Also test C with single layer
         acid3, _ = dill_abc_exposure(dose_map, C=0.5, n_layers=1)
         acid4, _ = dill_abc_exposure(dose_map, C=0.1, n_layers=1)
         assert not torch.allclose(acid3, acid4)
 
-        acid5, _ = dill_abc_exposure(dose_map, Q=0.5, n_layers=1)
-        acid6, _ = dill_abc_exposure(dose_map, Q=0.1, n_layers=1)
-        assert not torch.allclose(acid5, acid6)
+        # B must be respected (before 2026-09-04 it was shadowed by the
+        # batch-size unpack and silently ignored).
+        acid_b1, _ = dill_abc_exposure(dose_map, A=0.0, B=1.0, n_layers=3)
+        acid_b2, _ = dill_abc_exposure(dose_map, A=0.0, B=8.0, n_layers=3)
+        assert not torch.allclose(acid_b1, acid_b2)
+
+        # A separate quantum-efficiency factor no longer exists (it
+        # double-counted phi_PAG, which lives inside C -- Mack 2013 Eq. 8).
+        with pytest.raises(TypeError):
+            dill_abc_exposure(dose_map, Q=0.5, n_layers=1)
 
     def test_z_positions(self, dose_map: torch.Tensor):
         """Custom z positions are respected."""

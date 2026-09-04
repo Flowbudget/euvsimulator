@@ -11,7 +11,6 @@ def test_full_chem_params_passed_through():
     cfg = SimulationConfig(
         resist_model="full_chem",
         dill_C=0.1,
-        dill_Q=0.5,
         peb_k=0.25,
         peb_t_bake=90.0,
         peb_sigma_diff=3.0,
@@ -22,7 +21,6 @@ def test_full_chem_params_passed_through():
         grid=128,
     )
     assert cfg.dill_C == 0.1
-    assert cfg.dill_Q == 0.5
     assert cfg.peb_k == 0.25
     assert cfg.peb_t_bake == 90.0
     assert cfg.peb_sigma_diff == 3.0
@@ -108,7 +106,11 @@ def test_both_paths_produce_reasonable_cd():
     see pipeline.py's "RESOLVED" note above mack_R_max/mack_R_min).
     """
     cfg1 = SimulationConfig(resist_model="aerial_threshold", grid=128)
-    cfg2 = SimulationConfig(resist_model="full_chem", grid=128)
+    # full_chem at its own dose-to-size (wafer-dose convention, acid yield
+    # saturating at 1 -- 2026-09-04): the default resist prints the 32 nm
+    # line near 5.7 mJ/cm²; at the aerial_threshold model's reference dose
+    # of 20 it is fully cleared (CD = 0), which is physics, not a failure.
+    cfg2 = SimulationConfig(resist_model="full_chem", grid=128, dose_mj_cm2=5.5)
 
     r1 = run_simulation(cfg1)
     r2 = run_simulation(cfg2)
@@ -199,23 +201,31 @@ def test_validation_rejects_invalid_params():
         pass
 
 
-def test_default_dill_q_is_mack_2011_baseline():
-    """Regression: dill_Q default must stay pinned to its cited source.
+def test_dill_q_no_longer_exists():
+    """Regression against re-introducing a separate acid-yield factor.
 
-    2026-09-03: dill_Q's default is Mack, Biafore & Smith 2011's own
-    baseline PAG quantum efficiency (phi_PAG, J. Micro/Nanolith. MEMS
-    MOEMS 10(3), 033019, Table 2) -- see pipeline.py's dill_Q comment for
-    the full derivation (this codebase's dill_Q corresponds to phi_PAG,
-    not the "acid yield"/FQY that EUV-resist chemistry papers usually
-    report). Superseded an earlier, uncited 0.04 default (and, before
-    that, a stray 1.0) once the depth-resolved MackModel chain made this
-    real, cited value actually produce a non-degenerate result.
+    2026-09-04: the former ``dill_Q`` multiplied the Dill acid yield,
+    acid = Q·(1 − e^{−C·E}), capping it at 0.5. In Mack's EUV exposure
+    model (2013, Eqs. 8/10) the PAG quantum efficiency is a factor inside
+    C, and the yield saturates at 1; the PROLITH-fitted dill_C already
+    contains it. A separate Q double-counted φ_PAG and acted as a hidden
+    calibration knob. The config must reject it outright rather than
+    silently accept and ignore it.
     """
-    cfg = SimulationConfig()
-    assert cfg.dill_Q == 0.5, (
-        f"SimulationConfig().dill_Q = {cfg.dill_Q}, expected 0.5 "
-        "(Mack et al. 2011 baseline phi_PAG, see pipeline.py dill_Q comment)."
-    )
+    with pytest.raises(TypeError):
+        SimulationConfig(dill_Q=0.5)
+    assert not hasattr(SimulationConfig(), "dill_Q")
+
+
+def test_acid_yield_saturates_at_one():
+    """acid = 1 − exp(−C·E) -> 1 for E -> ∞ (Mack 2013 Eq. 10); a
+    prefactor < 1 would show up as a lower plateau."""
+    from euvsimulator.resist.exposure import dill_abc_exposure
+
+    dose = torch.full((2, 2), 1e6, dtype=torch.float64)
+    acid, inhib = dill_abc_exposure(dose, A=0.0, B=1.06, C=0.09, thickness=0.05, n_layers=2)
+    assert float(acid.min()) == pytest.approx(1.0, abs=1e-9)
+    assert float(inhib.max()) == pytest.approx(0.0, abs=1e-9)
 
 
 if __name__ == "__main__":

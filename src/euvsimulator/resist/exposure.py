@@ -54,7 +54,6 @@ def dill_abc_exposure(
     A: float | torch.Tensor = 0.5,
     B: float | torch.Tensor = 0.2,
     C: float | torch.Tensor = 0.1,
-    Q: float | torch.Tensor = 0.1,
     z_positions: torch.Tensor | None = None,
     thickness: float = 0.1,
     n_layers: int = 1,
@@ -73,10 +72,12 @@ def dill_abc_exposure(
     B : float or torch.Tensor
         Non-bleachable absorption coefficient [1/µm].  Default 0.2.
     C : float or torch.Tensor
-        Photo-rate constant [cm²/mJ].  Default 0.1 (realistic for EUV CAR).
-    Q : float or torch.Tensor
-        Quantum efficiency — maximum acid yield per absorbed photon.
-        Default 0.1 (typical for EUV CAR).  NOT the same as A!
+        Photo-rate constant [cm²/mJ]. In an EUV CAR it already contains the
+        PAG quantum efficiency (Mack 2013, "Stochastic exposure kinetics of
+        EUV photoresists: Trapping model", Eq. 8: C ∝ φ_PAG·σ·…), so the
+        acid yield is 1 − exp(−C·E) with no separate prefactor (Eq. 10).
+        A former ``Q`` argument that multiplied this yield double-counted
+        φ_PAG and was removed 2026-09-04.
     z_positions : torch.Tensor, optional
         Depth positions in [µm] along the resist thickness.  Shape ``(N,)``.
         If ``None``, ``n_layers`` equally spaced positions are used.
@@ -106,7 +107,13 @@ def dill_abc_exposure(
     else:
         raise ValueError(f"Expected 2D or 3D dose, got {dose.ndim}D")
 
-    B, H, W = dose.shape
+    # NOTE: do not unpack the batch size into a variable named ``B`` -- that
+    # is the Dill B parameter. Before 2026-09-04 this line read
+    # ``B, H, W = dose.shape``, silently replacing dill_B by the batch size
+    # (1 for a 2D dose map), so the absorption coefficient was A + 1.0 µm⁻¹
+    # regardless of the configured dill_B. Found by
+    # tests/test_photon_absorption.py::test_absorbed_fraction_uses_same_coefficient_as_depth_profile.
+    n_batch, H, W = dose.shape
 
     # depth positions
     if z_positions is None:
@@ -124,10 +131,10 @@ def dill_abc_exposure(
     # --- inhibitor concentration M(z,t) ---
     inhibitor = torch.exp(-C * dose_z)
 
-    # --- acid concentration [H⁺] ---
-    # Correct: acid = Q * (1 - M), where Q is quantum efficiency (max acid yield).
-    # A is the bleachable absorption coefficient (1/µm), NOT a concentration!
-    acid = Q * (1.0 - inhibitor)
+    # --- acid concentration [H⁺] relative to the initial PAG density ---
+    # acid = 1 - M: the fraction of PAG converted (Mack 2013, Eq. 10).
+    # A is the bleachable absorption coefficient (1/µm), NOT a concentration.
+    acid = 1.0 - inhibitor
 
     # restore input dims: (N, H, W) for 2D input, (B, N, H, W) for batched
     if not has_batch:
@@ -149,14 +156,13 @@ def sample_pag_quencher_acid(
     quencher_density: float,
     dx: float,
     dz: float,
-    Q: float | torch.Tensor = 1.0,
     dy: float | None = None,
     rng: torch.Generator | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Sample discrete PAG/quencher acid generation (molecular shot noise).
 
-    ``dill_abc_exposure``/``dose_to_acid`` compute the MEAN-FIELD acid
-    concentration, ``acid = Q*(1-exp(-C*dose))`` -- correct in the limit
+    ``dill_abc_exposure`` computes the MEAN-FIELD acid
+    concentration, ``acid = 1-exp(-C*dose)`` -- correct in the limit
     of infinitely many PAG molecules per voxel, but EUV lithography's
     whole "stochastics problem" is that a real voxel does not have
     infinitely many: a 92 eV photon absorption event converts one of a
@@ -169,11 +175,12 @@ def sample_pag_quencher_acid(
         n_PAG ~ Poisson(rho_PAG * V_voxel)          -- molecules actually
                                                           present, not just
                                                           their mean
-        p_convert = Q * (1 - exp(-C * dose_z))       -- same Dill-C
+        p_convert = 1 - exp(-C * dose_z)           -- same Dill-C
                                                           conversion
                                                           probability as
                                                           the mean-field
-                                                          model
+                                                          model (phi_PAG
+                                                          is inside C)
         n_acid ~ Binomial(n_PAG, p_convert)          -- each present PAG
                                                           independently
                                                           converts or not;
@@ -199,15 +206,6 @@ def sample_pag_quencher_acid(
     C : float or torch.Tensor
         Dill photo-rate constant [cm²/mJ] -- same parameter and same
         physical role as in the mean-field model.
-    Q : float or torch.Tensor
-        PAG quantum efficiency (Mack's phi_PAG -- see pipeline.py's
-        dill_Q comment for the full derivation of why this codebase's
-        dill_Q corresponds to phi_PAG, not the unrelated "film quantum
-        yield"): the per-molecule probability that an already-excited
-        PAG actually converts, applied identically to the mean-field
-        model's Q*(1-exp(-C*dose)). Default 1.0 (no additional loss) --
-        pipeline.py's stochastic block always passes cfg.dill_Q
-        explicitly; the default here is for standalone/test use.
     pag_density : float
         Initial PAG number density [nm⁻³]. Real, cited EUV-native value:
         Mack, Biafore & Smith, "Stochastic Acid-Base Quenching in
@@ -245,7 +243,7 @@ def sample_pag_quencher_acid(
     mean_quencher = quencher_density * voxel_volume
 
     n_pag = torch.poisson(torch.full_like(dose_z, mean_pag), generator=rng)
-    p_convert = torch.clamp(Q * (1.0 - torch.exp(-C * dose_z)), 0.0, 1.0)
+    p_convert = torch.clamp(1.0 - torch.exp(-C * dose_z), 0.0, 1.0)
     n_acid = torch.binomial(n_pag, p_convert, generator=rng) if hasattr(torch, "binomial") else _binomial_fallback(n_pag, p_convert, rng)
     n_quencher = torch.poisson(torch.full_like(dose_z, mean_quencher), generator=rng)
 

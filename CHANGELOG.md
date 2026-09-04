@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed (physics — Phase 0 of the 2026-09-04 audit, see `docs/audit_2026-09-04_vollpruefung.md`)
+- **Exposure-dose convention.** `dose_mj_cm2` is now the wafer dose in a clear area (Mack 1997):
+  the aerial image is divided by the multilayer's clear-field reflectivity (|r_ML|² ≈ 0.647 for
+  the default stack), so an open frame delivers exactly the nominal dose. Previously the resist
+  saw 0.647 × the nominal dose and every dose-to-size comparison with the literature was off by
+  that factor. New result field `clear_field_reflectivity`.
+- **Photon shot noise on absorbed photons.** The stochastic path now samples the absorbed
+  fraction 1 − exp(−(A+B)·t) of the incident photons (5.2 % for the default film) instead of all
+  of them; photon-shot-noise LWR was under-estimated 4.4× (linear) to 7.9× (measured).
+- **`dill_B` was silently ignored** (`B, H, W = dose.shape` shadowed the parameter); the
+  absorption coefficient was A + 1.0 µm⁻¹ regardless of configuration.
+- **RCWA order labels off by one** (floor division) and **RCWA run at wafer instead of mask
+  scale** (±1 orders hit the mirror outside its Bragg acceptance, 10.8× order asymmetry instead of
+  the physical ≈1.2×). New `mask_demagnification` (default 4×).
+- **Quench rate units:** k_Q [nm³/s] is converted to k_Q·G0 [1/s] for relative concentrations
+  (Mack 2011: 3 s⁻¹, not 15).
+- `absorber_taper_deg` / `mask_undercut_nm` now raise `NotImplementedError` instead of being
+  silently ignored.
+
+### Removed
+- `dill_Q` (config field, CLI `--dill-Q`, calibration parameter): it double-counted the PAG
+  quantum efficiency, which lives inside Dill C (Mack 2013, Eqs. 8/10), and capped the acid yield
+  at 0.5. The acid yield is now 1 − exp(−C·E). `SimulationConfig(dill_Q=...)` raises.
+- `resist_threshold`, `mask_sidewall_roughness_nm`: accepted but never read.
+
 ### Changed
 - Repository layout: 110+ historical audit/session reports moved out of the repository root
   (recoverable from git history; index in `docs/history/README.md`); third-party reference
