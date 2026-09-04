@@ -1603,3 +1603,189 @@ Ein Fix erfordert eine Entscheidung über die Parameterbasis, nicht über den Co
 Kein Code, kein Parameter geändert. Verifikationsskripte lagen im Scratchpad, nicht im Repo.
 
 ---
+
+## 2026-09-04 (Fortsetzung 10): Ursache der Überrauheit isoliert — PEB-Blur auf der steilen Flanke der Kontrastverlust-Kurve; Q-Fix-Hypothese aus Fortsetzung 9 als LWR-Ursache widerlegt
+
+Auftrag: "finde zuerst heraus warum das model zuviel rauschen erzeugt" — vor jeder
+Code-Änderung. Vorgehen durchgehend nach der Preflight-Methodik: Vorhersagen vorab
+schriftlich, Messung per Monkey-Patch durch die echte Pipeline, kein Repo-Code geändert.
+Alle Skripte im Scratchpad (`preflight_qfix.py`, `blur_diagnose.py`, `blur_diagnose_v2.py`,
+`left_flank.py`, `mechanism_check.py`, `edge_saturation.py`, `mean_mismatch.py`).
+
+### 1. Preflight des Q-Fixes (`acid = Q·(1−M)` → `acid = 1−M`, Q=1,0 an beiden Aufrufstellen)
+
+Vier vorab festgelegte Vorhersagen, Ergebnis **1 von 4**:
+
+| | Vorhersage | Ergebnis |
+|---|---|---|
+| P1 | Dosisfenster fällt in Vesters' 8–16 mJ/cm² | **erfüllt**: Dosis-zu-Größe 10,25–10,5 (vorher 24) |
+| P2 | Großzahlgrenzfall konvergiert gegen det. CD | nicht erfüllt: CD 17,19 bei allen ρ_PAG, det. 20,28 |
+| P3 | Vorglättung kollabiert nicht mehr auf 0 | nicht erfüllt: weiterhin exakt 0,0 |
+| P4 | LWR bessert sich ~√2 | **widerlegt, Gegenrichtung**: Konfig C 5,29 → 6,01; A 1,63 → 2,75 |
+
+Die LWR-Zunahme ist physikalisch stimmig (niedrigere korrekte Dosis → weniger Photonen →
+1/√Dosis: 1,63·√(24/10,5) = 2,46 vs. gemessen 2,75). **Die Ursachenanalyse aus Fortsetzung 9
+("fehlender Spielraum über der Quencher-Schwelle erzeugt die Überrauheit") ist damit als
+LWR-Ursache widerlegt** — der Spielraum wurde verdreifacht, die Rauheit sank nicht. Der
+Q-Fix bleibt eine eigenständig belegte Korrektur (Mack 2013 Gl. 8/10, φ_PAG steckt in C,
+Doppelzählung), löst aber das Rauschproblem nicht. Nicht umgesetzt.
+
+### 2. Analytische Vorhersage: Blur-Länge gegen Pitch
+
+`σ_diff = √(2·peb_D·t_bake) = √(2·3,3·60) = 19,9 nm`, plus `se_blur_nm = 5,0` →
+`σ_tot = 20,5 nm` bei Pitch 44 nm. Gauß-MTF bei der Grundfrequenz:
+`exp(−2π²σ²/P²)` = **1,4 %** Restkontrast (linear). Derselbe Blur dämpft unkorreliertes
+Voxelrauschen nur ∝ 1/σ. Also `LWR ∝ (1/σ)·exp(+2π²σ²/P²)` mit Minimum bei
+**σ_opt = P/(2π) = 7,0 nm** (P=44) bzw. 10,2 nm (P=64). Vorhergesagte Verstärkung
+19,9 nm gegenüber Optimum: Faktor 12 (linear, ohne Dill/Mack-Nichtlinearität).
+
+### 3. Messung (Konfig C, exposure_stochasticity), CD konstant gehalten
+
+`blur_diagnose_v2.py`: je σ zuerst Dosis-zu-Größe (CD=22, deterministisch, `se_blur_nm=5`
+in **allen** Läufen — v1 hatte hier 0 vs. 5 gemischt und CD von 21,3 auf 15,5 driften
+lassen; verworfen), dann LWR dort. grid=256, ler_grid_y=2048, 3 Realisierungen, Seed 42.
+
+| σ_PEB | σ_tot | MTF | LWR [nm] | n_eff |
+|---|---|---|---|---|
+| 1,0 | 5,1 | 0,77 | 0,014 | 1104 (degeneriert, s. §5) |
+| 3,0 | 5,8 | 0,71 | 5,00 | 51,8 |
+| 5,0 | 7,1 | 0,60 | 2,95 | 25,6 |
+| **7,0** | **8,6** | 0,47 | **1,78** | 19,8 |
+| 9,0 | 10,3 | 0,34 | 1,85 | 14,9 |
+| 12,0 | 13,0 | 0,18 | 2,01 | 12,4 |
+| 16,0 | 16,8 | 0,057 | 4,50 | 12,5 |
+| **19,9 (Default)** | **20,5** | 0,014 | **6,60** | 12,1 |
+
+U-Kurve bestätigt, Minimum bei σ_tot = 8,6 nm (Vorhersage 7,0), **Default 3,7× über dem
+Minimum**. Am Minimum liegt das LWR mit 1,78 nm **unter** dem Zielband 2,17–3,43 nm.
+Gemessener Säure-Restkontrast nach PEB bei σ=19,9: 10 % (nicht 1,4 % — Dill-Sättigung
+und tiefenaufgelöste Absorption regenerieren Kontrast; die lineare Formel ist im
+Bereich σ_tot 7–15 nm quantitativ auf ±35 % richtig, an den Rändern nur qualitativ).
+
+### 4. Falsifikation des Mechanismus (`mechanism_check.py`) — alle 4 Vorhersagen erfüllt
+
+Wenn die Ursache Kontrastverlust ist, muss sie (a) für **jede** Rauschquelle gelten und
+(b) mit dem Pitch skalieren:
+
+- **Konfig A (nur Photonenrauschen, kein Quencher, keine Spikes), P=44**: LWR
+  0,44 / 0,33 / 0,34 / 0,48 / 0,62 / 1,02 / 1,32 nm für σ_PEB 3/5/7/9/12/16/19,9.
+  Minimum bei σ_tot = **7,07 nm** (Vorhersage 7,0). Default **4,0×** über dem Minimum.
+- **Konfig C, P=64 (Default-Geometrie)**: Minimum bei σ_tot = 11,2 nm (Vorhersage 10,2),
+  Default nur **1,8×** über dem Minimum — erklärt, warum das Problem bei der
+  Default-Geometrie weniger auffiel.
+
+Das ist der Kernbefund: **die Überrauheit ist keine Eigenschaft der PAG/Quencher-
+Diskretheit, sondern der Blur-Länge relativ zum Pitch.** Jede Rauschquelle wird bei
+σ_tot = 20,5 nm / P = 44 nm um ~4× verstärkt, weil der Kantengradient kollabiert und
+Mack (n=18,2) den Restkontrast samt Rauschen wieder hochzieht.
+
+### 5. Linke Flanke ist kein Physik-Effekt (`left_flank.py`, `mean_mismatch.py`)
+
+Feinraster σ_PEB 1–5 mit Gitterkontrolle (grid 256 vs. 512, Linienlänge konstant):
+LWR bei σ=2/3/5: 1,55/5,00/2,95 vs. 1,64/4,56/2,13 — gitterunabhängig auf ±10–30 %.
+σ=1,0 und 1,5 sind degeneriert (n_eff 1104/235, LWR 0,014/0,18): **die stochastische
+Realisierung entwickelt dort nirgends** (100 % unentwickelt, max. Tiefe 15,5 nm),
+während der deterministische Lauf bei derselben Dosis 50,8 % freilegt. Erst vermutetes
+Sättigungsartefakt des Sub-Pixel-Interpolanten ausgeschlossen (kein Bracket-Pixel
+existiert). FFT/Direkt-Pfadwechsel von `gaussian_se_blur` bei kernel>64 ebenfalls
+ausgeschlossen (Blur-Statistik glatt über die Schwelle, std 0,211→0,201).
+
+`mean_mismatch.py` (je σ an der det. Dosis-zu-Größe, ler_grid_y=512, 1 Realisierung):
+
+| σ | Pfad | ⟨acid⟩ vor PEB | ⟨quencher⟩ | ⟨acid⟩ nach PEB | ⟨M⟩ | entwickelt | CD |
+|---|---|---|---|---|---|---|---|
+| 1,0 | det | 0,155 | – | 0,155 | 0,534 | 50,8 % | 21,7 |
+| 1,0 | photon | 0,157 | – | 0,157 | 0,531 | 50,7 % | 21,7 |
+| 1,0 | expstoch | 0,158 | 0,248 | **0,157** | 0,621 | **0,0 %** | 44,0 |
+| 7,0 | expstoch | 0,160 | 0,248 | 0,160 | 0,512 | 40,2 % | 26,3 |
+| 19,9 | expstoch | 0,160 | 0,248 | 0,160 | 0,501 | 27,1 % | 32,1 |
+
+Drei Befunde, alle σ-unabhängig belegt:
+- **Der Quencher ist im Stochastik-Pfad faktisch inert**: er entfernt 0,3 % der Säure
+  (0,158 → 0,157), obwohl ⟨quencher⟩ = 0,25 > ⟨acid⟩ = 0,16 im Mittelfeld die Säure
+  vollständig neutralisieren würde. Ursache: `_reaction_limited_quench` wird auf
+  Voxeln von 0,17×0,17×2,5 nm³ = 0,07 nm³ mit λ_PAG = 0,014 Molekülen ausgewertet —
+  Säure und Quencher "treffen sich" nur, wenn beide Poisson-Ziehungen im selben Voxel
+  landen (p ≈ 0,004). Ein Reaktionsvolumen unterhalb der Molekülgröße ist physikalisch
+  bedeutungslos; Moleküle treffen sich durch Diffusion innerhalb der Bake-Zeit, nicht
+  in einer Gitterzelle. Die "react-then-blur"-Reihenfolge aus Fortsetzung 6 hat die
+  Diskretheit sichtbar gemacht, aber dabei den Quencher abgeschaltet; "blur-then-react"
+  (das frühere Verhalten, Signal → 1e-21) war die *korrekte* Mittelfeld-Konsequenz der
+  inkonsistenten Parameterlage 0,16 < 0,25 — genau das Dosisfenster-Problem, das der
+  Q-Fix adressiert.
+- **Der deterministische Pfad hat gar keinen Quencher.** Beide Pfade stimmen im
+  Mittel überein (⟨acid⟩ nach PEB ≈ 0,16 in allen drei) — durch zwei verschiedene
+  Fehler, nicht durch Konsistenz.
+- **Das stochastische CD ist trotz gleichem Mittelwert um 4–22 nm gegen das
+  deterministische verschoben** (26–44 vs. 22 nm), σ-abhängig, nicht monoton
+  (Minimum der Abweichung bei σ 7–12). Ursache: Jensen-Ungleichung durch
+  `M = exp(−k·A·t)` (konvex → ⟨M⟩ 0,62 vs. 0,53 bei σ=1) und durch die Mack-Rate
+  (n=18,2, Schwelle M_th=0,39). Konfig A (Photon) ist dagegen unverzerrt (CD 20,8–21,7).
+  Das ist die Erklärung für die P2-Nichtkonvergenz aus §1 und aus Fortsetzung 6:
+  der Großzahlgrenzfall kann nicht konvergieren, weil die Verzerrung nicht vom
+  Rauschen kommt, sondern von der Diskretisierung des Quenchings und der
+  Nichtlinearität danach.
+
+**Korrektur eigener Aussagen:** (a) v2s Spalte "CD_sto" war `r.cd_nm`, also das
+deterministische CD — das stochastische CD war nie kontrolliert. (b) Die in v2
+ausgewiesene Q3-Verstärkung "476×" beruhte auf dem degenerierten σ=1,0-Punkt; korrekt
+sind 3,7× (Konfig C) und 4,0× (Konfig A) gegen das jeweils echte Minimum.
+
+### 6. Quellenprüfung der Blur-Länge
+
+- `peb_D = 3,3 nm²/s` wurde laut Kommentar (pipeline.py ~Z. 387) *gewählt*, damit
+  σ = √(2Dt) ≈ 20 nm "inside Anderson's 17–35 nm Reference cluster" liegt — das ist
+  eine Rückrechnung auf ein Ziel-σ, kein unabhängig gemessenes D für diesen Resist.
+- **Anderson 2009** (lokal: `Anderson_2009_PhD_Thesis_EUV_Lithography_OSTI.pdf`):
+  "blur" ist die Fit-Größe eines **HOST-PSF-Modells** (Houle et al., Ref. [28]),
+  definiert als "the average *width* of the volume of resist polymer that is rendered
+  dissolvable … by a single photo-generated acid" (Fußnote i, Kap. 5). **Die
+  funktionale Form der PSF ist in der Dissertation nirgends angegeben; "Gaussian"
+  kommt im Blur-Kapitel nicht vor.** Die Identifikation "Anderson-Blur = Gauß-σ" im
+  Code-Kommentar ist aus der Quelle nicht belegbar. Andersons Werte gelten für
+  50–100-nm-Strukturen (Kontaktloch-Metrik mit 50-nm-Löchern); 22 nm Blur bei 50-nm-
+  Linien bezeichnet er selbst als "degrading" (Kap. 6.5). Seine Zusammenfassung sagt
+  wörtlich, dass bei Blur groß gegen die Strukturgröße "LER reduction from improved
+  counting statistics becomes dominated by an increase in LER due to reduced
+  deprotection contrast" — exakt der hier gemessene Mechanismus.
+- **Vesters 2019** (lokal), Kap. 1.5.5 und 3: zitiert D_acid "typically 1–10 nm²/s"
+  und ADL "5–70 nm" für EUV-Resists, mit ADL = √(2·D·t) (1D-Bilayer-Definition → das
+  ist ein Gauß-σ, die Formel im Code ist mit Vesters konsistent). Zugleich: für
+  Half-Pitch < 20 nm "strong focus has been put in reducing acid diffusion length";
+  "high acid diffusion length is detrimental to resolution and roughness". Gemessene
+  laterale Säure-Diffusionsgeschwindigkeiten seiner 20-nm-HP-Resists: 2,5–17 pm/s
+  (Tab. 3.2) — Kantenbewegung < 1 nm pro 60 s PEB.
+- **Ergebnis: eine Quelle für σ_diff eines 22-nm-HP-EUV-CAR-Resists wurde nicht
+  gefunden.** 19,9 nm liegt innerhalb der von Vesters zitierten Literaturspanne, ist
+  aber für diesen Strukturmaßstab weder belegt noch — nach den Messungen oben —
+  physikalisch haltbar (MTF 1,4 %).
+
+### 7. Antwort auf die Auftragsfrage
+
+Das Modell erzeugt zu viel Rauheit, weil die PEB-Diffusionslänge (19,9 nm, plus 5 nm
+SE-Blur) beim Validierungs-Pitch 44 nm auf der steilen rechten Flanke der
+Kontrastverlust-Kurve liegt, 2,4× über dem Optimum P/(2π) ≈ 7 nm. Der Kantengradient
+kollabiert, die stark nichtlineare Mack-Entwicklung hebt Restkontrast und Rauschen
+gemeinsam wieder an, und jede Rauschquelle erscheint ~4× verstärkt. Beim Optimum liegt
+das Modell mit 1,8 nm (Konfig C) bzw. 0,3 nm (Konfig A) *unter* dem Zielband. Der Wert
+19,9 nm ist eine Rückrechnung auf eine Anderson-Zahl, deren PSF-Form nicht dokumentiert
+ist und die für 50–100-nm-Strukturen gemessen wurde.
+
+Zweiter, davon unabhängiger Befund: der `exposure_stochasticity`-Pfad ist keine treue
+stochastische Version des Mittelfeld-Pfads — Quencher faktisch inert (Reaktionsvolumen
+unterhalb der Molekülgröße), deterministischer Pfad ohne Quencher, stochastisches CD
+um 4–22 nm verzerrt. Das erklärt P2/P3 aus §1 und ist mit dem Q-Fix allein nicht behebbar.
+
+### Offen — Entscheidung nach Stop-Regel erforderlich (physikkonsequent, mehrere Optionen)
+
+Kein Code, kein Parameter geändert. Drei getrennte Baustellen, jede mit Optionen:
+1. **σ_diff**: Quelle für den Validierungsmaßstab fehlt → als Kalibrierparameter
+   deklarieren (nicht als Lavery/Anderson-Konstante) und gegen Vesters kalibrieren, ODER
+   als Nutzerparameter mit ehrlichem "nicht literaturbelegt" belassen.
+2. **Q-Fix**: eigenständig belegt, verschiebt Dosisfenster auf 10,5 mJ/cm²; erhöht das
+   LWR am aktuellen σ (Photonen bei niedrigerer Dosis).
+3. **Quenching-Diskretisierung**: Reaktion auf Diffusionsskala statt Gittervoxel auswerten
+   und in *beiden* Pfaden konsistent anwenden — Modellentscheidung (welche Skala, welche
+   Kinetik), keine mechanische Korrektur.
+
+---
