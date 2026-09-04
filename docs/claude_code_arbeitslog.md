@@ -1221,3 +1221,102 @@ eigenem Datensatz, nicht Teil dieser Prüfung, und laut Mandat streng von Validi
 trennen).
 
 ---
+
+## 2026-09-04 (Fortsetzung 6): Falsifikationstests — 3 bestätigt korrekt, 1 echter neuer Befund
+
+**Auslöser:** "mach mit allen weiteren Prüfungen weiter" — Fortsetzung von Phase 3 mit
+gezielten Grenzfall-/Falsifikationstests, wie vom Mandat gefordert ("Was muss mathematisch
+immer gelten?", "Was passiert bei sehr großen/kleinen Werten?").
+
+**Test 1 — RCWA/Hopkins-Konsistenztests frisch verifiziert (nicht nur Audit-Historie
+vertraut):** `test_energy_conservation_lossless` (RCWA 1D), `test_energy_conservation`
+(RCWA 2D), `test_hopkins_aerial_matches_abbe` (Hopkins vs. unabhängige Abbe-Implementierung,
+< 10% relativer Fehler, < 0,03 MAE) — alle frisch gelaufen, alle grün. Bestätigt: diese
+Kern-Konsistenzprüfungen sind real, nicht nur behauptet.
+
+**Test 2 — Poisson-Statistik des Photon-Schrotrauschens, unabhängig nachgerechnet:** bei
+konstantem Dosisfeld (20mJ/cm², 512×512, `se_blur_nm=0`) gemessen: Varianz/Mittelwert des
+verrauschten Dosisfelds = 1,468. Unabhängig aus den Umrechnungsfaktoren berechnet (Photonen-
+energie 91,84eV, dose_to_energy_factor): erwartete "Dosis pro Photon" = 20mJ/cm² /
+13,59 Photonen/Pixel ≈ 1,471 — **innerhalb der statistischen Stichprobenunsicherheit
+identisch.** Das bestätigt: die Poisson-Photonenstatistik ist korrekt implementiert, nicht
+nur "sieht plausibel aus".
+
+**Test 3 — Reproduzierbarkeit bei festem Seed:** 3 identische Läufe mit `stochastic_seed=42`
+(nicht-degenerierte Konfiguration, CD=17,19nm) geben bit-identische CD/LER/LWR. Anderer Seed
+(43) weicht sinnvoll ab (LER 1,4026→1,3991, ähnliche Größenordnung, andere Realisierung).
+Reproduzierbarkeit real bestätigt.
+
+**Test 4 — Großzahlgrenzfall von `exposure_stochasticity`: ECHTER, NEUER BEFUND, NICHT
+GELÖST:**
+
+Physikalische Erwartung: bei `pag_density_per_nm3 → ∞` (Quencher-Dichte proportional
+mitskaliert, Verhältnis 0,25 konstant) sollte das molekulare Zählrauschen verschwinden
+(1/√N-Skalierung) UND das Ergebnis gegen den deterministischen Mean-Field-Wert (ohne
+`exposure_stochasticity`) konvergieren — beide beschreiben im Grenzfall unendlich vieler
+Moleküle dieselbe Kontinuums-Physik.
+
+**Gemessen** (period_nm=44, line_width_nm=22, dose=24mJ/cm², development_stochasticity=False):
+
+| Konfiguration | CD [nm] | LER [nm] | LWR [nm] |
+|---|---|---|---|
+| Deterministisch (kein exposure_stochasticity) | **23,03** | – | – |
+| exposure_stochasticity, pag_density=0,2/nm³ (Default) | 17,19 | 2,68 | 5,28 |
+| exposure_stochasticity, pag_density=2,0/nm³ | 17,19 | 1,05 | 2,08 |
+| exposure_stochasticity, pag_density=20,0/nm³ | 17,19 | 0,00 | 0,00 |
+| exposure_stochasticity, pag_density=200,0/nm³ | 17,19 | 0,00 | 0,00 |
+
+LER/LWR verhalten sich korrekt (→0 mit steigender Dichte, wie erwartet). **Aber CD bleibt bei
+17,19nm über den GESAMTEN getesteten Dichtebereich — konvergiert NICHT gegen den
+deterministischen Wert 23,03nm, selbst wenn das Rauschen vollständig verschwunden ist.**
+
+**Ursache identifiziert** (Code gelesen, nicht spekuliert): `_cd_via_full_chem`s
+deterministischer Pfad (IMMER berechnet, unabhängig von `enable_stochastic`) nutzt
+`dill_abc_exposure()` → `reaction_diffusion_analytical()` — **enthält keinerlei
+Säure-Base-Quenching-Mechanismus.** `exposure_stochasticity=True`s Kette
+(`sample_pag_quencher_acid()` → `reaction_diffusion_with_quenching()`) enthält dagegen
+IMMER eine Quencher-Subtraktion (im reaktionslimitierten Sättigungsregime ≈
+`max(acid-quencher, 0)`), UNABHÄNGIG von der Molekülzahl-Diskretheit selbst — auch im
+perfekten Kontinuums-Grenzfall (unendlich viele Moleküle, kein Zählrauschen) bleibt diese
+Subtraktion bestehen, weil das Quencher/PAG-**Verhältnis** (0,25) bei meiner Testskalierung
+konstant gehalten wurde, nicht die absolute Quencher-Menge auf 0 gesetzt wurde.
+
+**Einordnung:** Das ist kein Implementierungsfehler im Sinne von "falscher Code" — beide
+Ketten sind einzeln real, zitiert und korrekt (`dill_abc_exposure` = reine Beer-Lambert-
+Belichtung ohne Quenching, zitiert Yamamoto et al. 2011; `sample_pag_quencher_acid`+
+`reaction_diffusion_with_quenching` = vollständige PAG/Quencher-Physik, zitiert Mack,
+Biafore & Smith 2011). Das Problem ist eine **stille physikalische Inkonsistenz zwischen
+den beiden Pfaden**: `exposure_stochasticity` ist NICHT nur ein "Rauschen an/aus"-Schalter,
+wie der Name und die bisherige Dokumentation nahelegen — er verändert auch die MITTLERE
+Chemie (fügt eine Säure-Base-Neutralisation hinzu, die der deterministische Baseline-Pfad
+gar nicht kennt). Ein Nutzer, der nur "Diskretheitsrauschen hinzufügen" möchte, bekommt
+implizit auch ein anderes mittleres chemisches Modell.
+
+**Bewusst NICHT einseitig entschieden** (drei valide, unterschiedlich invasive Optionen,
+jede mit echten Vor-/Nachteilen):
+- **A)** So lassen, aber explizit dokumentieren, dass `exposure_stochasticity=True` das
+  mittlere chemische Modell ändert, nicht nur Rauschen hinzufügt — kleinster Eingriff,
+  reine Dokumentation.
+- **B)** Den deterministischen `full_chem`-Basispfad um die (Mean-Field-Erwartung der)
+  Quenching-Chemie erweitern, sodass beide Pfade dieselbe mittlere Chemie teilen und
+  `exposure_stochasticity` wirklich NUR Rauschen hinzufügt — invasiver, ändert den
+  Standard-`full_chem`-Determinismus-Pfad und damit potenziell viele bereits etablierte
+  CD-Werte/Golden-Values.
+- **C)** Eine separate, nur für Vergleichszwecke gedachte Mean-Field-Referenz MIT Quenching
+  berechnen, ohne den bestehenden Standardpfad zu verändern.
+
+Dies ist laut Mandat explizit ein Punkt, an dem angehalten und die Entscheidung dem Nutzer
+vorgelegt werden soll, statt einseitig zu entscheiden (mehrere wissenschaftlich plausible
+Optionen mit unterschiedlicher Tragweite). Kein Code geändert in dieser Runde.
+
+**Zusätzlicher, kleinerer Befund (dokumentiert, nicht behoben):** `dx` vs. `dx_nm` als
+Parametername ist im gesamten `resist/`-Paket inkonsistent — 14 Funktionssignaturen nutzen
+`dx` (exposure.py, peb.py, develop.py, größte Teile von stochastic.py), 6 nutzen `dx_nm`
+(neuere Funktionen in stochastic.py, `aerial/abbe.py::aerial_from_orders`). Empfehlung:
+auf `dx_nm` vereinheitlichen (selbstdokumentierend, passt zum sonstigen `_nm`-Suffix-Muster
+im Projekt, z.B. `resist_thickness_nm`, `se_blur_nm`), aber bewusst NICHT in dieser Runde
+umgesetzt — eine echte Umbenennung von 14 Signaturen berührt viele Call-Sites, bestehende
+Tests und die heute reparierten Notebooks; das wäre der "riesige Misch-Commit", vor dem das
+Mandat explizit warnt. Als eigener, klar abgegrenzter Schritt vorgeschlagen, falls gewünscht.
+
+---
