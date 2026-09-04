@@ -803,3 +803,84 @@ angefragt, keine ausreichende Datenbasis für eine neue Formel ohne weitere Kali
 Charakterisierungs-/Kalibrierungsuntersuchung, keine Bugs gefunden).
 
 ---
+
+## 2026-09-04 (Fortsetzung): LWR-Ursache systematisch isoliert — KORREKTUR des vorigen Befunds
+
+**Auslöser:** "1. LWR-Ursache systematisch isolieren" — Ablationsstudie, um die verbleibende
+Vesters-Lücke auf ihre einzelnen Rauschquellen zurückzuführen.
+
+**Methodik-Fehler zuerst gefunden und korrigiert:** die eben abgeschlossene Kombinations-
+Kalibrierungsuntersuchung (voriger Eintrag) lief bei `period_nm=64` (Software-Default), NICHT
+bei Vesters' echter Geometrie (`period_nm=44, line_width_nm=22`, siehe Validierungseintrag
+weiter oben). Das ist dieselbe Geometrie-Inkonsistenz, die auch schon den ursprünglichen
+"Faktor 3-5x"-Befund erschwert. Die gesamte Ablationsstudie wurde daher bei der KORREKTEN
+Vesters-Geometrie wiederholt.
+
+**Ablation bei `period_nm=64` (falsche Geometrie, zur Einordnung, dose=16, CD=58nm):**
+
+| Konfiguration | LWR [nm] |
+|---|---|
+| A: nur Photon-Schrotrauschen | 3,17 |
+| B: + development_stochasticity | 3,24 (+2%) |
+| C: + exposure_stochasticity | 0,98 (**-69%**) |
+| D: beide kombiniert | 0,22 (**-93%**) |
+
+Bei dieser (falschen) Geometrie dominiert Photon-Schrotrauschen fast vollständig, und
+`exposure_stochasticity` UNTERDRÜCKT es (Kontrastverschärfungs-Artefakt, siehe unten).
+
+**Ablation bei `period_nm=44, line_width_nm=22` (korrekte Vesters-Geometrie), drei
+verschiedene Dosen/CDs, `stochastic_n_realisations=3`, `se_blur_nm=5,0` konsistent:**
+
+| Dosis [mJ/cm²] | CD [nm] | A: Photon | B: +dev.stoch | C: +exp.stoch | D: beide |
+|---|---|---|---|---|---|
+| 22 | 30,25 | 2,38 | 2,84 | 4,24 | 3,69 |
+| 24 | 17,19 | 1,61 | 1,80 | 5,28 | 5,17 |
+| 25 | 10,31 | 2,39 | 2,26 | 4,93 | 4,83 |
+
+**Genau umgekehrtes Bild** gegenüber `period_nm=64`: bei der tatsächlich relevanten Geometrie
+VERSTÄRKT `exposure_stochasticity` das LWR deutlich (C/D durchweg 2-3x über A/B), statt es zu
+unterdrücken. Der Effekt ist über drei unterschiedliche Dosen/CDs (30, 17, 10nm) konsistent,
+kein Zufallstreffer an einem einzelnen Punkt.
+
+**KORREKTUR des vorigen Eintrags:** die dort dokumentierte Schlussfolgerung
+("development_stochasticity + exposure_stochasticity kombiniert ist strikt schlechter als
+development_stochasticity allein, über den ganzen getesteten strength-Bereich") gilt NUR bei
+`period_nm=64` und ist NICHT allgemeingültig — bei der für den Vesters-Vergleich tatsächlich
+relevanten Geometrie (44nm Pitch, CD nahe 22nm) ist es GENAU UMGEKEHRT: die Kombination (D)
+schneidet deutlich besser ab als jeder Einzelmechanismus. Die Empfehlung "einzeln statt
+kombiniert verwenden" aus dem vorigen Eintrag wird hiermit zurückgezogen — sie war an eine
+nicht-repräsentative Testgeometrie gebunden, nicht an eine universelle Modelleigenschaft.
+
+**Aktualisierte Vesters-Lücke** (bei CD nahe dem Zielwert 22nm, Dosis 24mJ/cm², beide
+Mechanismen kombiniert): LWR=5,17nm gegen real gemessene 6,5–10,3nm — **Faktor nur noch
+~1,25–2x, nicht mehr 3–5x wie zuvor berichtet.** Die Lücke ist damit deutlich kleiner als in
+der ursprünglichen Validierung (bdea3b6) und im vorigen Eintrag angenommen — beide beruhten
+auf einem Vergleichspunkt ohne `exposure_stochasticity` bzw. auf der falschen Geometrie.
+
+**Separater, wichtiger Befund — extreme Parameterempfindlichkeit nahe CD≈18-24nm:** beim
+Aufbau dieser Ablation wurde zunächst ein scheinbarer Bug gefunden (`enable_stochastic=True`
+änderte den DETERMINISTISCHEN `cd_nm`-Wert, obwohl der RNG-unabhängig sein sollte: 23,7nm vs.
+18,6nm bei identischer Dosis). Durch Vergleich der Zwischenwerte (`aerial`-Eingabe bitidentisch,
+aber `acid_3d` bereits verschieden) wurde die Ursache gefunden: ein Fehler im eigenen Testskript
+(`se_blur_nm` war zwischen den beiden Vergleichsläufen inkonsistent — 0,0 vs. 5,0 — nicht als
+Absicht, sondern vergessen). Mit konsistentem `se_blur_nm` verschwindet die Diskrepanz
+vollständig; **kein echter Pipeline-Bug.** Der Vorfall deckt aber auf: bei diesem CD-Bereich
+(nahe Vesters' Zielwert 22nm) reagiert das Modell EXTREM empfindlich auf kleine
+Parameteränderungen — allein der (unzitierte) `se_blur_nm`-Wert verschiebt CD hier um >5nm, und
+eine Dosisänderung von nur 0,1mJ/cm² (23,9→24,0) verschiebt CD um >6nm (siehe feine Dosis-
+Sweep-Werte oben). Plausible Ursache: `mack_n=18,2` ("notably steeper than textbook", bereits
+im Code als Ausreißer geflaggt) macht die CD-vs-Dosis-Kurve in diesem Resistmodell nahezu
+stufenförmig. Das bedeutet: JEDE einzelne LWR-Zahl in dieser und der vorigen Validierungsrunde
+ist nur an genau dem getesteten (Dosis-, Blur-, Geometrie-)Punkt aussagekräftig — kleine
+Konfigurationsabweichungen können CD und damit LWR stark verschieben. Keine Korrektur an
+`mack_n` vorgenommen (real zitierter Yamamoto-et-al.-2011-Wert, nicht willkürlich) — als
+Interpretationsvorbehalt für alle bisherigen und künftigen full_chem-Zahlen festgehalten, nicht
+als Fehler behoben.
+
+**Verbleibend offen:** ob die verbleibende Faktor-1,25-2x-Lücke durch SEM-Metrologie-Rauschen
+(in echten Messungen enthalten, in reiner Physik-Simulation nicht), durch weitere, noch nicht
+modellierte Rauschquellen, oder durch die o.g. Parameterempfindlichkeit selbst (evtl. optimistisch
+getroffener Vergleichspunkt) erklärt wird, ist nicht untersucht. Kein Code geändert in dieser
+Runde (reine Charakterisierung); nur Dokumentation aktualisiert.
+
+---
