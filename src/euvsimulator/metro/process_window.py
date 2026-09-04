@@ -226,6 +226,8 @@ def pw_metrics(
     target_cd: float,
     tolerance: float,
     nils_matrix: Optional[np.ndarray] = None,
+    doses: Optional[List[float]] = None,
+    focuses: Optional[List[float]] = None,
 ) -> Dict[str, float]:
     """Compute detailed process-window metrics from a Bossung CD matrix.
 
@@ -240,13 +242,22 @@ def pw_metrics(
     nils_matrix : np.ndarray, optional
         Optional 2D array of same shape with NILS values at each
         dose-focus condition.
+    doses, focuses : list of float, optional
+        The dose [mJ/cm²] and focus [nm] grids of the matrix. Required for
+        the physical DoF/EL values; without them only grid-index counts can
+        be reported (a previous version returned those counts under the
+        physical keys ``dof_nm``/``el_pct`` -- fixed 2026-09-04).
 
     Returns
     -------
     metrics : dict
         Keys:
-        - ``'dof_nm'`` — Depth of Focus [nm].
-        - ``'el_pct'`` — Exposure Latitude [%].
+        - ``'dof_nm'`` — Depth of Focus [nm] at best dose (NaN if *focuses*
+          not given).
+        - ``'el_pct'`` — Exposure Latitude [%] at best focus (NaN if *doses*
+          not given).
+        - ``'dof_steps'``, ``'el_steps'`` — the same windows as numbers of
+          in-spec grid steps (always available).
         - ``'max_nils'`` — Maximum NILS in the in-spec region (NaN if
           *nils_matrix* not provided).
         - ``'min_nils'`` — Minimum NILS in the in-spec region.
@@ -259,11 +270,7 @@ def pw_metrics(
     in_spec = (cd_matrix >= cd_low) & (cd_matrix <= cd_high) & (~np.isnan(cd_matrix))
     n_in_spec = int(in_spec.sum())
 
-    # Focus spacing
-    doses = np.arange(Nd, dtype=float)  # dummy spacing
-    focus_spacing = 1.0  # dummy — caller should pass actual grids
-
-    # DoF at best-dose column: find the column closest to target
+    # Best point: in-spec CD closest to target
     deviations = np.where(in_spec, np.abs(cd_matrix - target_cd), np.inf)
     if np.isfinite(deviations).any():
         best_focus_idx, best_dose_idx = np.unravel_index(
@@ -272,27 +279,30 @@ def pw_metrics(
     else:
         best_focus_idx, best_dose_idx = 0, 0
 
-    # Recompute focus spacing from the actual focus range (assume uniform)
-    # The caller should pass the actual arrays for accurate metrics;
-    # here we rely on the simpler process_window() for real data.
-    dof_nm = 0.0
-    el_pct = 0.0
-
+    dof_steps = 0
+    el_steps = 0
     if n_in_spec > 0:
-        # Estimate DoF: look at focus range at the best dose
         spec_col = in_spec[:, best_dose_idx]
         if spec_col.any():
-            idx_first = int(np.where(spec_col)[0][0])
-            idx_last = int(np.where(spec_col)[0][-1])
-            # Assume uniform focus spacing of 1 nm as fallback
-            dof_nm = float(idx_last - idx_first)
-
+            idx = np.where(spec_col)[0]
+            dof_steps = int(idx[-1] - idx[0])
         spec_row = in_spec[best_focus_idx, :]
         if spec_row.any():
-            idx_first = int(np.where(spec_row)[0][0])
-            idx_last = int(np.where(spec_row)[0][-1])
-            # Fractional EL using dose indices as proxy
-            el_pct = float(idx_last - idx_first) / max(Nd - 1, 1) * 100.0
+            idx = np.where(spec_row)[0]
+            el_steps = int(idx[-1] - idx[0])
+
+    dof_nm = float("nan")
+    el_pct = float("nan")
+    if focuses is not None and len(focuses) == Nf and dof_steps > 0:
+        spec_col = in_spec[:, best_dose_idx]
+        idx = np.where(spec_col)[0]
+        dof_nm = float(focuses[idx[-1]] - focuses[idx[0]])
+    if doses is not None and len(doses) == Nd and el_steps > 0:
+        spec_row = in_spec[best_focus_idx, :]
+        idx = np.where(spec_row)[0]
+        best_dose = float(doses[best_dose_idx])
+        if best_dose > 0:
+            el_pct = float(doses[idx[-1]] - doses[idx[0]]) / best_dose * 100.0
 
     # NILS metrics
     max_nils = float("nan")
@@ -306,6 +316,8 @@ def pw_metrics(
     return {
         "dof_nm": dof_nm,
         "el_pct": el_pct,
+        "dof_steps": dof_steps,
+        "el_steps": el_steps,
         "max_nils": max_nils,
         "min_nils": min_nils,
         "n_in_spec": n_in_spec,

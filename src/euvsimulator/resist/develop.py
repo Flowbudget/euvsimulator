@@ -18,16 +18,27 @@ where:
     n      — dissolution selectivity (contrast, typically 2–15)
     M_th   — threshold inhibitor concentration where R = (R_max + R_min)/2
 
-Two development extraction methods are provided:
+Development models provided:
 
 1. **Threshold development** — the resist is considered developed where
    the inhibitor concentration falls below a critical threshold M_cd.
-   This yields a binary developed image.
+   This yields a binary developed image (screening only).
 
-2. **Surface-advancement / level-set development** — the dissolution
-   front advances from the top surface according to the local rate
-   R(M), solved via a fast-marching / level-set approach.  CD is then
-   extracted at the resist-substrate interface.
+2. **Eikonal development front** (``eikonal_development``) — the
+   physical model: the dissolution front is an isotropic wave with local
+   speed R(M); its first-arrival time obeys |∇T| = 1/R with T = 0 on the
+   top surface and is solved by fast sweeping (Zhao 2005). Lateral
+   dissolution, undercut and sidewall angle are represented.
+
+3. **Vertical-column model** (``surface_advancement_level_set``) — each
+   column developed independently from the top, T = Σ dz/R. No lateral
+   dissolution. Fast approximation and the reference the Eikonal solver
+   reduces to without lateral rate variation.
+
+4. ``stochastic_development`` — an EXPERIMENTAL event-based dissolution-
+   noise model with a dimensionless event-rate parameter and no
+   literature source. Not used by the pipeline (disabled 2026-09-04,
+   see pipeline.SimulationConfig.development_stochasticity).
 
 CD extraction uses the developed profile to find left/right edge
 positions at a given height (typically the substrate), from which
@@ -170,10 +181,16 @@ def stochastic_development(
     dx: float = 1.0,
     rng: torch.Generator | None = None,
 ) -> torch.Tensor:
-    """Event-based stochastic development (STEP 5.3).
+    """Event-based stochastic development (EXPERIMENTAL, not in the pipeline).
 
-    Physical model
-    --------------
+    Status (2026-09-04): kept as a standalone building block only. Its
+    ``strength`` is a unit-less event-rate knob without a literature source,
+    and when it was driven by the pipeline's depth overshoot its output
+    depended on the numerical layer count; the pipeline therefore refuses
+    ``development_stochasticity=True`` (audit A6).
+
+    Model
+    -----
     The dissolution of a resist is a discrete stochastic process:
     molecular aggregates dissolve when the local driving force
     (over-threshold latent concentration) overcomes the activation
@@ -259,7 +276,171 @@ def stochastic_development(
 
 
 # ──────────────────────────────────────────────
-# Surface-advancement / level-set development
+# Eikonal development front (fast sweeping)
+# ──────────────────────────────────────────────
+
+
+def eikonal_arrival_time(
+    rate_3d: torch.Tensor,
+    dx: float,
+    dz: float,
+    n_iter: int = 6,
+    tol: float = 1e-6,
+) -> torch.Tensor:
+    """Arrival time T(x, z) of the development front, |∇T| = 1/R(x, z).
+
+    The dissolution front is a wave propagating with the local, isotropic
+    speed R(M(x, z)) (Mack's rate): its first-arrival time obeys the Eikonal
+    equation |∇T| = 1/R with T = 0 on the resist top surface, the same
+    equation a level-set / fast-marching development simulator solves. It is
+    solved here with the fast-sweeping method (H. Zhao, "A fast sweeping
+    method for Eikonal equations", Math. Comp. 74, 603-627, 2005): Godunov
+    upwind discretisation, Gauss-Seidel sweeps in the four (z, x) sweep
+    directions, vectorised over the un-modelled y direction (tensor rows).
+    First-order accurate in the grid spacing.
+
+    Boundary conditions: T = 0 at z = 0 (top surface, in contact with the
+    developer everywhere -- a ghost node above layer 0); periodic in x (the
+    grid is one period); no condition at the bottom (the substrate is not
+    dissolved -- the front simply stops).
+
+    Parameters
+    ----------
+    rate_3d : torch.Tensor
+        Development rate R [nm/s] per voxel, shape ``(N, H, W)`` = (depth
+        layers top → bottom, rows, columns). Layer k occupies
+        z ∈ [k·dz, (k+1)·dz].
+    dx, dz : float
+        Lateral and vertical grid spacing [nm].
+    n_iter : int
+        Maximum number of full 4-direction sweep iterations. Two iterations
+        suffice for monotone rate fields; convex/re-entrant fronts need more.
+    tol : float
+        Stop when the maximum change of T between iterations is below this
+        value [s].
+
+    Returns
+    -------
+    T : torch.Tensor
+        Arrival time [s] at the BOTTOM face of every layer, shape
+        ``(N, H, W)``. T[k] ≤ T[k+1] along a column is not enforced -- a
+        lateral front can arrive at a deeper voxel earlier than the column
+        above it (undercut), which is the point of solving the Eikonal
+        equation rather than integrating dz / R down each column.
+    """
+    if rate_3d.ndim != 3:
+        raise ValueError(f"rate_3d must be (N, H, W), got shape {tuple(rate_3d.shape)}")
+    if dx <= 0 or dz <= 0:
+        raise ValueError("dx and dz must be > 0")
+    N, H, W = rate_3d.shape
+    slowness = 1.0 / rate_3d.clamp(min=1e-30)
+    big = torch.tensor(1e30, dtype=rate_3d.dtype, device=rate_3d.device)
+    T = torch.full((N + 1, H, W), 1e30, dtype=rate_3d.dtype, device=rate_3d.device)
+    T[0] = 0.0  # ghost row: top surface
+
+    inv_hz2 = 1.0 / dz**2
+    inv_hx2 = 1.0 / dx**2
+    A2 = inv_hz2 + inv_hx2
+
+    def godunov(t_old, a, b, f):
+        # Solve (T-a)^2/hz^2 + (T-b)^2/hx^2 = f^2 for T > max(a, b), else the
+        # one-dimensional update from the smaller neighbour.
+        t1 = a + f * dz
+        t2 = b + f * dx
+        B2 = -2.0 * (a * inv_hz2 + b * inv_hx2)
+        C2 = a * a * inv_hz2 + b * b * inv_hx2 - f * f
+        disc = (B2 * B2 - 4.0 * A2 * C2).clamp(min=0.0)
+        t3 = (-B2 + torch.sqrt(disc)) / (2.0 * A2)
+        t_new = torch.where(t3 > torch.maximum(a, b), t3, torch.minimum(t1, t2))
+        return torch.minimum(t_old, t_new)
+
+    for _ in range(n_iter):
+        T_prev = T.clone()
+        for z_dir in (1, -1):
+            z_range = range(1, N + 1) if z_dir == 1 else range(N, 0, -1)
+            for x_dir in (1, -1):
+                x_range = range(W) if x_dir == 1 else range(W - 1, -1, -1)
+                for k in z_range:
+                    up = T[k - 1]
+                    down = T[k + 1] if k + 1 <= N else big.expand_as(up)
+                    a = torch.minimum(up, down)
+                    Tk = T[k]
+                    fk = slowness[k - 1]
+                    for i in x_range:
+                        b = torch.minimum(Tk[:, (i - 1) % W], Tk[:, (i + 1) % W])
+                        Tk[:, i] = godunov(Tk[:, i], a[:, i], b, fk[:, i])
+        if float((T - T_prev).abs().max()) < tol:
+            break
+    return T[1:]
+
+
+def developed_depth_from_arrival(
+    T: torch.Tensor,
+    t_develop: float,
+    dz: float,
+) -> torch.Tensor:
+    """Developed depth per (y, x) column from the arrival-time field.
+
+    A column counts as developed down to the deepest layer whose bottom face
+    the front has reached within *t_develop*; the partially developed next
+    layer is added by linear interpolation of T between the two bounding
+    faces (same continuous-depth semantics as
+    :func:`surface_advancement_level_set`, which the LER/LWR sub-pixel edge
+    extraction relies on). Where the front has reached the bottom of the
+    film with time to spare, the depth is reported as (N + 1)·dz − (one
+    layer of overshoot) exactly like the column model, so both models feed
+    the same "fully cleared" test in the pipeline.
+    """
+    N, H, W = T.shape
+    reached = T <= t_develop
+    # Layers are reached top-down along a column unless a lateral front
+    # arrives from below; count the leading run of reached layers so that a
+    # column is "cleared through" only if every layer is reached.
+    not_reached = (~reached).to(torch.int64)
+    first_not = torch.where(
+        not_reached.any(dim=0), torch.argmax(not_reached, dim=0), torch.full((H, W), N, dtype=torch.int64, device=T.device)
+    )
+    n_clear = first_not  # number of consecutive cleared layers from the top
+    depth = n_clear.to(T.dtype) * dz
+    idx_next = n_clear.clamp(max=N - 1)
+    T_next = torch.gather(T, 0, idx_next.unsqueeze(0)).squeeze(0)
+    T_prev = torch.where(
+        n_clear > 0,
+        torch.gather(T, 0, (n_clear - 1).clamp(min=0).unsqueeze(0)).squeeze(0),
+        torch.zeros_like(T_next),
+    )
+    frac = ((t_develop - T_prev) / (T_next - T_prev).clamp(min=1e-30)).clamp(0.0, 1.0)
+    partial = torch.where(n_clear < N, frac * dz, torch.zeros_like(frac))
+    # Fully cleared columns: report one extra dz of overshoot, matching the
+    # column model's convention (see surface_advancement_level_set).
+    overshoot = torch.where(n_clear >= N, torch.full_like(frac, dz), torch.zeros_like(frac))
+    return depth + partial + overshoot
+
+
+def eikonal_development(
+    inhibitor_3d: torch.Tensor,
+    mack: MackModel,
+    dx: float,
+    dz: float,
+    t_develop: float,
+    n_iter: int = 6,
+) -> torch.Tensor:
+    """Developed depth map [nm] from a 2D (x, z) Eikonal development front.
+
+    Replaces the vertical-column time-of-flight of
+    :func:`surface_advancement_level_set` (which cannot represent lateral
+    dissolution, undercut or sidewall angle) by the first-arrival time of an
+    isotropic front with local speed R(M) -- see :func:`eikonal_arrival_time`.
+    Returns the same continuous depth field (shape ``(H, W)``) so the
+    pipeline's CD/LER/LWR extraction is unchanged.
+    """
+    R = mack.rate(inhibitor_3d)
+    T = eikonal_arrival_time(R, dx=dx, dz=dz, n_iter=n_iter)
+    return developed_depth_from_arrival(T, t_develop, dz)
+
+
+# ──────────────────────────────────────────────
+# Surface-advancement (vertical column) development
 # ──────────────────────────────────────────────
 
 
@@ -268,23 +449,23 @@ def surface_advancement_level_set(
     mack: MackModel,
     dx: float = 1.0,
     dz: float = 1.0,
-    t_develop: float | None = None,
-    n_time_steps: int = 50,
+    t_develop: float = 30.0,
 ) -> torch.Tensor:
-    """3D level-set-like surface advancement during development.
+    """Vertical-column ("time-of-flight") development model.
 
-    The dissolution front starts at the top of the resist and advances
-    downward according to the local rate *R(M)*.  This is modelled
-    via a **ray-tracing / time-of-flight** approximation:
+    Each (x, y) column is developed independently from the top down: the
+    time to reach the bottom face of layer k is T_k = Σ_{j≤k} dz / R(M_j).
+    The front position at *t_develop* is the deepest face with T ≤ t,
+    plus a linear interpolation into the next layer.
 
-        T(x, y) = Σ_k dz / R(M(k, x, y))
-
-    where *k* indexes the depth layer.  The front position at time
-    *t_develop* is the deepest layer where the cumulative development
-    time ≤ *t_develop*.
-
-    This is a fast approximation to a full level-set (fast marching)
-    solution, suitable for moderate resist thicknesses.
+    LIMITATION -- this is NOT a level-set / fast-marching solution despite
+    the historical name: there is no lateral dissolution, so undercut,
+    sidewall angle and the erosion of a line from an already-cleared
+    neighbouring space cannot occur. Use :func:`eikonal_development`
+    (isotropic front, |∇T| = 1/R) for the physical model; this function
+    is kept as the fast, well-tested column approximation and as the
+    reference the Eikonal solver must reduce to when the rate has no
+    lateral variation (tests/test_eikonal_development.py).
 
     Parameters
     ----------
@@ -297,22 +478,17 @@ def surface_advancement_level_set(
         Lateral grid spacing [nm].  Default 1.0.
     dz : float
         Vertical grid spacing [nm].  Default 1.0.
-    t_develop : float, optional
-        Development time [s].  If ``None``, the full 3D profile is
-        computed (time at each depth).
-    n_time_steps : int
-        Number of time-steps for the surface advancement when
-        *t_develop* is given.  Default 50.
+    t_develop : float
+        Development time [s].
 
     Returns
     -------
-    profile : torch.Tensor
-        Developed profile.  If *t_develop* is ``None``: 3D float tensor
-        of shape ``(N, H, W)`` with values in [0, 1] representing
-        whether each voxel is developed (0 = undeveloped, 1 =
-        developed).  If *t_develop* is given: 2D tensor ``(H, W)``
-        representing the developed depth at each (x, y) position [nm
-        from top surface].
+    depth_map : torch.Tensor
+        Developed depth at each (y, x) position [nm from the top surface],
+        shape ``(H, W)``; continuous (sub-layer interpolation), with up to
+        one dz of overshoot for fully cleared columns (see the note in the
+        body). A former ``t_develop=None`` mode returning an all-ones 3D
+        mask was dead, defective code and was removed 2026-09-04.
     """
     N, H, W = inhibitor_3d.shape
 
@@ -325,82 +501,65 @@ def surface_advancement_level_set(
     # cumulative time to reach each depth
     cum_time = torch.cumsum(dt_layer, dim=0)  # (N, H, W)
 
-    if t_develop is None:
-        # return the full 3D developed mask
-        # compare cum_time to a range of times
-        t_vals = torch.linspace(0, cum_time.max().item(), n_time_steps)
-        # for simplicity, return mask at each depth
-        # binary: 1 where the front has passed
-        profile_3d = torch.zeros_like(cum_time)
-        for k in range(N):
-            front_passed = cum_time[k] <= cum_time[-1]  # full clearing
-            profile_3d[k] = (cum_time[k] <= cum_time[-1].max()).float()
-        # simpler: developed depth = number of cleared layers
-        # build mask voxel-by-voxel
-        profile_3d = torch.zeros_like(inhibitor_3d)
-        # Vectorized: use broadcasting to compare all voxels at once
-        profile_3d = (cum_time <= t_vals[-1]).float()
-        return profile_3d
-    else:
-        # Developed depth: fully-cleared layers, PLUS a linearly-interpolated
-        # partial clearing into the next (boundary) layer using the time
-        # remaining after the last fully-cleared layer and that boundary
-        # layer's own local rate. Without this interpolation, depth is a
-        # staircase quantised to multiples of dz (only N possible output
-        # values) -- fine for a quick deterministic CD estimate, but it
-        # silently discards any variation smaller than one dz step, which
-        # matters when this function is used per-realisation with a noisy
-        # inhibitor field (photon-shot-noise-driven LER/LWR): the noise is
-        # typically much finer than dz, so the un-interpolated version was
-        # measuring near-zero LER regardless of the actual noise (found and
-        # fixed 2026-09-03 while wiring the stochastic LER/LWR path to this
-        # same chain -- see docs/claude_code_arbeitslog.md).
-        developed_mask = cum_time <= t_develop  # (N, H, W) bool
-        has_true = developed_mask.any(dim=0)  # (H, W) bool
-        rev_mask = developed_mask.flip(dims=(0,)).to(torch.int64)
-        first_true = rev_mask.argmax(dim=0)  # (H, W), index into the reversed array
-        last_cleared_idx = N - 1 - first_true  # (H, W) int64; meaningless where ~has_true
+    # Developed depth: fully-cleared layers, PLUS a linearly-interpolated
+    # partial clearing into the next (boundary) layer using the time
+    # remaining after the last fully-cleared layer and that boundary
+    # layer's own local rate. Without this interpolation, depth is a
+    # staircase quantised to multiples of dz (only N possible output
+    # values) -- fine for a quick deterministic CD estimate, but it
+    # silently discards any variation smaller than one dz step, which
+    # matters when this function is used per-realisation with a noisy
+    # inhibitor field (photon-shot-noise-driven LER/LWR): the noise is
+    # typically much finer than dz, so the un-interpolated version was
+    # measuring near-zero LER regardless of the actual noise (found and
+    # fixed 2026-09-03 while wiring the stochastic LER/LWR path to this
+    # same chain -- see docs/claude_code_arbeitslog.md).
+    developed_mask = cum_time <= t_develop  # (N, H, W) bool
+    has_true = developed_mask.any(dim=0)  # (H, W) bool
+    rev_mask = developed_mask.flip(dims=(0,)).to(torch.int64)
+    first_true = rev_mask.argmax(dim=0)  # (H, W), index into the reversed array
+    last_cleared_idx = N - 1 - first_true  # (H, W) int64; meaningless where ~has_true
 
-        zeros_hw = torch.zeros((H, W), device=inhibitor_3d.device, dtype=cum_time.dtype)
+    zeros_hw = torch.zeros((H, W), device=inhibitor_3d.device, dtype=cum_time.dtype)
 
-        # Time already spent clearing layers 0..last_cleared_idx (0 if none cleared).
-        gather_idx = last_cleared_idx.clamp(min=0)
-        cum_time_at_last = torch.gather(cum_time, 0, gather_idx.unsqueeze(0)).squeeze(0)
-        time_spent = torch.where(has_true, cum_time_at_last, zeros_hw)
+    # Time already spent clearing layers 0..last_cleared_idx (0 if none cleared).
+    gather_idx = last_cleared_idx.clamp(min=0)
+    cum_time_at_last = torch.gather(cum_time, 0, gather_idx.unsqueeze(0)).squeeze(0)
+    time_spent = torch.where(has_true, cum_time_at_last, zeros_hw)
 
-        # Boundary layer to partially clear into: the layer right after the
-        # last fully-cleared one, or layer 0 if none is fully cleared yet.
-        # Clamped to N-1 so a front already at the last layer stays there.
-        next_idx = torch.where(
-            has_true, (last_cleared_idx + 1).clamp(max=N - 1), torch.zeros_like(last_cleared_idx)
-        )
-        R_next = torch.gather(R, 0, next_idx.unsqueeze(0)).squeeze(0)  # (H, W) [nm/s]
+    # Boundary layer to partially clear into: the layer right after the
+    # last fully-cleared one, or layer 0 if none is fully cleared yet.
+    # Clamped to N-1 so a front already at the last layer stays there.
+    next_idx = torch.where(
+        has_true, (last_cleared_idx + 1).clamp(max=N - 1), torch.zeros_like(last_cleared_idx)
+    )
+    R_next = torch.gather(R, 0, next_idx.unsqueeze(0)).squeeze(0)  # (H, W) [nm/s]
 
-        t_remain = (t_develop - time_spent).clamp(min=0.0)
-        partial_depth = (t_remain * R_next).clamp(min=0.0, max=dz)
-        # No boundary layer left to partially clear into once every layer
-        # (0..N-1) is already fully cleared.
-        fully_cleared_all = has_true & (last_cleared_idx >= N - 1)
-        partial_depth = torch.where(fully_cleared_all, torch.zeros_like(partial_depth), partial_depth)
+    t_remain = (t_develop - time_spent).clamp(min=0.0)
+    partial_depth = (t_remain * R_next).clamp(min=0.0, max=dz)
+    # No boundary layer left to partially clear into once every layer
+    # (0..N-1) is already fully cleared.
+    fully_cleared_all = has_true & (last_cleared_idx >= N - 1)
+    partial_depth = torch.where(fully_cleared_all, torch.zeros_like(partial_depth), partial_depth)
 
-        base_depth = torch.where(has_true, (last_cleared_idx.to(cum_time.dtype) + 1.0) * dz, zeros_hw)
-        depth_map = base_depth + partial_depth
-        # NOT clamped to (N-1)*dz (the modelled film thickness): a pixel
-        # whose front reaches the last layer WITH time to spare naturally
-        # reports up to one extra dz of "overshoot" (base_depth can reach
-        # N*dz when fully_cleared_all). This is deliberate, not an
-        # oversight -- it is the only signal callers have for "how much
-        # margin this pixel cleared with," which
-        # resist/develop.py:stochastic_development()'s drive formula
-        # ((latent-threshold)/threshold) needs to produce any nonzero
-        # event rate at all for a fully-clearing pixel. Clamping this away
-        # was tried and found to make development_stochasticity=True
-        # degenerate (zero drive everywhere a pixel fully clears) --
-        # see docs/claude_code_arbeitslog.md, 2026-09-03. Callers that
-        # want a strict "did this fully clear the real film" binary
-        # should compare with `>=` against the true thickness ((N-1)*dz),
-        # not rely on this field never exceeding it.
-        return depth_map
+    base_depth = torch.where(has_true, (last_cleared_idx.to(cum_time.dtype) + 1.0) * dz, zeros_hw)
+    depth_map = base_depth + partial_depth
+    # NOT clamped to (N-1)*dz (the modelled film thickness): a pixel
+    # whose front reaches the last layer WITH time to spare naturally
+    # reports up to one extra dz of "overshoot" (base_depth can reach
+    # N*dz when fully_cleared_all). This is deliberate, not an
+    # oversight -- it is the only signal callers have for "how much
+    # margin this pixel cleared with," which
+    # resist/develop.py:stochastic_development()'s drive formula
+    # ((latent-threshold)/threshold) needs to produce any nonzero
+    # event rate at all for a fully-clearing pixel. Clamping this away
+    # was tried and found to make development_stochasticity=True
+    # degenerate (zero drive everywhere a pixel fully clears) --
+    # see docs/claude_code_arbeitslog.md, 2026-09-03. Callers that
+    # want a strict "did this fully clear the real film" binary
+    # should compare with `>=` against the true thickness ((N-1)*dz),
+    # not rely on this field never exceeding it.
+    return depth_map
 
 
 # ──────────────────────────────────────────────

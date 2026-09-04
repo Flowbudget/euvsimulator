@@ -1,5 +1,13 @@
 """Parametric LPP Sn-plasma source model for EUV lithography.
 
+STATUS (2026-09-04 audit): an illustrative, parametric description -- Gaussian
+in-band line plus two out-of-band Gaussians with hand-set widths and
+fractions (0.15 DUV, 0.10 IR, ``losses=0.7``); the numbers are typical
+magnitudes from the cited reviews, not fitted to a measured spectrum. This
+module is NOT connected to the imaging pipeline (which assumes monochromatic
+13.5 nm illumination with the dose given directly at the wafer); it serves
+power-budget estimates only.
+
 Models the laser-produced plasma (LPP) tin droplet source used in
 ASML NXE scanners.  The source emits strongly in a narrow band around
 13.5 nm (the Sn⁸⁺–Sn¹⁴⁺ unresolved transition array, UTA) with a

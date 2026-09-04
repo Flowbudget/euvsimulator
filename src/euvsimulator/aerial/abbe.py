@@ -23,13 +23,16 @@ is (Hopkins 1953)::
 where a_i are the complex amplitude coefficients of the mask
 reflectivity (EUV: multilayer stack reflectivity in the spaces,
 absorber reflectivity on the lines).  The Transmission Cross
-Coefficient (TCC) for a circular source of partial coherence sigma is::
-
-    TCC(i,j) = 2·J₁(x) / x,   x = π·sigma·NA·|m_i−m_j|·λ/Λ
-
-(J₁ = Bessel function of the first kind, order 1; NOT J₀).  For
-sigma → 0 this reduces to the coherent limit TCC = 1 (fully coherent).
-The TCC damps order interference *gradually* — there is no hard cutoff.
+Coefficient TCC(i, j) is evaluated as the exact source–pupil overlap
+integral ∬ S(f) P(f + f_i) P*(f + f_j) d²f / ∬ S d²f on a 2D frequency
+grid (``_compute_tcc_matrix``), for conventional, annular, dipole and
+quasar sources.  (For a conventional disk source and orders both inside
+the pupil this reduces to the classical 2·J₁(x)/x form; the numerical
+overlap additionally accounts for the pupil edge, which the closed form
+does not.)  The TCC damps order interference *gradually* — there is no
+hard cutoff.  Scalar, thin-mask formulation: no polarisation, no
+obliquity factors, no chief-ray-angle shadowing in this path (mask-3D
+effects require ``use_rcwa=True``).
 """
 
 from __future__ import annotations

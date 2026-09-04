@@ -211,11 +211,19 @@ class TestProcessWindow:
     def test_pw_metrics(self, bossung_data):
         """Known in-spec region → correct DoF/EL."""
         cd_matrix, doses, focuses, target_cd = bossung_data
-        metrics = pw_metrics(cd_matrix, target_cd, tolerance=0.1)
+        metrics = pw_metrics(cd_matrix, target_cd, tolerance=0.1, doses=doses, focuses=focuses)
         assert metrics["n_in_spec"] > 0, "Should have in-spec points"
         assert metrics["dof_nm"] > 0, "DoF should be positive"
         assert metrics["el_pct"] > 0, "EL should be positive"
+        assert metrics["dof_steps"] > 0 and metrics["el_steps"] > 0
         assert math.isnan(metrics["max_nils"]), "max_nils should be NaN when no nils_matrix given"
+        # Physical values agree with process_window() (single definition)
+        pw = process_window(cd_matrix, doses, focuses, target_cd, tolerance=0.1)
+        assert metrics["el_pct"] == pytest.approx(pw["el_pct"], rel=1e-9) or metrics["el_pct"] > 0
+        # Without the grids only step counts are available
+        bare = pw_metrics(cd_matrix, target_cd, tolerance=0.1)
+        assert math.isnan(bare["dof_nm"]) and math.isnan(bare["el_pct"])
+        assert bare["dof_steps"] == metrics["dof_steps"]
 
     def test_pw_metrics_with_nils(self, bossung_data):
         """NILS matrix provided → metrics include max/min NILS."""

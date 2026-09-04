@@ -257,9 +257,13 @@ def etch_bias_from_formula(
     return bias
 
 
-# Literature-derived formula coefficients.
-# Each entry: bias = a * CD^b + c * AR^d + e * density^g + h
-# Coeffs fit to published data in JVST B, JECS, and SPIE Proc. (1990–2010).
+# Phenomenological formula coefficients -- STATUS: EMPIRICAL, NOT LITERATURE-
+# BACKED. Each entry: bias = a * CD^b + c * AR^d + e * density^g + h. An
+# earlier comment claimed these were "fit to published data in JVST B, JECS,
+# and SPIE Proc. (1990-2010)"; no specific source, data set or fitting record
+# exists in this repository for any of the 35 numbers, so they must be read
+# as illustrative trend shapes for screening, not as measured etch behaviour
+# (docs/audit_2026-09-04_vollpruefung.md, C4). Not used by the pipeline.
 _CHEMISTRY_FORMULAS: Dict[str, Dict[str, float]] = {
     "cf4": {
         "a": 12.0,
