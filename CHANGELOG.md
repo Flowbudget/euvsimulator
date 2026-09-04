@@ -3,6 +3,23 @@
 All notable changes to euvsimulator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+- Repository layout: 110+ historical audit/session reports moved out of the repository root
+  (recoverable from git history; index in `docs/history/README.md`); third-party reference
+  PDFs/HTML removed from version control; `testberechnungen.md` moved to `docs/`.
+
+### Documentation
+- `docs/audit_2026-09-04_vollpruefung.md`: full scientific audit of the code base. Records
+  several **open physics defects** that are not yet fixed (photon shot noise computed on
+  incident instead of absorbed photons; undocumented dose convention — aerial image is not
+  clear-field-normalised; PEB diffusion length not sourced for the validation regime;
+  quencher effectively inert in the stochastic path; `development_stochasticity` depends on
+  the numerical layer count; RCWA TM factorisation is the Laurent rule, not Li's rule).
+  No physics or code was changed in this release; see the report for evidence and a
+  proposed order of correction.
+
 ## [1.0.0] — 2026-07-07
 
 ### Added

@@ -258,8 +258,9 @@ def _generate_photon_shot_noise(
 
 # ──────────────────────────────────────────────
 # Event-based photon deposition with SE-PSF
-# (physically clean shot-noise model — Step 1 of
-#  STOCHASTIC_PHYSICS_DESIGN_AUDIT)
+# (physically clean shot-noise model — Step 1 of the 2026-08
+#  stochastic physics design audit; report archived, see
+#  docs/history/README.md)
 # ──────────────────────────────────────────────
 
 
@@ -276,8 +277,9 @@ def photon_deposition_shot_noise(
 ) -> torch.Tensor:
     """Event-based photon shot noise with secondary-electron PSF.
 
-    This is the physically clean shot-noise model described in
-    ``STOCHASTIC_PHYSICS_DESIGN_AUDIT.txt`` (Step 1):
+    This is the physically clean shot-noise model described in the
+    2026-08 stochastic physics design audit (Step 1; report archived in
+    git history, index in ``docs/history/README.md``):
 
         1. Mean photon count per voxel:
                N_bar(x) = dose(x) * A_voxel * f / E_photon * absorption

@@ -1,6 +1,7 @@
 """Unit tests for photon_deposition_shot_noise — event-based shot noise.
 
-Tests cover (Step 1 of STOCHASTIC_PHYSICS_DESIGN_AUDIT):
+Tests cover (Step 1 of the 2026-08 stochastic physics design audit,
+archived -- see docs/history/README.md):
 1. Statistical moments of the Poisson events (E[N]=lam, Var[N]=lam)
 2. Unbiasedness of D_eff w.r.t. dose (many realisations)
 3. Seed reproducibility

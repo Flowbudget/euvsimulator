@@ -3,10 +3,9 @@
 3|[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 4|[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 5|[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/euvsimulator/actions)
-6|[![Tests](https://img.shields.io/badge/tests-796%2B%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
+6|[![Tests](https://img.shields.io/badge/tests-797%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
 7|[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?include_prereleases&sort=semver)](https://github.com/Flowbudget/euvsimulator/releases)
-8|[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
-9|
+8|9|
 10|**From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
 11|
 12|| | |
@@ -45,7 +44,7 @@
 45|## Verified reference calculations
 46|
 47|All material constants verified against the CXRO/Henke database.
-48|Full details in [`testberechnungen.md`](testberechnungen.md).
+48|Full details in [`docs/testberechnungen.md`](docs/testberechnungen.md).
 49|
 50|| Test | Result | Method |
 51||------|--------|--------|
@@ -246,7 +245,7 @@
 246||-----------|--------|
 247|| Project scaffold & CXRO materials | ✅ |
 248|| Multilayer optics (S-matrix TMM) | ✅ |
-249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), integrated via `use_rcwa=True`. ⚠️ `absorber_taper_deg`/`mask_undercut_nm` exist as config fields but are currently silently ignored in the RCWA geometry path (`pipeline.py:1516`, `pass  # Taper/undercut grid geometry is not yet implemented` — verified 2026-09-04; correction of a previous, inaccurate "✅ taper/undercut integrated" claim here) |
+249|| Mask 3D (RCWA 1D + 2D) | ✅ RCWA 1D/2D (S-matrix), integrated via `use_rcwa=True`. ⚠️ `absorber_taper_deg`/`mask_undercut_nm` exist as config fields but are currently silently ignored in the RCWA geometry path (`pipeline.py:1628`, `pass  # Taper/undercut grid geometry is not yet implemented` — verified 2026-09-04; correction of a previous, inaccurate "✅ taper/undercut integrated" claim here) |
 250|| Aerial image (Abbe/Hopkins + SE blur) | ✅ |
 251|| High-NA imaging (anamorphic) | ✅ |
 252|| End-to-end pipeline | ✅ |
@@ -260,7 +259,7 @@
 260|| Tutorials & documentation | ✅ 6 notebooks complete |
 261|| Docker deployment | ✅ |
 262|| **CI/CD pipeline** | ✅ **GitHub Actions: Linux/macOS/Windows × Python 3.10–3.13** |
-263||| **Test count** | **796+ / 796+ passing** |
+263||| **Test count** | **797 / 797 passing** (2026-09-04) |
 264|| **License** | Apache 2.0 |
 265|
 266|---
@@ -278,7 +277,10 @@
 278|| **High-NA EUV** | Anamorphic pupil, polarisation (TE/TM), Zernike aberrations | Research |
 279|| **Citation metadata** | `CITATION.cff` + Zenodo DOI for v1.0 | Medium |
 280|
-281|See [`COMPLETION_PLAN.md`](COMPLETION_PLAN.md) for detailed phase breakdown with code sketches.
+281|Scientific status, open physics issues and the full verification record are kept in
+[`docs/audit_2026-09-04_vollpruefung.md`](docs/audit_2026-09-04_vollpruefung.md) and
+[`docs/claude_code_arbeitslog.md`](docs/claude_code_arbeitslog.md); earlier reports are
+indexed in [`docs/history/`](docs/history/README.md).
 282|
 283|---
 284|
