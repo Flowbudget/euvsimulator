@@ -797,7 +797,33 @@ def ler_estimate(
 
     vals = torch.tensor([v for v in ler_per_real if not math.isnan(v)])
     if vals.numel() == 0:
-        raise ValueError("no valid edges found in any realization")
+        # No realization had a measurable edge (e.g. the field is fully
+        # developed or fully undeveloped in every realization -- a real,
+        # reachable configuration, not a numerical error). Consistent with
+        # extract_lwr()'s own NaN convention for the identical "no edge
+        # found" case (see its own `return float("nan")`, called at the
+        # same pipeline.py call site just above this one), and with the
+        # per-realization math.isnan(v) filtering a few lines above: report
+        # NaN rather than raising, so a caller sweeping a parameter across
+        # a resist's resolution window (e.g. a dose or dill_Q sweep that
+        # legitimately runs into fully-cleared or fully-unresolved points)
+        # gets a well-formed, filterable result instead of an uncaught
+        # exception aborting the whole run. Found and fixed 2026-09-04
+        # while repairing notebooks/05_stochastics.ipynb, whose dill_Q
+        # sweep hits exactly this case at its upper end.
+        return LEREstimate(
+            ler_nm=float("nan"),
+            n_rows=n_rows,
+            n_eff=neff,
+            l_int_px=l_int,
+            l_int_nm=l_int * dx,
+            estimator=estimator,
+            seed_count=int(seed_count) if seed_count is not None else 0,
+            uncertainty_nm=float("nan"),
+            ci95_low_nm=float("nan"),
+            ci95_high_nm=float("nan"),
+            rho_truncation=k_trunc,
+        )
     ler_mean = float(vals.mean())
     n_seed = int(vals.numel()) if seed_count is None else seed_count
     if vals.numel() > 1:
