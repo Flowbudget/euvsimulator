@@ -114,6 +114,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   state their status.
 - `euv calibrate --period/--cd/--grid/--se-blur`: the simulated geometry must match the measured
   FEM; it was hard-wired to 64/32 nm regardless of the data.
+- `tests/test_cli_commands.py`: smoke tests for `version`, `info`, `materials`, `make-mask`,
+  `process-window` (audit item E7: 7 of 8 commands were untested).
 - `tests/test_yamamoto_anchor.py`: the default resist parameters (Yamamoto et al. 2011, Table 2)
   are checked against the same paper's own measurements on the same resist (Fig. 3 FTIR
   protection ratio, Fig. 5 dissolution-rate threshold). In the standard Mack forms the chain

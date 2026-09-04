@@ -452,7 +452,7 @@ class SimulationConfig:
     # ADOPTED as the new default for the same reason as dill_Q above: this
     # is Yamamoto et al. 2011's own real, cited Arrhenius-derived rate (kJ/mol
     # reading, see above), not a new or re-guessed number.
-    peb_k: float = 0.0723  # Deprotection rate constant [s⁻¹] -- Yamamoto et al. 2011's own Arrhenius fit (Ea=27.8 kJ/mol, ln(Ar)=6.1/s) evaluated at their own PEB condition (110C); see note above for the unit-ambiguity resolution and why this is now adopted (works with the depth-resolved MackModel chain, did not with the old simplified one)
+    peb_k: float = 0.0723  # Deprotection rate constant [s⁻¹] -- Yamamoto et al. 2011's own Arrhenius fit (Ea=27.8 kJ/mol, ln(Ar)=6.1/s) evaluated at their own PEB condition (110C); see note above for the unit-ambiguity resolution and why this is now adopted (works with the depth-resolved MackModel chain, did not with the old simplified one). CAVEAT 2026-09-05: the paper's own Fig. 4 Arrhenius plot gives Kdp(110C) ~ 1.4 s^-1 for this polymer (axis-calibrated reading), 19x this value; together with the missing acid-loss term this is why the chain deprotects ~3.4x too little against Figs. 3/5 -- see the dill_A caveat and tests/test_yamamoto_anchor.py
     peb_t_bake: float = 60.0  # Bake time [s]
     peb_sigma_diff: float | None = None  # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see note above
 

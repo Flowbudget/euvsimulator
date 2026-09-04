@@ -64,3 +64,16 @@ def test_coarse_grid_agrees_with_fine_grid():
         return run_simulation(SimulationConfig(resist_model="full_chem", period_nm=64.0, line_width_nm=32.0,
                                                grid=grid, dose_mj_cm2=4.5, peb_sigma_diff=7.0, se_blur_nm=5.0)).cd_nm
     assert abs(cd(64) - cd(256)) < 0.5
+
+
+def test_column_model_still_runs_and_is_wider_than_eikonal():
+    """The column model has no lateral dissolution: its line is at least as
+    wide as the Eikonal line at the same dose, and (documented) its CD stays
+    a multiple of dx because it has no lateral information to interpolate."""
+    kw = dict(resist_model="full_chem", period_nm=64.0, line_width_nm=32.0, grid=64,
+              dose_mj_cm2=4.5, peb_sigma_diff=7.0, se_blur_nm=5.0)
+    col = run_simulation(SimulationConfig(development_model="column", **kw)).cd_nm
+    eik = run_simulation(SimulationConfig(development_model="eikonal", **kw)).cd_nm
+    assert col > 0.0 and eik > 0.0
+    assert col >= eik - 1e-9
+    assert float(col).is_integer()  # dx = 1 nm at grid 64

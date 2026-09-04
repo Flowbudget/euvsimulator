@@ -18,7 +18,13 @@ haben sie sichtbar gemacht. **Phase 2b (Fortsetzung 14):** ein weiterer, in dies
 Numerikfehler: `gaussian_se_blur` klemmte den Kernel auf die Bildbreite — die PEB-Diffusion mit
 σ = 19,9 nm hatte effektiv eine MTF von 0,12 statt 0,018 (alle σ-abhängigen Zahlen in Abschnitt A3
 und im Arbeitslog Fortsetzung 10 sind davon betroffen); behoben, plus ADI-Flussform (C1) und
-z-Diffusion (B2). **Offen:** A3 (σ_diff), B1 (Eikonal-Löser validiert, Pipeline-Anbindung folgt).
+z-Diffusion (B2). B1: Eikonal-Front ist seit Fortsetzung 14 Pipeline-Default. **Fortsetzung 15
+(2026-09-05):** CD sub-pixel aus der Eikonal-Ankunftszeit; Stochastik-Kette in y-Kacheln (der
+61440-Zeilen-Test war nach Phase 2b OOM-gekillt, 43,7 GB → 1,8 GB); `euv calibrate` hatte einen
+Variablen-Shadowing-Fehler (`cd`); und der Yamamoto-Table-2-Satz reproduziert die Messungen seiner
+eigenen Quelle nicht (Fig. 3/5, Faktor ≈ 3,4 in k·C; `tests/test_yamamoto_anchor.py`, strict-xfail).
+**Offen:** A3 (σ_diff — ohne 22-nm-HP-Resistsatz aus einer Quelle nicht kalibrierbar, siehe
+Arbeitslog Fortsetzung 15 Punkt 2/3).
 
 **Lesart dieses Berichts:** Jeder Befund trägt eine Klasse — **[BESTÄTIGT]** = numerisch oder gegen Primärquelle belegt, **[GELESEN]** = aus dem Code eindeutig ableitbar, aber nicht separat gemessen, **[VERDACHT]** = plausibel, nicht abgeschlossen. Was ich geprüft und für korrekt befunden habe, steht in Abschnitt D, damit „nicht erwähnt" nicht mit „nicht geprüft" verwechselt wird. Eigene Fehleinschätzungen aus diesem Audit stehen in Abschnitt F.
 

@@ -2331,3 +2331,18 @@ Photonenrauschen nicht prüfbar und wird nicht mehr behauptet. Geblieben: dense 
 
 **Ergebnis:** `test_arbitrary_n_rows[61440]` allein: **bestanden in 312 s, Spitzen-RSS 1,82 GB**
 (vorher 43,7 GB Footprint, SIGKILL). Konsistenzmodul nach Umschreibung 5/5.
+
+**Rauchtest mit glatter FEM (nach Sub-Pixel-CD erzeugt: 31,65/28,59/26,14/24,08):** `euv calibrate`
+ab Start 12 → **σ = 7,0000, RMSE 0,000** (38 Auswertungen). Vorhersage 7 ± 0,3 bestätigt; die
+Abweichung 7,51 zuvor war die Quantisierung der alten Zieldaten.
+
+### 8. Nacharbeiten
+
+- `tests/test_cli_commands.py`: `version`, `info`, `materials`, `make-mask` (GDS mit 3 Polygonen),
+  `process-window` (Gitter 64, 3×3) — Audit E7 (7/8 Kommandos ungetestet) abgearbeitet; `serve`
+  und `bench` bewusst nicht.
+- Säulenmodell-Test in `tests/test_subpixel_cd.py`: läuft, CD ≥ Eikonal-CD (keine laterale
+  Auflösung), bleibt dx-quantisiert.
+- Audit E8 (`dx` vs `dx_nm`, 16 gegen 7 Signaturen): alle `dx` sind Nanometer; eine
+  Massenumbenennung öffentlicher Parameter ist kosmetisch und bleibt offen.
+- Notebooks 01–06 nach Sub-Pixel-CD und Kachelung erneut ausgeführt (6 × „Writing", keine Fehler).
