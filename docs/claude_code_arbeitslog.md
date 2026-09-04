@@ -727,3 +727,79 @@ golden-value-Anpassungen nötig.
 weiterhin gar nicht entwickelt, siehe Befund 1 oben); Commit dieser Änderungen steht noch aus.
 
 ---
+
+## 2026-09-04: Kombinations-Kalibrierung untersucht — Befund: keine Fehlkalibrierung, sondern echte Architektur-Wechselwirkung
+
+**Auslöser:** "ja, geh der Kalibrierung nach" — Untersuchung des oben offen gelassenen Befunds,
+dass `development_stochasticity` + `exposure_stochasticity` kombiniert bei 16mJ/cm² WENIGER
+LWR ergibt (0,22nm) als `development_stochasticity` allein (3,24nm).
+
+**Root-Cause-Analyse** (über echte Pipeline-Zwischenwerte, `surface_advancement_level_set`
+abgegriffen, `stochastic_ler_grid_y=1024`, 1 Realisierung, dose=16): `stochastic_development()`
+berechnet `drive = max(0, (depth_map_noisy - resist_thickness_nm) / resist_thickness_nm)` und
+zieht daraus Poisson-Ereignisse mit Rate `strength·drive`. Der Vergleich der beiden Modi:
+
+| | `exposure_stochasticity=False` | `exposure_stochasticity=True` |
+|---|---|---|
+| depth_map Mittel/Std [nm] | 18,4 / 18,0 | 13,7 / 13,0 |
+| drive Mittel | 0,00465 | 0,000107 (**43x kleiner**) |
+| Anteil Pixel mit drive>0 | 11,0% | 0,54% (**20x kleiner**) |
+
+`exposure_stochasticity` verschiebt die `depth_map_noisy`-Verteilung strukturell nach unten:
+weniger Pixel erreichen überhaupt eine nennenswerte Überschreitung von `resist_thickness_nm`
+(volle Klärung). Das ist eine direkte Folge desselben Quencher-Schwellen-Mechanismus, der
+`exposure_stochasticity` selbst erst funktionsfähig macht (Eintrag oben) — ein Großteil des
+Resists sitzt nahe der Quencher-Baseline und liefert nur knapp genug übrige Säure, um überhaupt
+zu entwickeln, mit entsprechend wenig Überschuss darüber hinaus. `development_stochasticity`s
+`drive`-Mechanismus braucht aber genau diesen Überschuss als "Treibstoff" — mit
+`exposure_stochasticity` aktiv bleibt davon strukturell weniger übrig, unabhängig von
+`development_strength`.
+
+**Sweep-Test, um zu prüfen ob reines Hochskalieren von `development_strength` das kompensiert**
+(kombiniert, dose=16, 3 Realisierungen, `stochastic_ler_grid_y=4096`):
+
+| strength | LWR kombiniert [nm] | LWR nur `development_stochasticity` [nm] |
+|---|---|---|
+| 20 (aktueller Default) | 0,22 | 3,24 |
+| 100 | 0,93 | 3,52 |
+| 200 | **1,22 (Maximum)** | 3,54 |
+| 400 | 0,88 | — |
+| 800 | 0,90 | — |
+| 1600 | 0,69 | — |
+
+Zwei Befunde:
+1. Der kombinierte Modus hat ein **nicht-monotones Maximum bei strength≈200** (1,22nm) — bei
+   noch höherer Stärke sättigt der Poisson-Rate-Mechanismus gegen deterministische
+   Schwellenentwicklung (dokumentiertes Verhalten von `stochastic_development`: "in the limit
+   strength -> infinity the model reduces to the deterministic threshold development", also
+   wieder WENIGER Rauschen), das Optimum liegt dazwischen.
+2. **Selbst am eigenen Optimum (1,22nm) bleibt der kombinierte Modus deutlich unter
+   `development_stochasticity` allein (3,24–3,54nm, selbst stabil über strength=20–200).**
+   Kein getesteter `development_strength`-Wert bringt die Kombination auch nur in die Nähe von
+   `development_stochasticity` allein, geschweige denn darüber hinaus.
+
+**Schlussfolgerung:** Dies ist **keine Fehlkalibrierung, die sich durch einen anderen
+`development_strength`-Wert beheben lässt**, sondern eine echte, strukturelle Wechselwirkung:
+`exposure_stochasticity`s Quencher-Schwelle und `development_stochasticity`s
+Depth-Overshoot-`drive`-Mechanismus konkurrieren um dieselbe "Überschuss-Marge" im Resist,
+und Ersteres verbraucht/reduziert sie strukturell, bevor Letzteres sie nutzen kann. Die beiden
+Mechanismen sind **nicht additiv unabhängig**, wie ursprünglich (naiv) angenommen.
+
+**Entscheidung:** `development_strength`-Default (20,0) bleibt **unverändert** — er ist korrekt
+für den bereits validierten `development_stochasticity`-allein-Pfad kalibriert (Phase 5,
+golden values), und ein anderer Wert würde nur für die Kombination optimieren, ohne diese
+über das bessere Einzelmechanismus-Ergebnis zu heben — das wäre ungerechtfertigtes Tuning
+ohne echten Nutzen. **Empfehlung für Nutzer dieses Modells:** aktuell `development_stochasticity`
+ODER `exposure_stochasticity` einzeln verwenden (beide Default aus), nicht kombiniert — die
+Kombination liefert derzeit kein besseres Ergebnis als der bessere der beiden Einzelmechanismen.
+Eine echte Vereinheitlichung (z.B. `drive` direkt aus dem Säure-Quencher-Überschuss statt aus
+dem Tiefen-Overshoot ableiten) wäre ein größerer Architektur-Umbau, hier nicht umgesetzt (nicht
+angefragt, keine ausreichende Datenbasis für eine neue Formel ohne weitere Kalibrierungsdaten).
+
+**Verbleibende Vesters-Lücke:** unverändert real — der beste bisher gefundene Einzelmechanismus
+(`development_stochasticity` allein) liefert bei 16mJ/cm² LWR≈3,2–3,5nm gegen real gemessene
+6,5–10,3nm, also weiterhin ein Faktor ~2–3x zu klein. `exposure_stochasticity` allein liegt mit
+≈0,98nm bei derselben Dosis noch weiter darunter. Kein Code geändert in dieser Runde (reine
+Charakterisierungs-/Kalibrierungsuntersuchung, keine Bugs gefunden).
+
+---
