@@ -353,14 +353,17 @@ class RCWA2D:
         A11, A12, A21, A22 = S_a[0, 0], S_a[0, 1], S_a[1, 0], S_a[1, 1]
         B11, B12, B21, B22 = S_b[0, 0], S_b[0, 1], S_b[1, 0], S_b[1, 1]
 
-        D1 = torch.linalg.inv(I - A22 @ B11)
-        D2 = torch.linalg.inv(I - B11 @ A22)
+        # Resolvent ordering matters for matrix blocks (push-through
+        # identity); same correction as rcwa_torch.RCWA1D._redheffer_star_matrix
+        # (2026-09-04) -- see its docstring.
+        D_b = torch.linalg.inv(I - B11 @ A22)  # terms starting with B11
+        D_a = torch.linalg.inv(I - A22 @ B11)  # terms starting with A22
 
         S = torch.zeros_like(S_a)
-        S[0, 0] = A11 + A12 @ D1 @ B11 @ A21
-        S[0, 1] = A12 @ D1 @ B12
-        S[1, 0] = B21 @ D2 @ A21
-        S[1, 1] = B22 + B21 @ D2 @ A22 @ B12
+        S[0, 0] = A11 + A12 @ D_b @ B11 @ A21
+        S[0, 1] = A12 @ D_b @ B12
+        S[1, 0] = B21 @ D_a @ A21
+        S[1, 1] = B22 + B21 @ D_a @ A22 @ B12
         return S
 
     # ── Convergence driver ─────────────────────

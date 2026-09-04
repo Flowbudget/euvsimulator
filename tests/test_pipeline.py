@@ -365,9 +365,15 @@ class TestPolarizationAveraging:
             "This suggests TE ≈ TM."
         )
 
-        # Verify analytic bound: diff = -|r_TE - r_TM|²/4
+        # Analytic bound. Per order, |(a+b)/2|² − (|a|²+|b|²)/2 = −|a−b|²/4.
+        # Through the Hopkins double sum the pointwise difference is
+        #   −(1/4) Σ_ij Δ_i Δ_j* TCC_ij e^{i2π(m_i−m_j)x/Λ},  Δ = r_TE − r_TM,
+        # whose magnitude is bounded (|TCC_ij| ≤ 1) by (Σ_i |Δ_i|)²/4 -- NOT by
+        # Σ_i |Δ_i|²/4, which a previous version of this test used; that
+        # tighter "bound" only held while TE ≈ TM and was violated by 8 % once
+        # the TM solver was corrected (2026-09-04, Fortsetzung 13).
         orders_diff = orders_te - orders_tm
-        bound = (orders_diff.abs()**2 / 4).sum().item()
+        bound = (orders_diff.abs().sum() ** 2 / 4).item()
         assert max_diff <= bound, (
             f"Difference {max_diff:.2e} exceeds bound {bound:.2e}"
         )

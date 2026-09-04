@@ -176,16 +176,28 @@ class RCWA1D:
         # Permittivity Toeplitz matrices: Toeplitz(ε) and Toeplitz(1/ε)
         E_eps = permittivity_toeplitz(eps_profile, self.M, use_inverse_rule=False)
         E_inv = permittivity_toeplitz(eps_profile, self.M, use_inverse_rule=True)
+        I_M = torch.eye(self.M, dtype=torch.complex128, device=self.device)
 
-        # Eigenvalue problem
+        # Eigenvalue problem  d²u/dz'² = −A u  (z' = k0 z), q² = eig(A).
+        #
+        # TE (E_y):  A = [ε] − Kx²                                   (Moharam 1995)
+        # TM (H_y):  A = [1/ε]⁻¹ (I − Kx [ε]⁻¹ Kx)                  (Li 1996, Lalanne & Morris 1996)
+        #   From ∂z((1/ε)∂z H) + ∂x((1/ε)∂x H) + k0² H = 0: the product (1/ε)·∂z H
+        #   has one discontinuous factor -> Laurent rule, [1/ε]; the product
+        #   (1/ε)·∂x H = −i k0 E_z is continuous (E_z is tangential to the
+        #   lamellar interfaces) -> inverse rule, [ε]⁻¹.
+        #   Before 2026-09-04 this read A = [ε] − [ε] Kx [ε]⁻¹ Kx (Laurent rule
+        #   everywhere) with the modal admittance V = [ε] W Q⁻¹ and Rayleigh
+        #   admittance ε k0/kz -- a set of conventions that is self-consistent
+        #   for HOMOGENEOUS layers (everything commutes; slab == TMM) but wrong
+        #   for gratings: the effective-medium limit P << λ gave R_TM = 0.21
+        #   instead of the exact 0.030 and did not converge in M
+        #   (docs/claude_code_arbeitslog.md "Fortsetzung 13").
         Kx2 = Kx @ Kx
         if self.cfg.polarization == "TE":
             A = E_eps - Kx2
         else:
-            # TM: Li's improved Fourier factorization
-            # A = E_eps - E_eps @ Kx @ inv(E_eps) @ Kx
-            E_eps_inv = torch.linalg.inv(E_eps)
-            A = E_eps - E_eps @ Kx @ E_eps_inv @ Kx
+            A = torch.linalg.inv(E_inv) @ (I_M - Kx @ torch.linalg.inv(E_eps) @ Kx)
 
         eig_vals, W = torch.linalg.eig(A)
         q = torch.sqrt(eig_vals)
@@ -201,14 +213,18 @@ class RCWA1D:
             q.imag < 0,  # complex: pick Im(q) > 0
         )
         q = torch.where(flip, -q, q)
+        # Second tangential field of each mode (the one whose continuity,
+        # together with the first, fixes the interface S-matrices):
+        #   TE: H_x ∝ −(i/k0) ∂z E_y  ->  V = W Q
+        #   TM: E_x ∝  (i/k0)(1/ε) ∂z H_y  ->  V = [1/ε] W Q
         if self.cfg.polarization == "TE":
-            V = W @ torch.diag(q)  # modal admittance: E_y ↔ H_x
+            V = W @ torch.diag(q)
         else:
-            # TM modal admittance: E_eps @ W @ diag(1/q)  (H_y ↔ E_x)
-            q_inv = torch.where(q.abs() > 1e-30, 1.0 / q, torch.zeros_like(q))
-            V = E_eps @ W @ torch.diag(q_inv)
+            V = E_inv @ W @ torch.diag(q)
 
-        # Rayleigh admittances of incident and substrate media
+        # Rayleigh "admittances" of incident and substrate media: the same
+        # field ratio for a plane wave e^{i kz z} -- kz/k0 (TE, H_x/E_y) and
+        # kz/(k0 ε) (TM, E_x/H_y).
         kz_inc = torch.sqrt((n_i[0] * k0) ** 2 - k_xm**2 + 0j)
         kz_sub = torch.sqrt((n_s[0] * k0) ** 2 - k_xm**2 + 0j)
         kz_inc = torch.where(kz_inc.imag < 0, -kz_inc, kz_inc)
@@ -218,8 +234,8 @@ class RCWA1D:
             Y_inc = torch.diag(kz_inc / k0).to(torch.complex128)
             Y_sub = torch.diag(kz_sub / k0).to(torch.complex128)
         else:
-            Y_inc = torch.diag(n_i[0] ** 2 * k0 / kz_inc).to(torch.complex128)
-            Y_sub = torch.diag(n_s[0] ** 2 * k0 / kz_sub).to(torch.complex128)
+            Y_inc = torch.diag(kz_inc / (k0 * n_i[0] ** 2)).to(torch.complex128)
+            Y_sub = torch.diag(kz_sub / (k0 * n_s[0] ** 2)).to(torch.complex128)
 
         # Build top interface S-matrix: Rayleigh ↔ eigenmodes
         S_top = self._rayleigh_to_eigenmode_smatrix(Y_inc, W, V)
@@ -238,7 +254,7 @@ class RCWA1D:
             if self.cfg.polarization == "TE":
                 Y_ML_top = torch.diag(kz_ML / k0).to(torch.complex128)
             else:
-                Y_ML_top = torch.diag(n_ML_top ** 2 * k0 / kz_ML).to(torch.complex128)
+                Y_ML_top = torch.diag(kz_ML / (k0 * n_ML_top ** 2)).to(torch.complex128)
 
             # Interface: eigenmode ↔ Rayleigh modes in ML top layer
             S_interface = self._eigenmode_to_rayleigh_smatrix(Y_ML_top, W, V)
@@ -373,9 +389,24 @@ class RCWA1D:
     def _redheffer_star_matrix(S_a: torch.Tensor, S_b: torch.Tensor) -> torch.Tensor:
         """Redheffer star product for matrix-valued S-matrices.
 
-        Stable formulation (Li 1996):
-          D₁ = (I − A₂₂ B₁₁)^{-1}
-          D₂ = (I − B₁₁ A₂₂)^{-1}
+        Port 0 of the result is port 0 of *S_a*, port 1 is port 1 of *S_b*;
+        S[i, j] maps the wave INCOMING at port j to the wave OUTGOING at
+        port i.  (Redheffer 1962; Li, JOSA A 13, 1024 (1996), Eq. 11):
+
+          S₁₁ = A₁₁ + A₁₂ (I − B₁₁ A₂₂)⁻¹ B₁₁ A₂₁
+          S₁₂ = A₁₂ (I − B₁₁ A₂₂)⁻¹ B₁₂
+          S₂₁ = B₂₁ (I − A₂₂ B₁₁)⁻¹ A₂₁
+          S₂₂ = B₂₂ + B₂₁ (I − A₂₂ B₁₁)⁻¹ A₂₂ B₁₂
+
+        The two resolvents are NOT interchangeable for matrix blocks:
+        (I − B₁₁A₂₂)⁻¹ B₁₁ = B₁₁ (I − A₂₂B₁₁)⁻¹ (push-through identity), so
+        using (I − A₂₂B₁₁)⁻¹ in S₁₁ puts the factors in the wrong order.
+        Before 2026-09-04 the two were swapped; that is invisible for scalar
+        blocks (TMM, homogeneous layers -- everything commutes) but made the
+        cascade Rayleigh → grating modes → Rayleigh over zero thickness NOT
+        reduce to the plain interface (deviation 0.17 in |r| for a lossless
+        test grating) and broke energy conservation by ~1 %
+        (docs/claude_code_arbeitslog.md "Fortsetzung 13").
         """
         M = S_a.shape[-1]
         I = torch.eye(M, dtype=torch.complex128, device=S_a.device)
@@ -383,14 +414,14 @@ class RCWA1D:
         A11, A12, A21, A22 = S_a[0, 0], S_a[0, 1], S_a[1, 0], S_a[1, 1]
         B11, B12, B21, B22 = S_b[0, 0], S_b[0, 1], S_b[1, 0], S_b[1, 1]
 
-        D1 = torch.linalg.inv(I - A22 @ B11)
-        D2 = torch.linalg.inv(I - B11 @ A22)
+        D_b = torch.linalg.inv(I - B11 @ A22)  # for terms that start with B11
+        D_a = torch.linalg.inv(I - A22 @ B11)  # for terms that start with A22
 
         S = torch.zeros_like(S_a)
-        S[0, 0] = A11 + A12 @ D1 @ B11 @ A21
-        S[0, 1] = A12 @ D1 @ B12
-        S[1, 0] = B21 @ D2 @ A21
-        S[1, 1] = B22 + B21 @ D2 @ A22 @ B12
+        S[0, 0] = A11 + A12 @ D_b @ B11 @ A21
+        S[0, 1] = A12 @ D_b @ B12
+        S[1, 0] = B21 @ D_a @ A21
+        S[1, 1] = B22 + B21 @ D_a @ A22 @ B12
         return S
 
     # ── Convergence driver ─────────────────────
@@ -499,8 +530,16 @@ def _build_ml_reflection_operator(
     # (same as the RCWA interface medium — the Ru capping layer).
     n_inc = n_layers[0]  # complex refractive index of top layer
 
-    # Substrate (bulk Si below the ML)
-    n_sub = ml_stack.n_layers[-1] if hasattr(ml_stack, 'substrate_nk') else n_layers[-1]
+    # Substrate below the ML: bulk Si (the standard EUV blank). The previous
+    # expression had two identical branches that both took the LAST LAYER's
+    # index -- numerically the same as Si here because the bottom layer of a
+    # Mo/Si stack is Si, but logically wrong; take Si from the CXRO table at
+    # the actual wavelength instead.
+    from euvsimulator.constants import HC_EV_NM
+    from euvsimulator.materials import CXROTable
+
+    n_si, k_si = CXROTable().refractive_index("Si", HC_EV_NM / (wavelength * 1e9))
+    n_sub = torch.tensor(complex(n_si, k_si), dtype=torch.complex128)
 
     S_ML = torch.zeros(2, 2, M, M, dtype=torch.complex128, device=device)
 
@@ -512,7 +551,14 @@ def _build_ml_reflection_operator(
             n_incident=complex(float(n_inc.real), float(n_inc.imag)),
             n_substrate=complex(float(n_sub.real), float(n_sub.imag)),
         )
-        S_ML[0, 0, m, m] = r_m
+        # optics.tmm returns the reflection coefficient of the field whose
+        # continuity its admittance formulation is built on: E_y for TE, and
+        # for TM the E-field amplitude (admittance ε k0/kz = H_y/E_x). The
+        # RCWA TM Rayleigh amplitudes are H_y; for the reflected (−z) wave
+        # H_y = −η E_x, so r_H = −r_E. Verified 2026-09-04 on an empty
+        # grating over the ML stack: with the sign, |r0|² and phase match the
+        # TMM to 1e-6; without it, 0.633 vs 0.639 and −1.5° vs −12.6°.
+        S_ML[0, 0, m, m] = r_m if te else -r_m
 
     return S_ML
 
