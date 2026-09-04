@@ -342,7 +342,7 @@ def _reaction_limited_quench(
 
 def reaction_diffusion_with_quenching(
     acid: torch.Tensor,
-    quencher: torch.Tensor,
+    quencher: torch.Tensor | float,
     inhibitor: torch.Tensor,
     D: float | torch.Tensor,
     k: float | torch.Tensor,
@@ -365,47 +365,57 @@ def reaction_diffusion_with_quenching(
     "ARCHITECTURE GAP" findings earlier this session for why that
     matters here specifically).
 
-    Model, in order:
+    Used by BOTH the mean-field (deterministic) chain and the sampled-
+    molecule (exposure_stochasticity) chain, so that the deterministic
+    result is the large-number limit of the stochastic one (pinned by
+    tests/test_stochastic_consistency.py). Operator splitting, in order:
 
-    1. The sampled per-voxel acid/quencher fields react via the
-       reaction-limited closed-form kinetics (Mack, Biafore & Smith
-       2011, "Stochastic Acid-Base Quenching in Chemically Amplified
-       Photoresists," Proc. SPIE 7972, 797202, Eq. 15 -- free via
-       lithoguru.com; see pipeline.py's acid_base_quench_rate_nm3_per_s
-       comment for the rate constant's citation) BEFORE any diffusion.
-       "Reaction-limited" specifically means the neutralisation is fast
-       and local relative to the PEB diffusion length -- that is what
-       justifies treating it as a well-mixed bimolecular reaction at
-       the voxel scale in the first place, so it must act on the
-       per-voxel sampled counts, not on an already spatially-averaged
-       field (applying it after diffusion was tried first and found to
-       destroy essentially all of the sampled molecular discreteness --
-       see the comment at this function's call site below for the
-       numerical finding that caught this).
-    2. The post-quenching acid/quencher fields then diffuse during the
-       rest of PEB (same Gaussian-blur approximation as
-       :func:`reaction_diffusion_analytical`, applied to BOTH fields
-       with the same sigma -- Mack et al. 2011's own baseline uses
-       equal acid/base diffusivities, DA=DQ=1 nm²/s; this codebase's
-       own peb_D/sigma_diff, a real EUV-cited value in its own right
-       (Lavery et al. 2006 / Anderson et al. 2009, see pipeline.py
-       peb_D comment), is reused for both here rather than introducing
-       a second, less-representative diffusivity).
-    3. That diffused, post-quenching acid level drives the SAME
-       pseudo-first-order deprotection kinetics as the rest of this
-       codebase, M(t) = M0 * exp(-k * h_quenched * t_bake).
+    1. Acid and quencher DIFFUSE over the PEB diffusion length (Gaussian
+       blur of both fields with the same sigma -- Mack, Biafore & Smith
+       2011, Proc. SPIE 7972, 797202, baseline D_A = D_Q; this codebase's
+       peb_D / sigma_diff is used for both).
+    2. The diffused fields then react via the reaction-limited closed-form
+       bimolecular kinetics (same paper, Eq. 15) with rate k_Q·G0 over
+       t_bake. Molecules "meet" through diffusion, not inside a grid cell:
+       evaluating the reaction on the raw per-voxel sample (the order used
+       before 2026-09-04) made the quencher effectively inert at this
+       codebase's resolution -- a 0.17×0.17×2.5 nm³ voxel holds 0.014
+       molecules, so an acid and a base only "met" when both Poisson draws
+       landed in the same cell (p ≈ 0.004; measured: 0.3 % of the acid
+       removed at q0/h0 = 0.25/0.16, where the mean field would remove all
+       of it). For equal diffusivities and complete reaction the result is
+       exactly max(blur(h0) − blur(q0), 0), since diffusion is linear and
+       the reaction conserves h − q; the closed form additionally handles
+       incomplete reaction near h ≈ q. The molecular discreteness survives
+       as the fluctuation of the diffused fields -- the counting statistics
+       of the molecules inside a diffusion volume, which is the physical
+       noise source.
+       (The earlier "react first" choice had been adopted because
+       blur-then-react collapsed the signal to ~1e-21 -- that collapse was
+       the correct mean-field consequence of the THEN-inconsistent
+       parameters: acid capped at Q = 0.5 and a 0.647× dose scale put the
+       mean acid below the quencher level; both are fixed, see
+       docs/claude_code_arbeitslog.md "Fortsetzung 11".)
+    3. The post-quenching acid drives the pseudo-first-order deprotection,
+       M(t) = M0 · exp(−k · h_quenched · t_bake).
 
-    This is an approximation, not a fully coupled solve (real physics
-    has quenching and deprotection proceeding concurrently, with
-    quenching itself diffusion-limited at short acid/quencher diffusion
-    lengths per Mack et al. 2011's own Fig. 1) -- documented as such,
-    not presented as more rigorous than it is.
+    Approximation, not a fully coupled reaction-diffusion solve: real
+    quenching and deprotection proceed concurrently and the reaction can
+    be diffusion-limited at short diffusion lengths (Mack et al. 2011,
+    Fig. 1). With sigma ≈ 20 nm and k_Q·G0·t_bake = 180 the reaction-
+    limited, post-mixing closed form is the appropriate limit.
 
     Parameters
     ----------
-    acid, quencher : torch.Tensor
-        Sampled relative concentrations (same shape), e.g. from
-        ``sample_pag_quencher_acid``.
+    acid : torch.Tensor
+        Relative acid concentration (mean field or sampled), shape (N, H, W).
+    quencher : torch.Tensor or float
+        Relative quencher concentration: a tensor of the same shape (sampled
+        chain) or a float for a UNIFORM loading (mean-field chain). A float
+        avoids allocating and blurring a full field -- the blur of a constant
+        is the constant -- which matters for the large Y-tiled stochastic
+        fields (21 × 61440 × 256 doubles = 2.6 GB per copy); q = 0 skips the
+        reaction entirely.
     inhibitor : torch.Tensor
         Initial normalised inhibitor concentration [0, 1]. Same shape.
     D, sigma_diff, dx : see :func:`reaction_diffusion_analytical`.
@@ -433,34 +443,12 @@ def reaction_diffusion_with_quenching(
     -------
     acid_final : torch.Tensor
         Post-quenching acid concentration. Same shape as *acid*.
-    quencher_final : torch.Tensor
-        Post-quenching quencher concentration. Same shape as *acid*.
+    quencher_final : torch.Tensor or float
+        Post-quenching quencher concentration (same shape as *acid*), or the
+        float 0.0 when no base was loaded.
     inhibitor_final : torch.Tensor
         Inhibitor concentration after deprotection. Same shape.
     """
-    # Reaction BEFORE diffusion, not after: "reaction-limited" kinetics
-    # means the neutralisation is fast/local relative to the PEB
-    # diffusion length (that is what justifies the well-mixed bimolecular
-    # ODE at the voxel scale in the first place, see _reaction_limited_
-    # quench's docstring). Blurring the sampled per-voxel acid/quencher
-    # counts FIRST (over the full ~20nm PEB diffusion length, i.e. an
-    # ensemble average across ~100+ independent voxels) and only THEN
-    # applying the reaction was found to destroy essentially all of the
-    # sampled molecular discreteness: since quench_rate*t_bake is large
-    # enough that the reaction goes to completion for any excess down to
-    # ~1e-3 (relative units), applying it to an already-averaged field
-    # just reproduces the (near-zero, since PAG/quencher densities from
-    # Mack et al. 2011 Table I put the mean acid signal close to the
-    # quencher baseline) ENSEMBLE MEAN outcome, not a per-voxel-noisy
-    # one -- verified numerically: blur-then-react gave a post-quench
-    # acid field with mean/std ~1e-21 (fully degenerate, explaining the
-    # exposure_stochasticity LER=LWR=0.0 finding in
-    # docs/claude_code_arbeitslog.md 2026-09-03), while react-then-blur
-    # on the same synthetic input gives mean=0.029, std=7.2e-4 -- a real,
-    # non-degenerate signal. React first (local, per-voxel, preserving
-    # the sampled discreteness), then diffuse the reacted result
-    # (representing the post-neutralisation acid profile spreading
-    # during the remainder of the bake).
     if pag_density is None or pag_density <= 0.0:
         raise ValueError(
             "pag_density (G0, nm^-3) is required to convert k_Q [nm^3/s] to the "
@@ -468,7 +456,6 @@ def reaction_diffusion_with_quenching(
             f"{pag_density!r}"
         )
     rate_rel = float(quench_rate) * float(pag_density)  # k_Q·G0 [1/s]
-    A_quenched, Q_final = _reaction_limited_quench(acid, quencher, rate_rel, t_bake)
 
     blur_sigma = None
     if sigma_diff is not None and sigma_diff > 0:
@@ -478,12 +465,28 @@ def reaction_diffusion_with_quenching(
         if sigma_val > 0.1:
             blur_sigma = sigma_val
 
+    # 1. Diffuse both species (see docstring for why this comes first).
+    h = acid
     if blur_sigma is not None:
         from euvsimulator.resist.exposure import gaussian_se_blur
 
-        A_quenched = gaussian_se_blur(A_quenched, sigma=blur_sigma, dx=dx)
-        Q_final = gaussian_se_blur(Q_final, sigma=blur_sigma, dx=dx)
+        h = gaussian_se_blur(h, sigma=blur_sigma, dx=dx)
 
+    uniform_q = not isinstance(quencher, torch.Tensor)
+    if uniform_q and float(quencher) == 0.0:
+        # No base loaded: the neutralisation is a no-op; do not allocate.
+        A_quenched, Q_final = h, 0.0
+    else:
+        if uniform_q:
+            q = torch.full_like(h, float(quencher))  # blur of a constant == constant
+        else:
+            q = quencher
+            if blur_sigma is not None:
+                q = gaussian_se_blur(q, sigma=blur_sigma, dx=dx)
+        # 2. React (reaction-limited closed form on the mixed fields).
+        A_quenched, Q_final = _reaction_limited_quench(h, q, rate_rel, t_bake)
+
+    # 3. Deprotect.
     M_t = inhibitor * torch.exp(-k * A_quenched * t_bake)
 
     return A_quenched, Q_final, M_t

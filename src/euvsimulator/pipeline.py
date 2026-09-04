@@ -25,20 +25,18 @@ from euvsimulator.optics.multilayer import mo_si_stack
 from euvsimulator.optics.tmm import reflectivity
 from euvsimulator.resist.develop import (
     MackModel,
-    stochastic_development,
     surface_advancement_level_set,
 )
 from euvsimulator.resist.exposure import (
     dill_abc_exposure,
-    dose_to_acid,
     sample_pag_quencher_acid,
 )
 from euvsimulator.resist.peb import (
-    reaction_diffusion_analytical,
     reaction_diffusion_with_quenching,
 )
 from euvsimulator.constants import HC_EV_NM
 from euvsimulator.resist.stochastic import (
+    extract_edges,
     extract_ler,
     extract_lwr,
     ler_estimate,
@@ -792,194 +790,67 @@ class SimulationConfig:
     # internal scientific validation, NOT yet experimentally validated.
     stochastic_ler_grid_y: int = 4096  # Requested Y dimension of the stochastic LER field
     stochastic_ler_estimator: str = "large_n"  # "large_n" | "legacy"
-    # Stochastic development (STEP 5.3): event-based dissolution noise
-    # on the local driving force of the stochastic-path latent image.
-    development_stochasticity: bool = False  # OFF = deterministic threshold development
-    # development_strength UPDATE (2026-09-03, "mach den stochastischen
-    # Pfad auch"): the "drive" this feeds into is now
-    # (depth_map_noisy - resist_thickness_nm) / resist_thickness_nm --
-    # the fraction by which a pixel's front overshoots the film
-    # thickness within develop_time_s (see stochastic_development()'s own
-    # docstring for the formula, and _cd_via_full_chem's stochastic block
-    # for how depth_map_noisy is produced). Under the OLD acid-based
-    # convention this codebase had before the MackModel/dill_abc_exposure
-    # wiring, "drive" could plausibly reach order 1 (acid concentration
-    # comfortably exceeding the old stochastic_develop_threshold by 100%+
-    # in well-exposed regions). Under the new, physically complete chain,
-    # a pixel can only overshoot the film thickness by at most one depth
-    # layer's worth of extra clearing (dz_nm, set by n_develop_layers) --
-    # empirically, max drive ~0.05 at the defaults -- so strength=1.0
-    # (the old default, "events per pixel AT drive=1") gave a rate near
-    # zero everywhere and development_stochasticity=True was silently
-    # inert (LER stayed exactly 0.0 regardless of noise). First recalibrated
-    # by direct empirical search (not guessed): strength=20.0 reliably gave
-    # a nonzero, ON-mode-adds-roughness-over-OFF-mode result across
-    # multiple seeds -- a real, if rough, recalibration to restore this
-    # feature's intended behaviour under the new chain, not itself
-    # literature-cited (it calibrates a numerical event-rate knob, not a
-    # physical resist property), but at that point not yet checked against
-    # any external roughness target either.
-    #
-    # RECALIBRATED AGAIN (2026-09-04, "development_strength gegen den
-    # korrigierten 1sigma-Zielbereich neu kalibrieren"): the earlier
-    # Vesters LWR comparison this codebase's docs relied on turned out to
-    # have compared this codebase's 1-sigma LWR output directly against
-    # Vesters' thesis's own 3-sigma LWR convention (LWR = 3*sigma_w,
-    # stated explicitly there) without converting -- see the arbeitslog
-    # entry "KRITISCHE KORREKTUR" (2026-09-04) for the full derivation.
-    # Converted to 1-sigma, the real (still SEM-noise-biased) target band
-    # at Vesters' own 44nm-pitch/22nm-HP geometry is ~2.2-3.4nm. Swept
-    # strength=5..40 (development_stochasticity=True, exposure_
-    # stochasticity=False, i.e. this mechanism alone) at that geometry
-    # across doses 22/24/25 mJ/cm2 and seeds 1/2/3/42: strength=15 landed
-    # all 12 (dose x seed) points inside or within 0.05nm of [2.17, 3.43]
-    # nm (means per dose: 2.47, 2.28, 3.02nm), a materially tighter and
-    # more consistent fit than the previous default of 20.0 (which
-    # undershot the band at one of the three doses: 1.80nm at dose=24).
-    # Values below ~13 hit a sharp, unstable transition (LWR jumping to
-    # 4-8nm at strength=12 -- the same near-discontinuous mack_n=18.2
-    # CD-vs-dose sensitivity flagged elsewhere in this file, not a new
-    # issue), so 15 was chosen as a value comfortably past that edge, not
-    # the literal argmin of some fit residual. Still not literature-cited
-    # (same caveat as before: a numerical event-rate knob, not a physical
-    # resist property) -- now checked against a correctly-converted
-    # external target rather than only against "produces a nonzero
-    # result."
-    development_strength: float = 15.0  # dimensionless dissolution events per pixel at drive=1 -- see note above
-    development_correlation_nm: float = 0.5  # molecular aggregate correlation length [nm]
+    # development_stochasticity -- DISABLED 2026-09-04 (audit A6): the
+    # event-based model (resist/develop.py::stochastic_development, kept as
+    # a standalone, experimental function) drove its Poisson event rate with
+    # (depth − thickness)/thickness, a quantity bounded by ONE depth layer
+    # (dz = thickness/(n_develop_layers − 1)), so its output depended on a
+    # numerical parameter: LWR 1.44 nm at N=21 vs 0.17 nm at N=41 for the
+    # same physics, and its "strength" (15, previously 20, 1.0) was a fitted
+    # event-rate knob with no physical unit or source. Setting True raises
+    # NotImplementedError rather than silently changing meaning. A physical
+    # development-noise model (e.g. Mack 2009/2010, "Stochastic modeling of
+    # photoresist development") would need dimensioned parameters and a
+    # grid-independence test before it can go here.
+    development_stochasticity: bool = False  # True -> NotImplementedError (see note)
 
-    # PAG/quencher molecular discreteness (2026-09-03, "baue die PAG-/
-    # Quencher-Diskretheit in den Belichtungsschritt ein"): a SEPARATE
-    # stochastic noise source from photon-shot-noise (photon_deposition_
-    # shot_noise, always used when enable_stochastic=True). Rather than a
-    # mean-field acid = Q*(1-exp(-C*dose)), this samples an ACTUAL,
-    # Poisson-distributed number of PAG molecules per voxel and a
-    # Binomial conversion of that finite population -- see resist/
-    # exposure.py's sample_pag_quencher_acid() docstring for the full
-    # model. Motivated directly by a validation finding the same day
-    # (docs/claude_code_arbeitslog.md): simulated LWR appeared to undershoot
-    # Vesters' real measured LWR (6.5-10.3nm) by ~3-5x even with
-    # photon-shot-noise and development_stochasticity both on, suggesting
-    # a real, missing noise source upstream of development -- this is the
-    # hypothesis that finding pointed at, now implemented. CORRECTION
-    # (2026-09-04, see arbeitslog): that 6.5-10.3nm figure is Vesters'
-    # thesis's own 3-sigma LWR convention (stated explicitly there,
-    # "LWR = 3*sigma_w"), while this codebase's extract_lwr()/ler_estimate()
-    # report 1-sigma throughout (see their own docstrings) -- the two were
-    # never reconciled before this comment was written. Converted to
-    # 1-sigma (divide by 3), the real range is ~2.2-3.4nm, and this
-    # codebase's simulated LWR (with exposure_stochasticity on, at the
-    # correct 44nm-pitch/22nm-HP geometry) turned out to OVERshoot that
-    # range by roughly 1.0-2.5x, not undershoot it -- see the arbeitslog
-    # entry dated 2026-09-04 ("KRITISCHE KORREKTUR") for the derivation,
-    # and the later entry "Fortsetzung 8" for this specific figure, which
-    # was re-measured after development_strength was recalibrated 20.0 ->
-    # 15.0 in commit 76c27e0 (the earlier "1.1-2.4x" figure predated that
-    # recalibration; re-measuring changed it only marginally, 1.07-2.39x
-    # -> 1.00-2.45x, confirming the remaining gap is NOT driven by
-    # development_strength). Note the target range itself is still the
-    # BIASED (SEM-noise-included) one -- the true physical roughness is
-    # lower, so the real overshoot is larger than these factors show.
-    # This does not mean the physics implemented below
-    # is wrong (independently verified as real and non-degenerate, see
-    # the same day's other arbeitslog entries) -- only that the
-    # quantitative target this feature was originally motivated against
-    # was off by the 3x sigma-convention factor.
+    # PAG / quencher / acid-base quenching -- ONE chemistry for both chains.
     #
-    # Off by default (exposure_stochasticity=False): this is a NEW,
-    # separate noise source layered on top of an already-working
-    # pipeline, and enabling it changes LER/LWR output -- opt-in,
-    # exactly like development_stochasticity, so it does not silently
-    # invalidate the golden-value tests fixed earlier this session.
+    # The deterministic (mean-field) full_chem chain and the sampled-molecule
+    # chain (exposure_stochasticity=True) run the SAME PEB step,
+    # resist/peb.py::reaction_diffusion_with_quenching: acid and quencher
+    # diffuse, then neutralise (reaction-limited closed form, Mack, Biafore &
+    # Smith 2011, Proc. SPIE 7972, Eq. 15), then deprotection. The only
+    # difference is where the initial fields come from -- the mean field
+    # h0 = 1 − exp(−C·E), q0 = ρ_Q/ρ_PAG, or a Poisson/Binomial sample of the
+    # molecule counts per voxel (resist/exposure.py::sample_pag_quencher_acid).
+    # Hence the deterministic result is the large-number limit of the
+    # stochastic one (tests/test_stochastic_consistency.py); before
+    # 2026-09-04 the deterministic chain had no quencher at all while the
+    # stochastic chain applied one per grid voxel where it was effectively
+    # inert (docs/audit_2026-09-04_vollpruefung.md, A4).
     #
-    # pag_density_per_nm3 / quencher_density_per_nm3 /
-    # acid_base_quench_rate_nm3_per_s are ALL from ONE real, cited,
-    # EUV-native, internally self-consistent source (their own Table I,
-    # not independently picked): Mack, J.J. Biafore & M.D. Smith,
-    # "Stochastic Acid-Base Quenching in Chemically Amplified
-    # Photoresists: A Simulation Study," Proc. SPIE 7972, 797202 (2011),
-    # free via https://www.lithoguru.com/scientist/litho_papers/
-    # 2011_EUV_Stochastic_Quenching_Kinetics.pdf (fetched and read
-    # directly). This is a DIFFERENT paper from the "Stochastic exposure
-    # kinetics..." one dill_Q/mack_R_max cite (same author group, same
-    # PROLITH stochastic-resist-model simulator, a distinct SPIE
-    # proceedings paper -- do not conflate the two when updating either
-    # citation). Table I ("Baseline stochastic resist parameters for EUV
-    # simulations"): PAG density 0.2/nm^3, quencher density 0.05/nm^3
-    # (i.e. quencher loaded at 25% of PAG, a real cited ratio, not a
-    # guess), quenching rate constant 15 nm^3/s, PEB time 25s (NOT
-    # adopted here -- peb_t_bake keeps its own Anderson-et-al.-2009-cited
-    # 60s default rather than switching to this paper's own value, to
-    # stay consistent with the rest of this project's PEB timing).
+    # exposure_stochasticity=True adds the counting statistics of a FINITE
+    # PAG/quencher population (a noise source distinct from photon shot
+    # noise, which is always on with enable_stochastic=True). Opt-in.
     #
-    # KNOWN ARCHITECTURAL INCONSISTENCY, investigated 2026-09-04
-    # (scientific-development mandate Phase 3, falsification testing):
-    # enabling exposure_stochasticity does NOT just add noise around the
-    # SAME mean prediction as the deterministic full_chem baseline -- it
-    # silently changes the MEAN CHEMISTRY too. Verified via a large-N
-    # limit test (pag_density swept 0.2->200/nm^3, quencher/PAG ratio held
-    # fixed): LER/LWR correctly -> 0 as expected, but CD does NOT converge
-    # to the deterministic baseline's CD (stayed at 17.19nm vs. the
-    # baseline's 23.03nm at a fixed test config, even fully noise-free).
-    # Root cause: the deterministic path (dill_abc_exposure ->
-    # reaction_diffusion_analytical) has no acid-base quenching mechanism
-    # at all, while this flag's own chain (sample_pag_quencher_acid ->
-    # reaction_diffusion_with_quenching) always includes a quencher
-    # subtraction, independent of molecular discreteness. Both halves are
-    # individually real and cited; the inconsistency is architectural, not
-    # a coding bug.
-    #
-    # Considered and rejected (2026-09-04) adding quenching to the
-    # deterministic baseline instead of just documenting this: tested
-    # directly (via the real pipeline, not a synthetic mock) -- at this
-    # codebase's own dill_Q=0.5/pag_density=0.2/quencher_density=0.05
-    # defaults, mean-field acid never clears the quencher baseline (0.25)
-    # by a usable margin at realistic EUV doses; dill_Q would need to
-    # exceed 1.0 (physically impossible -- it is a probability) or dose
-    # would need to exceed ~150 mJ/cm^2 (far outside any realistic EUV
-    # budget) to get a non-degenerate CD. Followed up with a real
-    # literature search (deep-research-escalation) for a single source
-    # providing self-consistent exposure+quenching parameters together --
-    # found one: Table I above ALSO states, in its own text, "these
-    # values result in an exposure rate constant of C = 0.08652 cm^2/mJ"
-    # (a self-consistent exposure rate constant for this exact
-    # PAG/quencher/quench-rate combination, distinct from this codebase's
-    # default dill_C=0.08997 from the unrelated Yamamoto et al. 2011 real-
-    # resist fit) and states plainly that at these Table-I values,
-    # "delta0 = 0 requires a dose of 3.43 mJ/cm2" -- i.e. a real, usable
-    # acid excess at realistic doses, IN THIS PAPER'S OWN idealized test
-    # case (PAG molar absorptivity = 0, i.e. no Beer-Lambert depth
-    # attenuation at all, and a 10nm resist thickness, not this codebase's
-    # real 50nm Yamamoto film). Verified empirically through this
-    # codebase's actual pipeline (dill_C=0.08652, dill_A=dill_B=0,
-    # resist_thickness_nm=10, all other quenching params as above): CD
-    # still stayed degenerate (undeveloped) up to dose=40 mJ/cm^2, because
-    # this codebase's peb_D/peb_t_bake (Lavery et al. 2006/Anderson et al.
-    # 2009, a REAL EUV resist's diffusion blur) and mack_R_max/R_min/n/
-    # M_th/peb_k (Yamamoto et al. 2011, the REAL "Polymer A" resist) are
-    # themselves from two MORE unrelated sources -- the PEB diffusion
-    # length these imply (~20nm) smears the already-narrow acid-excess
-    # region from Table I's synthetic case across most of the 64nm pitch
-    # before development ever sees it. Conclusion: NO single freely
-    # available source provides a self-consistent exposure+PEB+quenching+
-    # development parameter set for one real resist (consistent with, and
-    # extending, the exhaustive ~9-round prior literature search
-    # documented in the project's external research catalog) -- this
-    # codebase's full_chem chain necessarily mixes five distinct sources'
-    # baseline/illustrative parameters, and exposure_stochasticity's mean-
-    # chemistry mismatch with the deterministic baseline is a genuine,
-    # currently-unresolved consequence of that, not something a quick
-    # parameter change fixes. A user who wants exposure_stochasticity's
-    # exposure+quenching sub-chain to be internally self-consistent (not
-    # the full chain -- PEB/development remain independently sourced
-    # either way) can explicitly pass dill_C=0.08652 (dill_C is already a
-    # normal, user-controllable field, so no new parameter was added for
-    # this). Left as an open, documented finding rather than a forced fix
-    # -- see docs/claude_code_arbeitslog.md 2026-09-04 for the full,
-    # dated derivation and all intermediate numbers.
+    # PARAMETER CLASSES (material properties of ONE resist formulation):
+    #  - pag_density_per_nm3 = 0.2: Mack et al. 2011 Table I baseline
+    #    ("Baseline stochastic resist parameters for EUV simulations").
+    #    Order-of-magnitude check against this codebase's development/
+    #    exposure source: Yamamoto et al. 2011 used 3.1 mol% PAG in a
+    #    methacrylate resist (~4.8 monomer units/nm³ at ~1.2 g/cm³, MW~150)
+    #    → ≈0.15 nm⁻³, consistent.
+    #  - acid_base_quench_rate_nm3_per_s = 15: same table; converted to
+    #    k_Q·G0 = 3 s⁻¹ inside the PEB step (Mack 2011, stated explicitly).
+    #  - quencher_density_per_nm3: DEFAULT 0.0. The Dill/PEB/Mack parameters
+    #    of this codebase are Yamamoto et al. 2011's PROLITH set (Table 2:
+    #    Rmax/Rmin/Mth/n, Ea/ln(Ar), A/B/C) -- that table contains NO quencher
+    #    or base loading, so a quencher-free chemistry is the only one
+    #    consistent with those parameters. Loading Mack 2011's 0.05 nm⁻³
+    #    (q0/h0-ratio 0.25) on top -- the pre-2026-09-04 default -- is a
+    #    combination with no source and a measured consequence: dose-to-size
+    #    of the 22 nm line at 44 nm pitch moves from 6.6 to 21.2 mJ/cm²
+    #    (preflight_phase1_quench.py), i.e. the base is then the dominant
+    #    unmodelled-by-any-source parameter of the whole chain. A user with a
+    #    self-consistent set (Mack 2011's own exposure C = 0.08652 cm²/mJ with
+    #    its densities) can set it explicitly; the physics path is complete.
+    #    No freely available single source with exposure + PEB + quenching +
+    #    development parameters for one real resist was found (see
+    #    docs/claude_code_arbeitslog.md "Fortsetzung 7").
     exposure_stochasticity: bool = False  # ON = sample discrete PAG/quencher populations instead of mean-field acid; see note above
     pag_density_per_nm3: float = 0.2  # Initial PAG number density [nm^-3] -- Mack, Biafore & Smith 2011 Table I; see note above
-    quencher_density_per_nm3: float = 0.05  # Initial quencher number density [nm^-3] -- same source/table
+    quencher_density_per_nm3: float = 0.0  # Initial quencher (base) number density [nm^-3]; 0 = the quencher-free chemistry of the Yamamoto 2011 parameter set -- see note above (Mack 2011 Table I would be 0.05)
     acid_base_quench_rate_nm3_per_s: float = 15.0  # Acid-base quenching rate constant [nm^3/s] -- same source/table
 
     # Mask-3D / RCWA parameters (Phase 4)
@@ -1012,6 +883,20 @@ class SimulationConfig:
                 raise ValueError("enable_stochastic=True requires resist_model='full_chem'")
             if self.stochastic_n_realisations < 1:
                 raise ValueError("stochastic_n_realisations must be >= 1")
+        if self.development_stochasticity:
+            raise NotImplementedError(
+                "development_stochasticity=True is disabled (2026-09-04): the former "
+                "event-based model depended on the numerical layer count and used a "
+                "fitted, unit-less event-rate knob -- see SimulationConfig."
+                "development_stochasticity and docs/audit_2026-09-04_vollpruefung.md A6."
+            )
+        # Chemistry densities (used by both chains, see the PAG/quencher note)
+        if self.pag_density_per_nm3 <= 0:
+            raise ValueError("pag_density_per_nm3 must be > 0")
+        if self.quencher_density_per_nm3 < 0:
+            raise ValueError("quencher_density_per_nm3 must be >= 0")
+        if self.acid_base_quench_rate_nm3_per_s < 0:
+            raise ValueError("acid_base_quench_rate_nm3_per_s must be >= 0")
         # LER estimator configuration (no artificial upper bound on grid_y)
         if self.stochastic_ler_grid_y < 1:
             raise ValueError("stochastic_ler_grid_y must be a positive integer")
@@ -1127,9 +1012,11 @@ def _cd_via_full_chem(
 ) -> tuple[float, torch.Tensor, float, float, float]:
     """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
 
-    Depth-resolved chain (2026-09-03, round 9): dill_abc_exposure() (real
-    Beer-Lambert absorption via dill_A/B, depth-resolved acid generation)
-    -> reaction_diffusion_analytical() (PEB, now per depth layer) ->
+    Depth-resolved chain (2026-09-03, round 9; PEB step unified 2026-09-04):
+    dill_abc_exposure() (real Beer-Lambert absorption via dill_A/B,
+    depth-resolved acid generation) -> reaction_diffusion_with_quenching()
+    (PEB per depth layer: diffuse acid + quencher, neutralise, deprotect --
+    the same step the sampled-molecule chain uses, with q0 = ρ_Q/ρ_PAG) ->
     MackModel.rate() via surface_advancement_level_set() (continuous
     Mack R(M) development front, time-integrated over cfg.develop_time_s)
     -> a pixel is "developed" where the front has cleared all the way
@@ -1198,14 +1085,21 @@ def _cd_via_full_chem(
         n_layers=n_layers,
     )
     inhib_in_3d = torch.ones_like(acid_3d)
-    _, inhib_3d = reaction_diffusion_analytical(
+    # Mean-field PEB with the SAME diffuse-then-quench step as the sampled
+    # chain (see SimulationConfig's PAG/quencher note): q0 = ρ_Q/ρ_PAG in
+    # the relative units of the acid field (0 by default).
+    q0_rel = cfg.quencher_density_per_nm3 / cfg.pag_density_per_nm3
+    _, _, inhib_3d = reaction_diffusion_with_quenching(
         acid_3d,
+        q0_rel,  # uniform loading as a float (no full-field allocation)
         inhib_in_3d,
         D=cfg.peb_D,
         k=cfg.peb_k,
+        quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
         t_bake=cfg.peb_t_bake,
         sigma_diff=cfg.peb_sigma_diff,
         dx=dx_nm,
+        pag_density=cfg.pag_density_per_nm3,
     )
 
     # Continuous Mack development, time-integrated through the resist depth.
@@ -1256,6 +1150,7 @@ def _cd_via_full_chem(
         lwr_vals = []
         dev_fields = []
         intensity_fields = []
+        stochastic_cd_vals = []  # mean line width per realisation [nm]
         # Only ABSORBED photons generate acid, so only they contribute to
         # the exposure shot noise (Mack, Biafore & Smith 2011, J. Micro/
         # Nanolith. MEMS MOEMS 10(3), 033019: the absorbed photon density is
@@ -1335,63 +1230,47 @@ def _cd_via_full_chem(
                     n_layers=n_layers,
                 )
                 inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
-                _, inhib_noisy_3d = reaction_diffusion_analytical(
+                # Photon-shot-noise-only chain: same mean-field quencher as
+                # the deterministic path (uniform q0), same PEB step.
+                _, _, inhib_noisy_3d = reaction_diffusion_with_quenching(
                     acid_noisy_3d,
+                    q0_rel,
                     inhib_in_noisy_3d,
                     D=cfg.peb_D,
                     k=cfg.peb_k,
+                    quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
                     t_bake=cfg.peb_t_bake,
                     sigma_diff=cfg.peb_sigma_diff,
                     dx=dx_nm,
+                    pag_density=cfg.pag_density_per_nm3,
                 )
             depth_map_noisy = surface_advancement_level_set(
                 inhib_noisy_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
             )
-            if cfg.development_stochasticity:
-                # STEP 5.3: event-based stochastic development on the local
-                # driving force of the stochastic latent image. threshold
-                # is now resist_thickness_nm (was stochastic_develop_
-                # threshold, removed -- see SimulationConfig note), so
-                # "drive" means the same fraction-of-full-clearing
-                # overshoot in both the OFF and ON paths.
-                #
-                # extract_ler/extract_lwr/ler_estimate re-binarise
-                # `developed` at the SAME `threshold` used for the
-                # `intensity` crossing (see their own `binary = (developed
-                # > threshold)`), so a pre-binarised 0/1 `developed` and a
-                # depth-scale `intensity` cannot share one threshold value.
-                # stochastic_development()'s Poisson event-thinning also
-                # has no clean continuous companion field left at this
-                # scale, so this branch uses threshold=0.5 (correct for
-                # the already-0/1 `developed`) and omits `intensity`
-                # (falls back to integer-pixel edges rather than silently
-                # producing degenerate results -- found and fixed
-                # 2026-09-03, see docs/claude_code_arbeitslog.md).
-                developed = stochastic_development(
-                    depth_map_noisy,
-                    threshold=cfg.resist_thickness_nm,
-                    strength=cfg.development_strength,
-                    correlation_nm=cfg.development_correlation_nm,
-                    dx=dx_nm,
-                    rng=rng,
-                )
-                edge_threshold = 0.5
-                edge_intensity = None
-            else:
-                # developed is left as the raw continuous depth field here
-                # (NOT pre-binarised) so extract_ler/lwr's own `developed >
-                # threshold` binarisation and the `intensity` sub-pixel
-                # crossing agree on the same threshold/scale. Threshold is
-                # thickness MINUS a small epsilon, matching the
-                # deterministic path's own `>=` convention above: depth_map
-                # is clamped to a max of exactly resist_thickness_nm (see
-                # surface_advancement_level_set), so a strict `>` against
-                # the unmodified thickness would never fire for a fully
-                # cleared pixel -- found and fixed 2026-09-03 alongside the
-                # threshold/intensity pairing bug in this same block.
-                developed = depth_map_noisy
-                edge_threshold = cfg.resist_thickness_nm - 1e-6
-                edge_intensity = depth_map_noisy
+            # developed is left as the raw continuous depth field here
+            # (NOT pre-binarised) so extract_ler/lwr's own `developed >
+            # threshold` binarisation and the `intensity` sub-pixel
+            # crossing agree on the same threshold/scale. Threshold is
+            # thickness MINUS a small epsilon, matching the
+            # deterministic path's own `>=` convention above: depth_map
+            # is clamped to a max of exactly resist_thickness_nm (see
+            # surface_advancement_level_set), so a strict `>` against
+            # the unmodified thickness would never fire for a fully
+            # cleared pixel -- found and fixed 2026-09-03 alongside the
+            # threshold/intensity pairing bug in this same block.
+            # (The former development_stochasticity branch was removed
+            # 2026-09-04, see SimulationConfig.development_stochasticity.)
+            developed = depth_map_noisy
+            edge_threshold = cfg.resist_thickness_nm - 1e-6
+            edge_intensity = depth_map_noisy
+            # Mean line width of this realisation (the stochastic CD), for
+            # the large-number-limit invariant and as a diagnostic.
+            _l_edge, _r_edge = extract_edges(
+                developed, threshold=edge_threshold, dx=dx_nm, intensity=edge_intensity
+            )
+            _w = _r_edge - _l_edge
+            _w = _w[~torch.isnan(_w)]
+            stochastic_cd_vals.append(float(_w.mean()) if _w.numel() > 0 else float("nan"))
             if use_large_n:
                 dev_fields.append(developed)
                 intensity_fields.append(edge_intensity)
@@ -1439,6 +1318,12 @@ def _cd_via_full_chem(
                 "estimator": est.estimator,
                 "rho_truncation": est.rho_truncation,
                 "disclaimer": est.disclaimer,
+                # Mean line width of the stochastic realisations [nm]. Differs
+                # from cd_nm (deterministic, mean-field) by the effect of
+                # nonlinearities on the noise; converges to cd_nm as the
+                # molecule density -> inf (tests/test_stochastic_consistency.py).
+                "stochastic_cd_nm": float(torch.tensor(stochastic_cd_vals).nanmean())
+                if stochastic_cd_vals else float("nan"),
             }
         else:
             ler_nm = float(torch.tensor(ler_vals).nanmean())

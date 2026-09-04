@@ -1,17 +1,15 @@
-"""STEP 5.3 — Development stochasticity tests.
+"""Development stochasticity -- disabled in the pipeline (2026-09-04, audit A6).
 
-Event-based stochastic development (stochastic_development in
-resist/develop.py) integrated into the stochastic production path.
+The event-based model (``resist/develop.py::stochastic_development``) drove
+its Poisson event rate with (depth − thickness)/thickness, a quantity bounded
+by one depth layer, so its pipeline output depended on ``n_develop_layers``
+(LWR 1.44 nm at N=21 vs 0.17 nm at N=41 for identical physics) and its
+``strength`` was a fitted, unit-less knob. The pipeline therefore refuses
+``development_stochasticity=True``; the standalone function is kept as an
+experimental building block and keeps its function-level tests.
 
-Covers:
-- OFF mode: deterministic threshold development bitwise unchanged
-- ON mode: additional LER/LWR variance
-- seed reproducibility/independence
-- no artificial 256-periodicity
-- arbitrary grid_y
-- deterministic observables (CD/NILS) unchanged
-- stochastic convergence over seeds
-- function-level validation of stochastic_development
+Also pinned here: the OFF path is the production path and reproduces its
+golden values (see test_ler_production_integration.py for their provenance).
 """
 
 import math
@@ -24,11 +22,7 @@ from euvsimulator.constants import HC_EV_NM
 from euvsimulator.pipeline import SimulationConfig, run_simulation
 from euvsimulator.resist.develop import stochastic_development
 from euvsimulator.resist.exposure import dose_to_acid
-from euvsimulator.resist.stochastic import (
-    extract_edges,
-    ler_estimate,
-    photon_deposition_shot_noise,
-)
+from euvsimulator.resist.stochastic import extract_edges, photon_deposition_shot_noise
 
 E_PH = HC_EV_NM / 13.5
 F = 6.241509074e15
@@ -36,34 +30,6 @@ DX = 0.25
 THRESH = 0.3
 SEED = 42
 
-# Golden values from STEP 5.2B, updated by the Option-C SE-blur path
-# consistency change (STEP 5.3E-5.3I): the stochastic mean energy
-# density is now blur(dose) (SE-PSF transport), which softens the
-# mean edge profile and raises the edge-fluctuation RMS.  Values were
-# re-measured reproducibly (seed=42, se_blur=5, dose=20); the change
-# is a documented model change, NOT a calibration.
-# Golden values updated for P1-1 TCC correction (2026-09-01):
-# The exact source-pupil overlap TCC reduces contrast, which
-# increases LER/LWR values.  This is a documented physics fix.
-#
-# Golden values updated again for the EUV-native Yamamoto et al. 2011
-# dill_C adoption (2026-09-03): dill_C rose from 0.05 to 0.08997 cm2/mJ,
-# directly changing dose_to_acid()'s output feeding the stochastic
-# LER/LWR path. (An earlier version of this comment incorrectly
-# attributed this shift to dill_A/dill_B -- at that time those two
-# fields really were dead code everywhere, corrected in commit 510e9ad;
-# superseded by the next update below, where they became load-bearing.)
-#
-# Golden values updated a THIRD time (2026-09-03, "mach den
-# stochastischen Pfad auch," see test_ler_production_integration.py for
-# the matching update and full explanation): the stochastic LER/LWR path
-# itself was rewired to use the same depth-resolved dill_abc_exposure()
-# -> reaction_diffusion_analytical() -> MackModel/
-# surface_advancement_level_set() chain as the deterministic CD path,
-# making dill_A/dill_B load-bearing here too. _car_cfg()'s dill_Q=1.0
-# pin was also removed (floods the field with the new chain); _car_cfg()
-# now uses the plain SimulationConfig default (dill_Q=0.5). Re-measured
-# reproducibly (seed=42, se_blur=5, plain _car_cfg() defaults).
 TEST_DOSE = 5.5  # mJ/cm² at the wafer, near dose-to-size of the default resist
 # Re-measured 2026-09-04 (Phase 0: wafer-dose convention, absorbed-photon
 # shot noise, dill_B fix, dill_Q removed, TEST_DOSE 20 -> 5.5); see the note
@@ -80,14 +46,7 @@ def _car_cfg(**kw):
         stochastic_n_realisations=1,
         stochastic_seed=SEED,
         se_blur_nm=5.0,
-        # Operating point (2026-09-04): wafer-dose convention, see the
-        # matching note in test_ler_production_integration.py::_car_cfg.
         dose_mj_cm2=TEST_DOSE,
-        # dill_Q no longer pinned to 1.0 here (2026-09-03) -- see the
-        # matching note in test_ler_production_integration.py's _car_cfg:
-        # that override was needed for the OLD, un-wired full_chem chain;
-        # with MackModel/dill_abc_exposure now wired in, dill_Q=1.0 floods
-        # the whole field instead. Just use cfg defaults now.
     )
     base.update(kw)
     return SimulationConfig(**base)
@@ -100,8 +59,9 @@ def _aerial():
     return run_simulation(cfg).aerial_image.clone()
 
 
-def _acid_large(seed, n_tiles=16, dose=40.0):
-    aerial = _aerial() * dose
+def _acid_large(seed, n_tiles=4):
+    """Synthetic stochastic acid map on a tiled field (function-level tests)."""
+    aerial = _aerial() * 40.0
     dose_map = torch.tile(aerial.float(), (n_tiles, 1))
     rng = torch.Generator().manual_seed(seed)
     d_eff = photon_deposition_shot_noise(
@@ -111,7 +71,39 @@ def _acid_large(seed, n_tiles=16, dose=40.0):
     return dose_to_acid(d_eff, C=0.05, Q=1.0, apply_blur=False), rng
 
 
-# ── Function-level tests ─────────────────────────────────────────
+# ── Pipeline: the switch is refused ─────────────────────────────
+
+def test_development_stochasticity_is_refused():
+    with pytest.raises(NotImplementedError, match="development_stochasticity"):
+        SimulationConfig(resist_model="full_chem", enable_stochastic=True,
+                         development_stochasticity=True)
+
+
+def test_removed_strength_fields_are_rejected():
+    with pytest.raises(TypeError):
+        SimulationConfig(development_strength=15.0)
+    with pytest.raises(TypeError):
+        SimulationConfig(development_correlation_nm=0.5)
+
+
+# ── Pipeline: OFF path unchanged ────────────────────────────────
+
+def test_off_mode_unchanged():
+    r = run_simulation(_car_cfg())
+    assert r.ler_metadata["estimator"] == "large_n"
+    assert abs(r.ler_nm - GOLDEN_LARGE_N_LER) <= 1e-8
+    assert abs(r.lwr_nm - GOLDEN_LARGE_N_LWR) <= 1e-4
+
+
+def test_legacy_off_golden_unchanged():
+    r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
+    # Re-measured 2026-09-04 (Phase 0, see the GOLDEN note above); previous
+    # values LER=0.0860674324, LWR=0.1297861139.
+    assert abs(r.ler_nm - 0.6648028427) <= 1e-9
+    assert abs(r.lwr_nm - 1.2965263709) <= 1e-9
+
+
+# ── Function-level tests of the standalone building block ───────
 
 def test_stochastic_development_basic():
     acid, rng = _acid_large(90000, n_tiles=4)
@@ -119,9 +111,6 @@ def test_stochastic_development_basic():
                                  correlation_nm=0.5, dx=DX, rng=rng)
     assert dev.shape == acid.shape
     assert set(torch.unique(dev).tolist()) <= {0.0, 1.0}
-    # developed fraction within ~15% of the deterministic one (the
-    # event-based edge sits at a slightly different latent level than
-    # the deterministic threshold — documented model property)
     det = (acid > THRESH).float()
     assert abs(float(dev.mean()) - float(det.mean())) < 0.15
 
@@ -145,59 +134,16 @@ def test_stochastic_development_limit_strong():
     assert float((dev_strong != det).float().mean()) < 0.05
 
 
-# ── A. OFF mode unchanged ────────────────────────────────────────
-
-def test_off_mode_unchanged():
-    r = run_simulation(_car_cfg())
-    assert r.ler_metadata["estimator"] == "large_n"
-    assert abs(r.ler_nm - GOLDEN_LARGE_N_LER) <= 1e-8
-    # LWR must also be unchanged (OFF == pre-STEP-5.3 behaviour)
-    assert abs(r.lwr_nm - GOLDEN_LARGE_N_LWR) <= 1e-4
-
-
-# ── B. ON mode adds variance ─────────────────────────────────────
-
-def test_on_mode_adds_roughness():
-    r_off = run_simulation(_car_cfg())
-    r_on = run_simulation(_car_cfg(development_stochasticity=True))
-    assert r_on.ler_nm > 0.0
-    assert r_on.lwr_nm > 0.0
-    # Development stochasticity changes the edge statistics: with the
-    # corrected TCC (lower contrast, higher photon LER), the ON mode
-    # may produce lower or higher LER than OFF depending on the balance
-    # of photon and development noise.  At minimum they must differ.
-    assert r_on.ler_nm != r_off.ler_nm, "Development stochasticity must change LER"
-
-
-# ── C. Seed reproducibility (ON) ─────────────────────────────────
-
-def test_on_same_seed_bitwise():
-    r1 = run_simulation(_car_cfg(development_stochasticity=True))
-    r2 = run_simulation(_car_cfg(development_stochasticity=True))
-    assert r1.ler_nm == r2.ler_nm
-    assert r1.lwr_nm == r2.lwr_nm
-    m1, m2 = r1.ler_metadata, r2.ler_metadata
-    for k in m1:
-        v1, v2 = m1[k], m2[k]
-        if isinstance(v1, float) and math.isnan(v1) and math.isnan(v2):
-            continue
-        assert v1 == v2, f"metadata {k}: {v1} vs {v2}"
-
-
-# ── D. Different seeds independent (ON) ──────────────────────────
-
-def test_on_different_seed_independent():
+def test_different_seed_independent():
     acid1, rng1 = _acid_large(90000, n_tiles=4)
     acid2, rng2 = _acid_large(90001, n_tiles=4)
     dev1 = stochastic_development(acid1, threshold=THRESH, rng=rng1)
     dev2 = stochastic_development(acid2, threshold=THRESH, rng=rng2)
     frac = float((dev1 != dev2).float().mean())
-    assert frac > 0.01  # development realisations differ
+    assert frac > 0.01
 
 
-# ── E. No artificial 256-periodicity (ON) ────────────────────────
-
-def test_on_no_256_periodicity():
+def test_no_256_periodicity():
     acid, rng = _acid_large(90000, n_tiles=16)
     dev = stochastic_development(acid, threshold=THRESH, strength=1.0,
                                  correlation_nm=0.5, dx=DX, rng=rng)
@@ -208,76 +154,3 @@ def test_on_no_256_periodicity():
     c0 = (xc * xc).mean()
     rho256 = float((xc[:-256] * xc[256:]).mean() / c0)
     assert abs(rho256) < 0.3
-
-
-# ── F. Arbitrary grid_y (ON mode) ────────────────────────────────
-
-@pytest.mark.parametrize("n", [256, 300, 1024, 2048, 3000, 4096, 6144])
-def test_on_arbitrary_grid_y(n):
-    r = run_simulation(_car_cfg(development_stochasticity=True, stochastic_ler_grid_y=n))
-    assert r.ler_metadata["n_rows"] == n
-    assert r.ler_nm > 0.0
-    assert r.ler_metadata["n_eff"] > 0.0
-
-
-# ── G. Deterministic observables unchanged ───────────────────────
-
-def test_on_cd_nils_unchanged():
-    r_off = run_simulation(_car_cfg())
-    r_on = run_simulation(_car_cfg(development_stochasticity=True))
-    assert r_off.cd_nm == r_on.cd_nm
-    assert r_off.nils_value == r_on.nils_value
-    # and identical to the deterministic (non-stochastic) path
-    r_det = run_simulation(SimulationConfig(resist_model="full_chem",
-                                            enable_stochastic=False, se_blur_nm=5.0,
-                                            dose_mj_cm2=TEST_DOSE))
-    assert r_det.cd_nm == r_on.cd_nm
-    assert r_det.nils_value == r_on.nils_value
-
-
-# ── I. Stochastic convergence over seeds (ON) ────────────────────
-
-def test_on_convergence_over_seeds():
-    lers, lwrs = [], []
-    for s in range(10):
-        r = run_simulation(_car_cfg(development_stochasticity=True, stochastic_seed=90000 + s))
-        lers.append(r.ler_nm)
-        lwrs.append(r.lwr_nm)
-    lers, lwrs = np.array(lers), np.array(lwrs)
-    se_ler = lers.std(ddof=1) / math.sqrt(len(lers))
-    se_lwr = lwrs.std(ddof=1) / math.sqrt(len(lwrs))
-    # SE must be small relative to the mean (stable estimator over seeds)
-    assert se_ler / lers.mean() < 0.1
-    assert se_lwr / lwrs.mean() < 0.1
-    assert lers.mean() > 0.2  # ON clearly above the photon-only level (~0.07-0.12)
-
-
-# ── Legacy mode: OFF bitwise unchanged; ON applies the switch too ─
-
-def test_legacy_off_golden_unchanged():
-    # Legacy golden values updated by the Option-C SE-blur path
-    # consistency change (STEP 5.3E-5.3I): stochastic mean energy
-    # density is now blur(dose); documented model change, NOT
-    # calibration.  Pre-Option-C values: LER=0.0925884545,
-    # LWR=0.1459884644.
-    r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
-    # Golden values updated for P1-1 TCC correction (2026-09-01), then for
-    # the EUV-native Yamamoto et al. 2011 dill_C adoption (was
-    # LER=0.2726584375, LWR=0.2833657265), then for the stochastic-path
-    # MackModel wiring (2026-09-03, "mach den stochastischen Pfad auch"
-    # -- see the GOLDEN_LARGE_N_LER note above) -- was LER=0.2835345566,
-    # LWR=0.2572942674 before this last change.
-    # Re-measured 2026-09-04 (Phase 0, see the GOLDEN note above); previous
-    # values LER=0.0860674324, LWR=0.1297861139.
-    assert abs(r.ler_nm - 0.6648028427) <= 1e-9
-    assert abs(r.lwr_nm - 1.2965263709) <= 1e-9
-
-
-def test_legacy_mode_applies_development_switch():
-    """The development switch is global: in legacy mode it adds the
-    same stochastic-development roughness (OFF remains bitwise)."""
-    r_off = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
-    r_on = run_simulation(_car_cfg(stochastic_ler_estimator="legacy",
-                                   development_stochasticity=True))
-    assert r_on.ler_nm > r_off.ler_nm
-    assert r_on.lwr_nm > r_off.lwr_nm
