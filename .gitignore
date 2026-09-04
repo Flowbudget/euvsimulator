@@ -58,3 +58,10 @@ EUV-Lithography_*.pdf
 
 # Manim video build artifacts
 video/
+# Third-party reference material: keep locally, do not redistribute
+references/**/original/
+references/**/extracted_data/fulltext.txt
+references/**/extracted_data/number_lines.txt
+
+# Ad-hoc analysis scripts
+scratch/
