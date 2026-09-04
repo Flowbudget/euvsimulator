@@ -1075,8 +1075,21 @@ def rms_scaling_check(
         Development threshold.  Default 0.3.
     quantum_efficiency : float
         Acid molecules per absorbed photon.  Default 0.04.
-    dx : float
-        Grid spacing [nm/pixel].  Default 1.0.
+    photon_energy_eV : float
+        Photon energy [eV], used to convert dose to photon count.
+        Default 91.84 (13.5 nm EUV).
+    dose_to_energy_factor : float
+        Conversion factor from dose [mJ/cm²] to photon energy density
+        [eV/nm²].  Default matches ``photon_deposition_shot_noise``'s
+        own convention.
+    dx_nm : float
+        Grid spacing in x [nm/pixel].  Default 1.0. (Corrected 2026-09-04:
+        this docstring previously said ``dx``, not matching the actual
+        parameter name ``dx_nm`` -- found while repairing
+        notebooks/05_stochastics.ipynb, which called this function with
+        the stale ``dx=`` keyword and raised TypeError.)
+    dy_nm : float, optional
+        Grid spacing in y [nm/pixel].  Defaults to ``dx_nm`` if not given.
     seed : int
         RNG seed for reproducibility.  Default 42.
 
