@@ -9,8 +9,13 @@ A1 (absorbierte Photonen), A2 (Dosis-Konvention), A5 (Q entfernt), A4-Einheiten 
 C3 (tote Parameter), C4 `nominal_dose`, B5-Taper (jetzt `NotImplementedError`) und die
 hart codierten Mo/Si-n,k in `geometry.py` sind behoben. Dabei zusätzlich gefunden und behoben:
 `dill_B` wurde durch `B, H, W = dose.shape` überschrieben (nie wirksam); RCWA-Ordnungen um eins
-falsch beschriftet; RCWA auf Wafer- statt Maskenskala. **Offen:** A3 (σ_diff), A4-Struktur
-(Quencher auf Diffusionsskala, beide Pfade), A6, B1, B2, B5-TM, C1, C5.
+falsch beschriftet; RCWA auf Wafer- statt Maskenskala. **Phase 1 (Fortsetzung 12):** A4-Struktur
+(eine PEB-Funktion für beide Pfade, Großzahl-Invariante als Test), A6 (abgeschaltet), C5 (CLI-EL).
+**Phase 2a (Fortsetzung 13):** B5-TM behoben — und dabei zwei weitere RCWA-Fehler gefunden, die dieser
+Bericht **nicht** enthielt: vertauschte Resolventen im Redheffer-Sternprodukt (jede Gitterrechnung) und
+ein Vorzeichen im TM-ML-Operator; erst Erhaltungssatz-Tests (R+T = 1, Effektivmedium, Fresnel-Grenzfall)
+haben sie sichtbar gemacht. **Offen:** A3 (σ_diff), B1 (laterale Entwicklung — Eikonal-Löser liegt
+validiert vor), B2 (z-Diffusion, gemessen −2,8 % bei α = 8/µm), C1 (ADI).
 
 **Lesart dieses Berichts:** Jeder Befund trägt eine Klasse — **[BESTÄTIGT]** = numerisch oder gegen Primärquelle belegt, **[GELESEN]** = aus dem Code eindeutig ableitbar, aber nicht separat gemessen, **[VERDACHT]** = plausibel, nicht abgeschlossen. Was ich geprüft und für korrekt befunden habe, steht in Abschnitt D, damit „nicht erwähnt" nicht mit „nicht geprüft" verwechselt wird. Eigene Fehleinschätzungen aus diesem Audit stehen in Abschnitt F.
 

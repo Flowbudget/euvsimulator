@@ -1873,6 +1873,111 @@ Parameteränderung. Wird in Phase 1 vorab als Preflight geprüft.
 
 Test-Arbeitspunkt der stochastischen Regressionstests deshalb von (implizit) 20 auf
 `TEST_DOSE = 5.5` gesetzt (bei 20 ist die Linie weggebelichtet, LER = NaN); Golden-Werte neu
-abgeleitet (reine Messung der Testkonfiguration, siehe Commit).
+abgeleitet (reine Messung der Testkonfiguration, siehe Commit). Commit `e96b440`, gepusht.
+
+---
+
+## 2026-09-04 (Fortsetzung 12): Phase 1 — eine Chemie für beide Pfade; Quencher-Vorhersage widerlegt; Yamamoto-Anker
+
+### Preflight (`preflight_phase1_quench.py`) — Q1 widerlegt, Q2/Q3 bestätigt
+
+Modell: Operator-Splitting **diffundieren → reagieren** in beiden Pfaden (Mack 2011 Baseline
+D_A = D_Q; für gleiche Diffusivitäten und vollständige Reaktion exakt max(blur(h₀) − q₀, 0)).
+- **Q1 widerlegt in der Größe:** Mack-2011-Beladung (q₀/ρ_PAG = 0,25) verschiebt die Dosis-zu-Größe
+  nicht um E(q₀) = 3,2, sondern um **+14,6 mJ/cm²** (P=44: 6,60 → 21,19; P=64: 5,62 → 19,40).
+  Meine Abschätzung ignorierte, dass die Kante bei ~50 % Bildintensität liegt und der Mack-
+  Schwellwert (M_th = 0,39 ↔ h ≈ 0,22) die nötige Säure festlegt; 0,25 abziehen verdoppelt die
+  Säureanforderung an der Kante.
+- **Q2/Q3 bestätigt:** LWR bei ρ_PAG = 0,2/2/20/200 nm⁻³: 7,48 / 1,90 / 2,12 / 2,31 nm — konvergiert
+  gegen den Photonenboden, nicht gegen 0 (Photonenrauschen ist eine separate Quelle).
+
+### Parameterklassen-Entscheidung: `quencher_density_per_nm3` Default 0,05 → **0,0**
+
+Primärquelle Yamamoto et al. 2011, Table 2 („Calculation parameters of Polymer A on PROLITH"):
+Rmax 68,6, Rmin 0,10, Mth 0,39, n 18,2, Ea 27,8 kJ/mol, ln(Ar) 6,1/s, A 0, B 1,06/µm, C 0,08997 —
+**kein Quencher, keine Base.** Die im Code kombinierte Mack-2011-Beladung ist damit eine
+Kombination zweier Resists ohne Quelle (Fortsetzung 7 fand keinen selbstkonsistenten Satz), und
+sie wäre nach der Messung oben der dominante Parameter der ganzen Kette. Default 0 ist die einzige
+mit Yamamotos Satz konsistente Wahl; sie bewegt die Dosis-zu-Größe **weg** von Vesters (6,6 statt
+8–16) — also keine Anpassung an ein Ziel. Die Physik (Quencher in beiden Pfaden) ist vollständig
+implementiert; wer einen selbstkonsistenten Satz hat, setzt die Dichte explizit.
+Plausibilitätscheck ρ_PAG: Yamamoto nutzt 3,1 mol % PAG → ≈0,15 nm⁻³, konsistent mit Mack 2011 (0,2).
+
+### Umsetzung
+
+- `reaction_diffusion_with_quenching`: diffundieren → reagieren (Docstring mit Befund, warum
+  „react first" den Quencher inert machte und warum „blur first" früher kollabierte: Q-Deckel +
+  Dosisskala). Verlangt `pag_density`.
+- Deterministischer Pfad und Photon-only-Pfad rufen dieselbe Funktion mit uniformem q₀ = ρ_Q/ρ_PAG.
+- Neues Metadatum `stochastic_cd_nm` (mittlere Linienbreite der Realisierungen).
+- `development_stochasticity=True` → `NotImplementedError` (A6); `development_strength`,
+  `development_correlation_nm` entfernt; `stochastic_development` bleibt als experimentelle
+  Einzelfunktion mit Funktionstests.
+- Tests `tests/test_stochastic_consistency.py`: mit Photonen-Sampler = Erwartungswert konvergiert
+  das stochastische CD für ρ_PAG → ∞ auf ±1 Pixel gegen das deterministische — **mit und ohne
+  Quencher** (P2-Invariante aus Fortsetzung 6/10 erfüllt); Molekülrauschen → Photonenboden
+  (±10 %); q₀ = 0 ⇒ PEB-Schritt bitgleich mit `reaction_diffusion_analytical`.
+- Erste Testfassung war falsch: ρ → ∞ entfernt nur das Molekül-, nicht das Photonenrauschen; mit
+  Photonenrauschen blieb ein Versatz von 2,5 nm (Jensen durch Mack-Nichtlinearität) — physikalisch,
+  kein Bug; Test entsprechend umgebaut.
+
+### Neuer Validierungsanker (offen): Yamamoto 2011 selbst
+
+Yamamoto simulierte mit **genau diesem Parametersatz** in PROLITH 26- und 50-nm-L/S bei
+**20, 25, 30 mJ/cm²** (σ = 0,5, Film 70/150 nm, PEB 110 °C/60 s, Entwicklung 30 s TMAH 2,38 %).
+Unser Modell druckt mit demselben Satz (ohne Quencher) bei 5,6–6,6 mJ/cm² — **Faktor 3–5 zu
+empfindlich gegenüber der Quelle der Parameter selbst.** Yamamotos PEB-Kinetik enthält eine
+Reaktionsverzögerung T_d und eine **Säure-Lebensdauer τ** (Z. 512–514) — ein Säureverlust-
+mechanismus, den unser `M = exp(−k·h·t)` nicht hat; PROLITHs Modell hat ihn. Das ist die
+naheliegendste Erklärung und wird in Phase 4 gegen diesen Anker geprüft — nicht durch
+Parameterdrehen, sondern durch Modellvervollständigung. Bedingungen, die schon stimmen:
+PEB 110 °C/60 s (k = 446·e^{−27800/(8,314·383)} = 0,072 s⁻¹ = `peb_k`), Entwicklung 30 s.
+
+---
+
+## 2026-09-04 (Fortsetzung 13): Phase 2a — RCWA: drei Fehler in der Modenkopplung, gefunden über Erhaltungssätze
+
+Ausgangspunkt war der geplante Wechsel des TM-Zweigs auf Li's inverse Regel (Audit B5). Der
+Preflight (`preflight_rcwa_tm.py`) ergab, dass die Faktorisierungsregel **nicht** das Problem war:
+Laurent und Li konvergierten gleich schlecht, und ein verlustfreies dielektrisches Gitter
+(ε = 2,25/1, P = 200 nm, λ = 300 nm, d = 150 nm) verletzte die Energieerhaltung: R + T = 0,56 (TM),
+1,004 (TE). Systematische Eingrenzung mit exakten Grenzfällen:
+
+| Test | Erwartung | Befund (alt) |
+|---|---|---|
+| Homogene Schicht | = TMM, R+T = 1 | TE ✓, TM: R = TMM, aber R+T = 0,47 |
+| Effektivmedium P ≪ λ (P = 20 nm) | TM → ⟨1/ε⟩⁻¹-Platte: R = 0,0296 | **0,209**, driftet mit M (0,22 → 0,13) |
+| Gitter, d → 0 | Fresnel Vakuum\|Substrat: 0,0417 (TE) | **0,0336** |
+| Rayleigh → Gittermoden → Rayleigh über d = 0 | = direkte Grenzfläche (basisunabhängig) | Abweichung 0,17 |
+
+Ursachen (jede einzeln numerisch bestätigt, `rcwa_energy.py`, `preflight_rcwa_tm2.py`, Zufalls-Algebra-Tests):
+
+1. **Redheffer-Sternprodukt mit vertauschten Resolventen** (`_redheffer_star_matrix`): S₁₁ nutzte
+   (I − A₂₂B₁₁)⁻¹ statt (I − B₁₁A₂₂)⁻¹ (Push-through-Identität: (I−B₁₁A₂₂)⁻¹B₁₁ = B₁₁(I−A₂₂B₁₁)⁻¹).
+   Für skalare Blöcke (TMM, homogene Schichten) kommutiert alles — deshalb blieben alle bisherigen
+   Tests grün. Mit Zufallsmatrizen: Komposition zweier Grenzflächen durch eine beliebige Modenbasis
+   weicht um 19 von der direkten Grenzfläche ab; korrigiert: 7·10⁻¹⁴, assoziativ. **Betraf jede
+   RCWA-Rechnung mit Gitter, TE und TM.**
+2. **TM-Formulierung**: Eigenproblem mit Laurent-Regel, Modenadmittanz V = [ε]WQ⁻¹, Rayleigh-
+   Admittanz εk₀/k_z — für homogene Schichten zufällig konsistent, für Gitter falsch. Aus Maxwell
+   (TM, H_y): ∂_z((1/ε)∂_z H) + ∂_x((1/ε)∂_x H) + k₀²H = 0 → A = [1/ε]⁻¹(I − K_x[ε]⁻¹K_x)
+   (Li 1996; Lalanne & Morris 1996), V = [1/ε]WQ (E_x = (i/k₀)(1/ε)∂_z H_y), Y = k_z/(k₀ε).
+3. **ML-Operator TM-Vorzeichen**: `optics.tmm` liefert den E-Feld-Koeffizienten; die RCWA-TM-
+   Amplituden sind H_y, für die reflektierte Welle gilt r_H = −r_E. Leeres Gitter über dem
+   Mo/Si-Stapel: ohne Vorzeichen |r₀|² 0,633/Phase −1,5° statt 0,639/−12,6°; mit: identisch.
+
+Nach der Korrektur (`tests/test_rcwa_physics.py`, 12 Tests): Slab = TMM (TE/TM, 1e-8), Fresnel-Grenzfall
+(1e-6), Effektivmedium TE 0,3 %/TM 1,2 %, Energieerhaltung R+T = 1 auf 2·10⁻⁶ (TE und TM, M = 11 und 41),
+ML-Operator Betrag und Phase (1e-6), Sternprodukt basisunabhängig (1e-10). Die Toeplitz-Matrix
+selbst war korrekt (gegen die analytische Fourierreihe des Rechteckprofils geprüft).
+
+**Ehrlich zur Wirkung auf EUV-Masken:** Für das reale Ta-Gitter (schwacher Permittivitätskontrast,
+ε_Ta ≈ 0,914 + 0,066i gegen 1) sind die Folgen klein: P = 64 nm: RCWA/Dünnmasken-Mittelwert 0,950 → 0,958,
+CD 27,46 → 27,38 nm; P = 44 nm: Verhältnis 0,90, CD 13,19 (Dünnmaske 14,37). Die Fehler wurden erst an
+Testgittern mit starkem Kontrast (ε = 2,25) groß — genau deshalb sind Erhaltungssätze als Tests
+unverzichtbar: die bisherigen Plausibilitätstests (RCWA/Dünnmaske in [0,5, 1,2]) hätten sie nie gefunden.
+`rcwa2d.py` (nicht in der Pipeline) enthielt dasselbe Sternprodukt und wurde identisch korrigiert.
+Ein Test in `test_pipeline.py` verwendete als „analytische Schranke" Σ|Δ_i|²/4 statt der korrekten
+(Σ|Δ_i|)²/4 (Cauchy-Schwarz über die Hopkins-Doppelsumme) — hielt nur, solange TE ≈ TM; korrigiert.
 
 ---

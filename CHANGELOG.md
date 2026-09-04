@@ -23,8 +23,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   (Mack 2011: 3 s⁻¹, not 15).
 - `absorber_taper_deg` / `mask_undercut_nm` now raise `NotImplementedError` instead of being
   silently ignored.
+- **One chemistry for both chains (Phase 1).** The deterministic full_chem chain and the
+  sampled-molecule chain (`exposure_stochasticity=True`) run the same PEB step: acid and
+  quencher diffuse, then neutralise (Mack 2011 closed form, k_Q·G0), then deprotect. The
+  deterministic result is now the large-number limit of the stochastic one
+  (`tests/test_stochastic_consistency.py`). Previously the deterministic chain had no quencher and
+  the stochastic chain evaluated the reaction per grid voxel, where it was effectively inert.
+  New `ler_metadata["stochastic_cd_nm"]`.
+- **RCWA (Phase 2a).** Three errors in the 1D solver's mode coupling, found through conservation
+  laws: (1) the Redheffer star product had its two resolvents swapped (invisible for scalar/
+  homogeneous cases, wrong for grating modes -- cascading two interfaces through the mode basis did
+  not reduce to the direct interface); (2) the TM branch used the Laurent rule with inverted
+  admittances (effective-medium limit gave R = 0.21 instead of 0.030 and did not converge); (3) the
+  multilayer operator fed the E-field TM reflection coefficient to H-field amplitudes (sign). Now
+  pinned by `tests/test_rcwa_physics.py`: slab == TMM, Fresnel limit, effective-medium limit,
+  energy conservation R+T = 1 (2e-6) for TE and TM, multilayer operator magnitude and phase. Same
+  star-product fix in `rcwa2d.py`. Effect on the EUV Ta grating is small (≈1 % in mean intensity).
+- `quencher_density_per_nm3` default 0.05 → 0.0: the Dill/PEB/Mack parameters are Yamamoto
+  2011's PROLITH set, which has no quencher; loading Mack 2011's base on top moved dose-to-size
+  from 6.6 to 21.2 mJ/cm² with no source for the combination. Set it explicitly for a
+  self-consistent parameter set.
+
+- `metro.pw_metrics` returned grid-index counts under the physical keys `dof_nm`/`el_pct`; it now
+  takes the `doses`/`focuses` grids and reports NaN for the physical values without them (index
+  counts are available as `dof_steps`/`el_steps`).
+- `resist.develop.surface_advancement_level_set`: `t_develop` is required; the `t_develop=None`
+  mode (returned an all-ones mask) was dead, defective code. Docstring now states plainly that
+  this is a vertical-column model without lateral dissolution.
+- `mask3d.rcwa_torch._build_ml_reflection_operator`: substrate index taken from CXRO Si at the
+  actual wavelength instead of the last ML layer.
+
+### Added
+- `resist.develop.eikonal_development` / `eikonal_arrival_time`: 2D (x, z) development front from
+  the Eikonal equation |∇T| = 1/R(M) (fast sweeping, Zhao 2005), validated against exact
+  solutions (`tests/test_eikonal_development.py`). Not yet the pipeline default.
+- Docstrings of `etch.bias` (coefficients are empirical, no source), `source.plasma` (illustrative,
+  not connected to the pipeline) and `aerial.abbe` (numerical TCC overlap, scalar thin-mask) now
+  state their status.
 
 ### Removed
+- `development_stochasticity=True` (raises `NotImplementedError`), `development_strength`,
+  `development_correlation_nm`: the event-based development-noise model depended on the
+  numerical layer count (LWR 1.44 nm at 21 layers vs 0.17 nm at 41) and used a fitted, unit-less
+  event-rate knob. `resist.develop.stochastic_development` remains as an experimental function.
 - `dill_Q` (config field, CLI `--dill-Q`, calibration parameter): it double-counted the PAG
   quantum efficiency, which lives inside Dill C (Mack 2013, Eqs. 8/10), and capped the acid yield
   at 0.5. The acid yield is now 1 − exp(−C·E). `SimulationConfig(dill_Q=...)` raises.
