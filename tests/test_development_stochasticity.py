@@ -30,13 +30,14 @@ DX = 0.25
 THRESH = 0.3
 SEED = 42
 
-TEST_DOSE = 5.5  # mJ/cm² at the wafer, near dose-to-size of the default resist
-# Re-measured 2026-09-04 (Phase 0: wafer-dose convention, absorbed-photon
-# shot noise, dill_B fix, dill_Q removed, TEST_DOSE 20 -> 5.5); see the note
-# in test_ler_production_integration.py. Previous: LER 0.3251749642,
-# LWR 0.6158645956.
-GOLDEN_LARGE_N_LER = 2.8802534977
-GOLDEN_LARGE_N_LWR = 5.6471533713
+TEST_DOSE = 4.0  # mJ/cm² at the wafer, near dose-to-size at TEST_SIGMA
+TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point
+# Regression pins, re-measured 2026-09-04 Phase 2b (exact blur, z-diffusion,
+# Eikonal front, sigma_PEB 7 / 4.0 mJ/cm2); see the provenance note in
+# test_ler_production_integration.py. Phase 0 values: 2.8802534977 /
+# 5.6471533713; pre-Phase-0: 0.3251749642 / 0.6158645956.
+GOLDEN_LARGE_N_LER = 2.3891057997
+GOLDEN_LARGE_N_LWR = 4.0032531626
 
 
 def _car_cfg(**kw):
@@ -47,6 +48,14 @@ def _car_cfg(**kw):
         stochastic_seed=SEED,
         se_blur_nm=5.0,
         dose_mj_cm2=TEST_DOSE,
+        # Operating point (2026-09-04, Phase 2b): with the exact PEB blur and
+        # the Eikonal development front, the default sigma_PEB = 19.9 nm gives
+        # the 32 nm line at 64 nm pitch only in a knife-edge dose window (CD
+        # 35.5 -> 14 -> 0 between 5.0 and 6.0 mJ/cm2); the stochastic machinery
+        # is therefore exercised at sigma_PEB = 7 nm (smooth window, CD 31.5 nm
+        # at 4.0 mJ/cm2). This is a choice of test operating point, not a
+        # physics default -- the default sigma is Phase 3's subject.
+        peb_sigma_diff=TEST_SIGMA,
     )
     base.update(kw)
     return SimulationConfig(**base)
@@ -97,10 +106,10 @@ def test_off_mode_unchanged():
 
 def test_legacy_off_golden_unchanged():
     r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
-    # Re-measured 2026-09-04 (Phase 0, see the GOLDEN note above); previous
-    # values LER=0.0860674324, LWR=0.1297861139.
-    assert abs(r.ler_nm - 0.6648028427) <= 1e-9
-    assert abs(r.lwr_nm - 1.2965263709) <= 1e-9
+    # Re-measured 2026-09-04 Phase 2b (see the GOLDEN note above); Phase 0
+    # values 0.6648028427 / 1.2965263709, pre-Phase-0 0.0860674324 / 0.1297861139.
+    assert abs(r.ler_nm - 0.8469136421) <= 1e-9
+    assert abs(r.lwr_nm - 1.4741479568) <= 1e-9
 
 
 # ── Function-level tests of the standalone building block ───────

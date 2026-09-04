@@ -106,11 +106,14 @@ def test_both_paths_produce_reasonable_cd():
     see pipeline.py's "RESOLVED" note above mack_R_max/mack_R_min).
     """
     cfg1 = SimulationConfig(resist_model="aerial_threshold", grid=128)
-    # full_chem at its own dose-to-size (wafer-dose convention, acid yield
-    # saturating at 1 -- 2026-09-04): the default resist prints the 32 nm
-    # line near 5.7 mJ/cm²; at the aerial_threshold model's reference dose
-    # of 20 it is fully cleared (CD = 0), which is physics, not a failure.
-    cfg2 = SimulationConfig(resist_model="full_chem", grid=128, dose_mj_cm2=5.5)
+    # full_chem at a printable operating point (2026-09-04: wafer-dose
+    # convention, acid yield saturating at 1, Eikonal development front). At
+    # the aerial_threshold model's reference dose of 20 mJ/cm² the resist is
+    # fully cleared (CD = 0) -- physics, not a failure -- and at the default
+    # 19.9 nm PEB blur the 32 nm line exists only in a knife-edge dose window,
+    # so the test uses sigma_PEB = 7 nm / 4.0 mJ/cm² like the stochastic
+    # regression tests (see test_ler_production_integration._car_cfg).
+    cfg2 = SimulationConfig(resist_model="full_chem", grid=128, dose_mj_cm2=4.0, peb_sigma_diff=7.0)
 
     r1 = run_simulation(cfg1)
     r2 = run_simulation(cfg2)
@@ -238,3 +241,17 @@ if __name__ == "__main__":
     test_validation_rejects_invalid_params()
     print("test_validation_rejects_invalid_params PASSED")
     print("ALL TESTS PASSED")
+
+
+def test_full_chem_nils_is_measured_at_the_printed_edge():
+    """NILS of the chemistry chain refers to the edge the resist prints, not
+    to the aerial_threshold model's reference-dose level (which returned 0
+    whenever that level missed the image, e.g. at 4 mJ/cm²)."""
+    r = run_simulation(SimulationConfig(resist_model="full_chem", dose_mj_cm2=4.0,
+                                        se_blur_nm=5.0, peb_sigma_diff=7.0, grid=128))
+    assert r.cd_nm > 0
+    assert 0.5 < r.nils_value < 10.0
+    cleared = run_simulation(SimulationConfig(resist_model="full_chem", dose_mj_cm2=20.0,
+                                              se_blur_nm=5.0, grid=128))
+    assert cleared.cd_nm == 0.0
+    assert cleared.nils_value != cleared.nils_value  # NaN: no printed edge

@@ -125,6 +125,7 @@ def simulate(
     resist_thickness_nm: float = typer.Option(50.0, "--resist-thickness", help="Resist film thickness [nm]; Yamamoto et al. 2011's own better-resolved PROLITH case"),
     develop_time_s: float = typer.Option(30.0, "--develop-time", help="Development time [s]; Yamamoto et al. 2011's own dissolution-rate measurement condition"),
     n_develop_layers: int = typer.Option(21, "--n-develop-layers", help="Number of depth layers for the resolved exposure/PEB/development chain (numerical resolution, not physical)"),
+    development_model: str = typer.Option("eikonal", "--development-model", help="Development front: 'eikonal' (isotropic front, lateral dissolution; physical) or 'column' (vertical time-of-flight approximation)"),
     # Stochastic / Shot Noise options
     enable_stochastic: bool = typer.Option(
         False, "--stochastic", help="Enable photon shot noise and LER/LWR extraction"
@@ -221,6 +222,7 @@ def simulate(
             resist_thickness_nm=resist_thickness_nm,
             develop_time_s=develop_time_s,
             n_develop_layers=n_develop_layers,
+            development_model=development_model,
             # Stochastic / Shot Noise parameters
             enable_stochastic=enable_stochastic,
             stochastic_n_realisations=stochastic_n_realisations,
@@ -633,14 +635,23 @@ def calibrate(
     method: str = typer.Option("Nelder-Mead", "--method", help="SciPy minimisation method"),
     maxiter: int = typer.Option(500, "--maxiter", help="Maximum iterations for optimiser"),
     seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for bootstrap"),
+    period: float = typer.Option(64.0, "--period", help="Pattern period of the measured FEM [nm] (wafer scale)"),
+    cd: float = typer.Option(32.0, "--cd", help="Nominal line width of the measured FEM [nm]"),
+    grid: int = typer.Option(128, "--grid", help="Simulation grid for the fit"),
+    se_blur: float = typer.Option(5.0, "--se-blur", help="Secondary-electron blur sigma [nm] held fixed during the fit"),
 ):
     """Calibrate resist-model parameters to measured wafer CD data.
+
+    The simulated geometry (--period/--cd) MUST match the measured pattern:
+    until 2026-09-04 it was hard-wired to 64/32 nm regardless of the data.
 
     The input data file must be CSV (dose,focus,cd columns) or JSON with
     WaferCDData format. See `euv.calibrate.wafer_fit.WaferCDData` for details.
 
-    Fits the resist model parameters (Dill C/Q, PEB k/t_bake, Mack R_max/R_min/n/M_th)
-    to minimise RMSE between simulated and measured CD across the focus-exposure matrix.
+    Fits the resist model parameters (Dill C, PEB k/t_bake/sigma_diff, Mack
+    R_max/R_min/n/M_th) to minimise RMSE between simulated and measured CD across
+    the focus-exposure matrix. Restrict the fitted set with an initial-parameter
+    file: an 8-parameter fit against a small FEM is under-determined.
     """
     import json
     from pathlib import Path
@@ -671,8 +682,11 @@ def calibrate(
         cd_matrix = np.zeros((len(dose_vals), len(focus_vals)))
         dose_to_idx = {d: i for i, d in enumerate(dose_vals)}
         focus_to_idx = {f: i for i, f in enumerate(focus_vals)}
-        for d, f, cd in zip(doses, foci, cd_values):
-            cd_matrix[dose_to_idx[d], focus_to_idx[f]] = cd
+        # NB: do not name the loop variable `cd` -- it would shadow the --cd
+        # option and silently feed the last measured CD into the simulated
+        # line width (found 2026-09-05 by the synthetic-FEM smoke test).
+        for d, f, cd_meas in zip(doses, foci, cd_values):
+            cd_matrix[dose_to_idx[d], focus_to_idx[f]] = cd_meas
         data = WaferCDData(
             dose_values=np.array(dose_vals),
             focus_values=np.array(focus_vals),
@@ -746,12 +760,13 @@ def calibrate(
     # Create pipeline function
     def pipeline_fn(dose: float, focus: float, **params) -> float:
         cfg = SimulationConfig(
-            period_nm=64.0,
-            line_width_nm=32.0,
+            period_nm=period,
+            line_width_nm=cd,
             dose_mj_cm2=dose,
             focus_nm=focus,
             resist_model="full_chem",
-            grid=128,
+            grid=grid,
+            se_blur_nm=se_blur,
             # Resist parameters from calibration
             dill_C=params.get("dill_C", 0.08997),
             peb_k=params.get("peb_k", 0.0723),

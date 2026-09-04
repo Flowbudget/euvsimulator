@@ -25,6 +25,8 @@ from euvsimulator.optics.multilayer import mo_si_stack
 from euvsimulator.optics.tmm import reflectivity
 from euvsimulator.resist.develop import (
     MackModel,
+    edge_positions_from_arrival,
+    eikonal_development,
     surface_advancement_level_set,
 )
 from euvsimulator.resist.exposure import (
@@ -279,6 +281,23 @@ class SimulationConfig:
     # parameter picks that were never fit against each other. Fallica et
     # al.'s ranges remain valuable as an independent cross-check that the
     # regime (not the exact numbers) is right -- kept in the paragraph below.
+    # CAVEAT (2026-09-05, tests/test_yamamoto_anchor.py): implemented in the
+    # standard Mack forms (acid = 1 - exp(-C*E); M = exp(-k*acid*t_PEB); Mack
+    # R(M)), Table 2 does NOT reproduce the paper's own measurements on the
+    # same resist at the same PEB (110 C / 60 s): Fig. 3 (FTIR, 1.4 mJ/cm²)
+    # shows a protection ratio of ~0.18 after 60 s where the chain gives 0.60,
+    # and Fig. 5 (RDA dissolution rate vs. flood dose, 35 % protection) puts
+    # the dissolution threshold at ~0.8 mJ/cm² where the chain puts it at
+    # ~2.7 mJ/cm² -- both readings from the figures (axis-calibrated, ±10 %),
+    # both giving the same factor ~3.4 in k*C. The paper's own PEB kinetics
+    # (Eq. 1) contains an acid-loss term (K_loss / acid lifetime) and a
+    # reaction order m that PROLITH's Table-2 translation and this chain do
+    # not carry; no value for either is published. Consequence: the SHAPE
+    # parameters (Mth, n, Rmax/Rmin, B) are sourced, but the absolute dose
+    # scale of the default resist is uncertain by at least that factor and
+    # is NOT a validation of sensitivity in either direction. The PROLITH
+    # doses of 20-30 mJ/cm² quoted in the paper are set values for profile
+    # plots, not a dose-to-size, and are not an anchor either.
     dill_A: float = 0.0  # Bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_B/C and mack_* below); Fallica et al. 2016 independently confirms the same A<<B regime (their range 0.2-0.45); see note above
     dill_B: float = 1.06  # Non-bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/C and mack_* below); Fallica et al. 2016 found a higher range (4-5) for a different, undisclosed EUV-CAR formulation -- both real, resist-specific; see note above
     #
@@ -686,6 +705,18 @@ class SimulationConfig:
     #   from) developed in NMD-3 (2.38% TMAH) for 30s at 23C.
     resist_thickness_nm: float = 50.0  # Resist film thickness [nm] -- Yamamoto et al. 2011's own better-resolved PROLITH case (26nm showed sidewall bridging in their own results); see note above
     develop_time_s: float = 30.0  # Development time [s] -- Yamamoto et al. 2011's own dissolution-rate measurement condition (NMD-3, 2.38% TMAH, 23C), self-consistent with mack_R_max/R_min/Mth/n above; see note above
+    # Development front model (2026-09-04). "eikonal": the dissolution front is
+    # an isotropic wave with local speed R(M); its first-arrival time obeys
+    # |∇T| = 1/R with T = 0 on the top surface (fast sweeping, Zhao 2005) --
+    # lateral dissolution, undercut and sidewall angle are represented
+    # (resist/develop.py::eikonal_development, validated against exact
+    # solutions in tests/test_eikonal_development.py). "column": the former
+    # vertical-column time-of-flight, T = Σ dz/R down each column, no lateral
+    # dissolution -- kept as the fast approximation and as the limit the
+    # Eikonal solver reduces to without lateral rate variation. The column
+    # model artificially keeps lines alive that lateral development would
+    # erode (Fortsetzung 14): it is NOT a physical development model.
+    development_model: str = "eikonal"
     n_develop_layers: int = 21  # Number of depth layers for the resolved exposure/PEB/development chain -- a NUMERICAL resolution choice, not a physical parameter; matches this codebase's own n_rcwa_orders convention, not independently cited
 
     # ─────────────────────────────────────────────────────────────────
@@ -900,6 +931,10 @@ class SimulationConfig:
         # LER estimator configuration (no artificial upper bound on grid_y)
         if self.stochastic_ler_grid_y < 1:
             raise ValueError("stochastic_ler_grid_y must be a positive integer")
+        if self.development_model not in ("eikonal", "column"):
+            raise ValueError(
+                f"development_model must be 'eikonal' or 'column', got {self.development_model!r}"
+            )
         if self.stochastic_ler_estimator not in ("large_n", "legacy"):
             raise ValueError(
                 "stochastic_ler_estimator must be 'large_n' or 'legacy', "
@@ -1002,6 +1037,149 @@ def _cd_via_aerial_threshold(
     return cd_nm, dev_2d, nils_val
 
 
+def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False):
+    """Developed depth map [nm] per the configured development model.
+
+    With ``return_arrival=True`` also returns the bottom-layer arrival-time
+    row field (H, W) for the Eikonal model, or ``None`` for the column model
+    (which has no lateral information; its CD stays pixel-quantised)."""
+    if cfg.development_model == "eikonal":
+        depth, T = eikonal_development(
+            inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s, return_arrival=True
+        )
+        return (depth, T[-1]) if return_arrival else depth
+    depth = surface_advancement_level_set(inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s)
+    return (depth, None) if return_arrival else depth
+
+
+
+def _peb_blur_radius_px(cfg, dx_nm: float) -> int:
+    """Half-width [px] of the lateral PEB Gaussian exactly as gaussian_se_blur
+    truncates it (4 sigma, rounded), or 0 when the PEB does not blur."""
+    sigma = None
+    if cfg.peb_sigma_diff is not None and cfg.peb_sigma_diff > 0:
+        sigma = float(cfg.peb_sigma_diff)
+    elif cfg.peb_D > 0 and cfg.peb_t_bake > 0:
+        s = (2.0 * cfg.peb_D * cfg.peb_t_bake) ** 0.5
+        sigma = s if s > 0.1 else None
+    if sigma is None:
+        return 0
+    return int(4.0 * sigma / dx_nm + 0.5)
+
+
+def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, tile_rows=1024):
+    """Developed-depth map (H, W) of one noisy 2D dose realisation.
+
+    The chain exposure -> PEB (diffuse, quench, deprotect) -> development is
+    the one the deterministic path runs, applied here in **y-tiles with a
+    halo** instead of on the whole ``(n_layers, H, W)`` stack: for the 61440-
+    row large-N LER fields the stack alone is 2.6 GB and the PEB/Eikonal
+    working sets ~10x that (measured 2026-09-05, the tests were OOM-killed).
+
+    Exactness. Every step is either pointwise, per column (z-blur, Beer-
+    Lambert), per row (Eikonal) or a lateral circular convolution truncated
+    at 4 sigma (gaussian_se_blur); with a halo of one more row than that
+    radius, taken periodically from the full field, the interior rows of a
+    tile receive exactly the contributions they receive in the full
+    convolution, so the result equals the unchunked one to FFT rounding
+    (tests/test_stochastic_chunking.py). With sampled molecules the draw for
+    each tile comes from its own generator seeded from *rng* once up front,
+    so a tile's molecules are the same whether it is processed as interior
+    or as a neighbour's halo -- one consistent realisation, independent of
+    how the rows are grouped. A field of at most *tile_rows* rows is a
+    single tile drawn directly from *rng* (no halo), i.e. unchanged.
+    """
+    H, W = d_eff.shape
+    radius = _peb_blur_radius_px(cfg, dx_nm)
+    halo = radius + 1 if radius > 0 else 0
+    tile_rows = max(int(tile_rows), halo)
+    n_tiles = max(1, math.ceil(H / tile_rows))
+    thickness_um = cfg.resist_thickness_nm / 1000.0
+    alpha = cfg.dill_A + cfg.dill_B  # [1/um]
+    z_um = torch.linspace(0.0, thickness_um, n_layers, device=d_eff.device)
+    if n_tiles == 1:
+        halo = 0
+        tile_gens = [rng]
+    else:
+        seeds = torch.randint(0, 2**62, (n_tiles,), generator=rng, device="cpu")
+        tile_gens = []
+        for t in range(n_tiles):
+            g = torch.Generator(device=d_eff.device)
+            g.manual_seed(int(seeds[t]))
+            tile_gens.append(g)
+
+    def tile_rows_of(t):
+        return t * tile_rows, min((t + 1) * tile_rows, H)
+
+    def sampled_tile(t):
+        """Acid/quencher sample of whole tile t (own generator, reproducible)."""
+        y0, y1 = tile_rows_of(t)
+        dose_z = d_eff[y0:y1].unsqueeze(0) * torch.exp(-alpha * z_um.view(-1, 1, 1))
+        return sample_pag_quencher_acid(
+            dose_z,
+            C=cfg.dill_C,
+            pag_density=cfg.pag_density_per_nm3,
+            quencher_density=cfg.quencher_density_per_nm3,
+            dx=dx_nm,
+            dz=dz_nm,
+            rng=tile_gens[t],
+        )
+
+    depth_parts = []
+    for t in range(n_tiles):
+        y0, y1 = tile_rows_of(t)
+        rows = torch.arange(y0 - halo, y1 + halo, device=d_eff.device) % H
+        if cfg.exposure_stochasticity:
+            # PAG/quencher molecular discreteness (see SimulationConfig's
+            # exposure_stochasticity note). The per-molecule conversion
+            # probability is 1 - exp(-C*E), the same Dill-C law as the mean-
+            # field path; dill_A/dill_B give the Beer-Lambert depth profile.
+            if halo == 0:
+                acid_3d, quencher_3d = sampled_tile(t)
+            else:
+                prev_t, next_t = (t - 1) % n_tiles, (t + 1) % n_tiles
+                a_prev, q_prev = sampled_tile(prev_t)
+                a_cur, q_cur = sampled_tile(t)
+                a_next, q_next = sampled_tile(next_t) if next_t != prev_t else (a_prev, q_prev)
+                # halo rows: the last `halo` rows of the previous tile and the
+                # first `halo` rows of the next one (periodic); tiles are at
+                # least `halo` rows long by construction
+                acid_3d = torch.cat([a_prev[:, -halo:], a_cur, a_next[:, :halo]], dim=1)
+                quencher_3d = torch.cat([q_prev[:, -halo:], q_cur, q_next[:, :halo]], dim=1)
+                del a_prev, q_prev, a_cur, q_cur, a_next, q_next
+            quencher_arg = quencher_3d
+        else:
+            acid_3d, _ = dill_abc_exposure(
+                d_eff[rows],
+                A=cfg.dill_A,
+                B=cfg.dill_B,
+                C=cfg.dill_C,
+                thickness=thickness_um,
+                n_layers=n_layers,
+            )
+            # photon-shot-noise-only chain: same mean-field quencher as the
+            # deterministic path (uniform q0), same PEB step
+            quencher_arg = q0_rel
+        _, _, inhib_3d = reaction_diffusion_with_quenching(
+            acid_3d,
+            quencher_arg,
+            torch.ones_like(acid_3d),
+            D=cfg.peb_D,
+            k=cfg.peb_k,
+            quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+            t_bake=cfg.peb_t_bake,
+            sigma_diff=cfg.peb_sigma_diff,
+            dx=dx_nm,
+            pag_density=cfg.pag_density_per_nm3,  # k_Q [nm^3/s] -> k_Q*G0 [1/s]
+            dz=dz_nm,
+        )
+        del acid_3d
+        depth = _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg)
+        del inhib_3d
+        n_int = y1 - y0
+        depth_parts.append(depth[halo : halo + n_int])
+    return torch.cat(depth_parts, dim=0)
+
 def _cd_via_full_chem(
     aerial: torch.Tensor,
     cfg: SimulationConfig,
@@ -1057,17 +1235,11 @@ def _cd_via_full_chem(
     else:
         dose_map_blurred = dose_map
 
-    # NILS on the blurred dose map (what resist actually sees).
-    # Same Optical-CD threshold convention as aerial_threshold:
-    #   thr = resist_threshold_norm * mean(field) * (20 / dose)
-    # so NILS and CD share one printed edge even in the full_chem path.
-    dc_level = float(dose_map_blurred.mean())
-    threshold_val = (
-        cfg.resist_threshold_norm
-        * dc_level
-        * (AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 / max(cfg.dose_mj_cm2, 1e-9))
-    )
-    nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm, threshold=threshold_val)
+    # NILS is evaluated AFTER development, at the edge the chemistry actually
+    # prints (see the CD extraction below). Until 2026-09-04 it was taken at
+    # the aerial_threshold model's reference-dose threshold, which has no
+    # meaning for the chemistry chain (it returned 0 whenever that threshold
+    # missed the image, e.g. at dose 4 mJ/cm²).
 
     # Depth-resolved acid generation (real Beer-Lambert via dill_A/B).
     # inhibitor from dill_abc_exposure() itself is discarded (not inhib_3d)
@@ -1076,6 +1248,7 @@ def _cd_via_full_chem(
     # fully-protected M=1 start, not during exposure itself (matching the
     # pre-existing 2D chain's own convention, unchanged here).
     n_layers = max(int(cfg.n_develop_layers), 2)
+    dz_nm = cfg.resist_thickness_nm / (n_layers - 1)  # layer spacing [nm]; used by PEB (z-diffusion) and development
     acid_3d, _ = dill_abc_exposure(
         dose_map_blurred,
         A=cfg.dill_A,
@@ -1100,16 +1273,14 @@ def _cd_via_full_chem(
         sigma_diff=cfg.peb_sigma_diff,
         dx=dx_nm,
         pag_density=cfg.pag_density_per_nm3,
+        dz=dz_nm,  # isotropic diffusion: same sigma along z (Neumann at the surfaces)
     )
 
     # Continuous Mack development, time-integrated through the resist depth.
     mack = MackModel(
         R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, n=cfg.mack_n, M_th=cfg.mack_M_th
     )
-    dz_nm = cfg.resist_thickness_nm / (n_layers - 1)
-    depth_map = surface_advancement_level_set(
-        inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
-    )
+    depth_map, arrival_bottom = _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=True)
     # Resist-Profil für Visualisierung (1 = developed/dissolved all the way
     # through the film, 0 = undeveloped/remaining) -- same binary semantics
     # as the previous threshold_development() output, now derived from a
@@ -1186,66 +1357,12 @@ def _cd_via_full_chem(
             # field -- the direct analogue of the old acid_noisy, but
             # physically complete (depth-resolved absorption + PEB, not a
             # bare Dill-C exponential on 2D dose).
-            if cfg.exposure_stochasticity:
-                # PAG/quencher molecular discreteness (see SimulationConfig's
-                # exposure_stochasticity note for the full citation/model).
-                # The per-molecule conversion probability is 1 − exp(−C·E),
-                # the same Dill-C law as the mean-field path (no separate
-                # quantum-efficiency factor -- see the dill_Q REMOVED note in
-                # SimulationConfig). dill_A/dill_B drive the depth-resolved
-                # Beer-Lambert dose (dose_z below), same as the mean-field path.
-                alpha = cfg.dill_A + cfg.dill_B  # [1/um]
-                thickness_um = cfg.resist_thickness_nm / 1000.0
-                z_um = torch.linspace(0.0, thickness_um, n_layers, device=d_eff.device)
-                dose_z = d_eff.unsqueeze(0) * torch.exp(-alpha * z_um.view(-1, 1, 1))
-                acid_noisy_3d, quencher_noisy_3d = sample_pag_quencher_acid(
-                    dose_z,
-                    C=cfg.dill_C,
-                    pag_density=cfg.pag_density_per_nm3,
-                    quencher_density=cfg.quencher_density_per_nm3,
-                    dx=dx_nm,
-                    dz=dz_nm,
-                    rng=rng,
-                )
-                inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
-                _, _, inhib_noisy_3d = reaction_diffusion_with_quenching(
-                    acid_noisy_3d,
-                    quencher_noisy_3d,
-                    inhib_in_noisy_3d,
-                    D=cfg.peb_D,
-                    k=cfg.peb_k,
-                    quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
-                    t_bake=cfg.peb_t_bake,
-                    sigma_diff=cfg.peb_sigma_diff,
-                    dx=dx_nm,
-                    pag_density=cfg.pag_density_per_nm3,  # k_Q [nm³/s] -> k_Q·G0 [1/s]
-                )
-            else:
-                acid_noisy_3d, _ = dill_abc_exposure(
-                    d_eff,
-                    A=cfg.dill_A,
-                    B=cfg.dill_B,
-                    C=cfg.dill_C,
-                    thickness=cfg.resist_thickness_nm / 1000.0,
-                    n_layers=n_layers,
-                )
-                inhib_in_noisy_3d = torch.ones_like(acid_noisy_3d)
-                # Photon-shot-noise-only chain: same mean-field quencher as
-                # the deterministic path (uniform q0), same PEB step.
-                _, _, inhib_noisy_3d = reaction_diffusion_with_quenching(
-                    acid_noisy_3d,
-                    q0_rel,
-                    inhib_in_noisy_3d,
-                    D=cfg.peb_D,
-                    k=cfg.peb_k,
-                    quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
-                    t_bake=cfg.peb_t_bake,
-                    sigma_diff=cfg.peb_sigma_diff,
-                    dx=dx_nm,
-                    pag_density=cfg.pag_density_per_nm3,
-                )
-            depth_map_noisy = surface_advancement_level_set(
-                inhib_noisy_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
+            # Depth-resolved exposure (sampled molecules or mean field) ->
+            # PEB -> development, processed in y-tiles with a halo so the
+            # 61440-row LER fields never hold the full 3D stack (see
+            # _noisy_depth_map). Same physics as the deterministic path.
+            depth_map_noisy = _noisy_depth_map(
+                d_eff, cfg, n_layers=n_layers, dx_nm=dx_nm, dz_nm=dz_nm, q0_rel=q0_rel, mack=mack, rng=rng
             )
             # developed is left as the raw continuous depth field here
             # (NOT pre-binarised) so extract_ler/lwr's own `developed >
@@ -1339,10 +1456,29 @@ def _cd_via_full_chem(
     runs = _find_runs_1d(dev_for_cd, target=0)  # find runs of undeveloped (0)
     if len(runs) == 0:
         cd_nm = 0.0
+        nils_val = float("nan")
     else:
         longest = max(runs, key=lambda r: r[1] - r[0])
         lidx, ridx = longest
         cd_nm = (ridx - lidx + 1) * dx_nm
+        if arrival_bottom is not None:
+            # Sub-pixel line width from the bottom-layer arrival time
+            # (Eikonal model): the pixel count above is quantised to dx,
+            # which made every CD-vs-parameter curve a staircase (and
+            # `euv calibrate` blind on coarse grids, 2026-09-05). Falls back
+            # to the pixel count if the interpolation finds no line.
+            x_l, x_r = edge_positions_from_arrival(arrival_bottom[half, :], cfg.develop_time_s, dx_nm)
+            if x_r == x_r and x_l == x_l:
+                cd_nm = x_r - x_l
+        # NILS at the printed edges: the image intensity at the boundary
+        # between the last developed and the first undeveloped pixel defines
+        # the threshold at which this chemistry prints; nils() then measures
+        # CD·|dI/dx|/I at the crossings of that level (Mack 2007 §4.5).
+        row_i = dose_map_blurred[half, :]
+        W_ = row_i.shape[0]
+        i_l = 0.5 * (float(row_i[(lidx - 1) % W_]) + float(row_i[lidx]))
+        i_r = 0.5 * (float(row_i[ridx]) + float(row_i[(ridx + 1) % W_]))
+        nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm, threshold=0.5 * (i_l + i_r))
     # dev_2d für Visualisierung
     dev_2d = dev_chem.clone()
 

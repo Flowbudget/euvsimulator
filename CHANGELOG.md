@@ -23,6 +23,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   (Mack 2011: 3 s⁻¹, not 15).
 - `absorber_taper_deg` / `mask_undercut_nm` now raise `NotImplementedError` instead of being
   silently ignored.
+- **`euv calibrate` simulated the wrong line width.** The CSV loader's loop variable `cd`
+  shadowed the `--cd` option, so every fit used the *last measured CD* as the nominal line
+  width (found by a synthetic-FEM smoke test: the fit returned σ = 1 nm / RMSE 6.6 nm for data
+  generated at σ = 7 nm). Wiring is now covered by `tests/test_cli_calibrate.py`.
+- `bootstrap_fit` no longer warns "Only n / n runs succeeded" when all runs succeeded.
+- **Sub-pixel line width (Eikonal model).** `cd_nm` was the count of undeveloped pixels × dx,
+  i.e. quantised to 1 nm at grid 64 and 0.5 nm at grid 128; every CD-vs-dose or -vs-parameter
+  curve was a staircase and the calibration objective was flat over whole parameter ranges.
+  The edge is now the linear crossing of the bottom-layer arrival time with the development
+  time (`resist.develop.edge_positions_from_arrival`): behind the edge the arrival time grows
+  linearly at 1/R(M) per unit length, so the crossing is first-order exact. Verified against a
+  4× finer grid (within 0.35 nm, monotone in dose; interpolating the developed-depth map
+  instead gave a 0.8 nm sawtooth and was rejected). The column model keeps the pixel count.
+  Tests: `tests/test_subpixel_cd.py`.
+- **Stochastic chain no longer needs the whole 3D stack in memory.** The z-diffusion and the
+  Eikonal front (Phase 2b) raised the working set of the noisy exposure → PEB → development
+  chain to ~10× the `(n_layers, H, W)` field (measured), which OOM-killed the 61440-row large-N
+  LER tests on an 8 GB machine. The chain now runs in y-tiles with a halo of one row more than
+  the 4σ blur radius (`pipeline._noisy_depth_map`); every step is pointwise, per column, per row
+  or that truncated circular convolution, so the result is the untiled one to FFT rounding
+  (`tests/test_stochastic_chunking.py`). Sampled molecules are drawn per tile from generators
+  seeded once from the run's RNG, so a realisation does not depend on the grouping. Fields of
+  ≤ 1024 rows are a single tile drawn directly from the run RNG (unchanged results). The Eikonal
+  solver, the z-blur and the FFT blur additionally process rows/layers in slices (bitwise
+  identical).
+- `tests/test_stochastic_consistency.py`: the "no roughness at ρ = 2000" check (passed by
+  0.0002 nm) is replaced by the physical invariant LWR ∝ ρ^(−1/2) with the photon sampler off
+  (measured ×150 over four decades, √10⁴ = 100); the sparse-vs-dense ordering with photon noise
+  on is dropped (a +3 % effect below the estimator scatter at n_eff ≈ 9).
 - **One chemistry for both chains (Phase 1).** The deterministic full_chem chain and the
   sampled-molecule chain (`exposure_stochasticity=True`) run the same PEB step: acid and
   quencher diffuse, then neutralise (Mack 2011 closed form, k_Q·G0), then deprotect. The
@@ -44,6 +73,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   from 6.6 to 21.2 mJ/cm² with no source for the combination. Set it explicitly for a
   self-consistent parameter set.
 
+- **Gaussian blur kernel was clamped to the image size** (`resist.exposure.gaussian_se_blur`): a PEB
+  blur wider than one pitch was truncated at ~1σ and renormalised -- for the default σ = 19.9 nm
+  on the 256-px grid the modulation transfer at the pitch frequency was 0.12 instead of the exact
+  0.018 (6.9×; 1.7× at 14 nm, 1.09× at 10 nm). Every full_chem result with σ_PEB ≳ 7 nm (44 nm
+  pitch) / ≳ 11 nm (64 nm pitch) was affected. Now an exact periodic (FFT) convolution for any
+  kernel size, 4σ truncation; `tests/test_blur.py` pins the analytic MTF.
+- `resist.peb.reaction_diffusion_adi`: zero-flux boundary rows in conservative flux form on both
+  half-steps (mass created before: +0.14..+1.6 %); `tests/test_peb_numerics.py`.
+- PEB diffusion is isotropic: the unified PEB step also diffuses along z (face-symmetric mirror
+  boundaries, column total conserved); previously lateral only.
+- `full_chem` NILS is now measured at the edge the chemistry prints (CD·|dI/dx|/I at the image
+  level of the developed boundary); previously it used the aerial_threshold model's
+  reference-dose level, which has no meaning for the chemistry chain and returned 0 whenever that
+  level missed the image. NaN when no line prints. `resist_threshold_norm` no longer affects
+  full_chem results at all.
 - `metro.pw_metrics` returned grid-index counts under the physical keys `dof_nm`/`el_pct`; it now
   takes the `doses`/`focuses` grids and reports NaN for the physical values without them (index
   counts are available as `dof_steps`/`el_steps`).
@@ -56,10 +100,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 - `resist.develop.eikonal_development` / `eikonal_arrival_time`: 2D (x, z) development front from
   the Eikonal equation |∇T| = 1/R(M) (fast sweeping, Zhao 2005), validated against exact
-  solutions (`tests/test_eikonal_development.py`). Not yet the pipeline default.
+  solutions (`tests/test_eikonal_development.py`). **Pipeline default** via
+  `SimulationConfig.development_model = "eikonal"` (CLI `--development-model`); `"column"` keeps
+  the former vertical time-of-flight approximation. With lateral dissolution the default
+  Yamamoto-2011 resist parameters print the 32 nm line at 64 nm pitch only in a knife-edge dose
+  window at the default 19.9 nm PEB blur -- the column model had kept such lines alive
+  artificially. At 44 nm pitch the 22 nm line prints with σ_PEB ≤ 7 nm at a dose-to-size of
+  ≈ 4.5–4.9 mJ/cm² (a first coarse scan with 2.5 mJ/cm² steps had missed this window; corrected
+  the same day). The stochastic regression tests run at an explicit operating point
+  (σ_PEB = 7 nm, 4.0 mJ/cm²).
 - Docstrings of `etch.bias` (coefficients are empirical, no source), `source.plasma` (illustrative,
   not connected to the pipeline) and `aerial.abbe` (numerical TCC overlap, scalar thin-mask) now
   state their status.
+- `euv calibrate --period/--cd/--grid/--se-blur`: the simulated geometry must match the measured
+  FEM; it was hard-wired to 64/32 nm regardless of the data.
+- `tests/test_yamamoto_anchor.py`: the default resist parameters (Yamamoto et al. 2011, Table 2)
+  are checked against the same paper's own measurements on the same resist (Fig. 3 FTIR
+  protection ratio, Fig. 5 dissolution-rate threshold). In the standard Mack forms the chain
+  deprotects ≈ 3.4× too little (P(60 s) 0.60 vs ≈ 0.18; threshold 2.75 vs ≈ 0.8 mJ/cm²). Encoded as
+  `xfail(strict=True)` with the reason, plus a pin of the current numbers. Consequence documented
+  in `SimulationConfig`: the shape parameters are sourced, the absolute dose scale of the default
+  resist is not a validated quantity in either direction. No acid-loss knob was added (no
+  published value).
 
 ### Removed
 - `development_stochasticity=True` (raises `NotImplementedError`), `development_strength`,

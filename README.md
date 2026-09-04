@@ -250,7 +250,7 @@
 251|| High-NA imaging (anamorphic) | ✅ |
 252|| End-to-end pipeline | ✅ |
 253|| LPP source model | ✅ |
-254|| Resist chemistry (Dill ABC + PEB + Mack) | ✅ |
+254|| Resist chemistry (Dill ABC + PEB + Mack) | ✅ Depth-resolved Dill exposure, isotropic PEB reaction-diffusion with acid-base quenching, Mack rate, Eikonal (fast-sweeping) development front with lateral dissolution (`development_model="eikonal"`, 2026-09-04) |
 255|| Stochastic effects (shot noise, LER/LWR) | ✅ Shot noise, LER/LWR, 1/√Dose scaling, Monte-Carlo |
 256|| CD metrology & process window | ✅ |
 257|| Inverse lithography (OpenILT bridge) | ✅ |

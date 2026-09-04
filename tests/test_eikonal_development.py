@@ -109,3 +109,15 @@ def test_developed_depth_interpolates_and_overshoots_like_column_model():
     assert float(d) == pytest.approx(2 * 2.0 + 0.5 * 2.0)  # two layers + half of the third
     d_full = developed_depth_from_arrival(T, t_develop=10.0, dz=2.0)
     assert float(d_full) == pytest.approx(4 * 2.0 + 2.0)  # all layers + one dz overshoot
+
+
+def test_row_chunking_is_bitwise_identical():
+    """Rows are independent (x, z) problems; chunking over y (memory bound
+    for the 61440-row LER fields, 2026-09-05) must not change a single bit."""
+    torch.manual_seed(0)
+    inhib = 1.0 - torch.rand(5, 37, 16, dtype=torch.float64) * 0.5
+    mack = MackModel(R_max=68.6, R_min=0.1, M_th=0.39, n=18.2)
+    a, Ta = eikonal_development(inhib, mack, dx=0.25, dz=2.5, t_develop=30.0, return_arrival=True, chunk_rows=10**9)
+    b, Tb = eikonal_development(inhib, mack, dx=0.25, dz=2.5, t_develop=30.0, return_arrival=True, chunk_rows=10)
+    assert torch.equal(a, b) and torch.equal(Ta, Tb)
+    assert Ta.shape == inhib.shape

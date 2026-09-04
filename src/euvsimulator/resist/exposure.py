@@ -310,7 +310,16 @@ def _fft_circular_blur(
     row_idx = offsets % H
     col_idx = offsets % W
     kernel_padded = torch.zeros(H, W, dtype=img_4d.dtype, device=img_4d.device)
-    kernel_padded[row_idx.unsqueeze(1), col_idx.unsqueeze(0)] = kernel_2d
+    # ACCUMULATE: when the kernel is wider than the (periodic) image, several
+    # taps wrap onto the same cell; plain assignment would keep only the
+    # last one. Accumulation is exactly the periodic summation of the
+    # kernel, which is what a circular convolution with a wide kernel is.
+    k = kernel_2d.shape[0]
+    kernel_padded.index_put_(
+        (row_idx.unsqueeze(1).expand(k, k), col_idx.unsqueeze(0).expand(k, k)),
+        kernel_2d,
+        accumulate=True,
+    )
 
     K = torch.fft.rfft2(kernel_padded)
     X = torch.fft.rfft2(img_4d, dim=(-2, -1))
@@ -322,7 +331,7 @@ def gaussian_se_blur(
     sigma: float | torch.Tensor = 5.0,
     kernel_size: int | None = None,
     dx: float = 1.0,
-    truncate: float = 3.0,
+    truncate: float = 4.0,
 ) -> torch.Tensor:
     """Apply secondary-electron Gaussian blur to a 2D dose/acid map.
 
@@ -330,9 +339,10 @@ def gaussian_se_blur(
 
         G(x, y) = (1 / 2πσ²) · exp[−(x² + y²) / (2σ²)]
 
-    This is applied via depthwise separable convolution for efficiency.
-    If the image dimensions are smaller than the kernel, sigma is reduced
-    accordingly to prevent padding errors.
+    This is applied via depthwise separable convolution for small kernels
+    and via an exact circular (FFT) convolution for kernels larger than
+    64 px or than the image in either axis. The image is treated as
+    periodic in both axes (one pitch in x, the Y-tiled field in y).
 
     Parameters
     ----------
@@ -349,7 +359,11 @@ def gaussian_se_blur(
     dx : float
         Grid spacing [nm/pixel].  Default 1.0.
     truncate : float
-        Truncation radius in units of *sigma*.  Default 3.0.
+        Truncation radius in units of *sigma*.  Default 4.0 (2026-09-04;
+        was 3.0): a 3σ-truncated, renormalised kernel carries 0.27 % of its
+        mass in the cut tails and overstates the modulation transfer at the
+        pitch frequency by ~0.5 %; at 4σ the error is ~1e-4. The cost is
+        irrelevant on the FFT path.
 
     Returns
     -------
@@ -381,11 +395,16 @@ def gaussian_se_blur(
 
     B, C, H, W = img_4d.shape
 
-    # Clamp kernel_size to be no larger than image dimensions
-    max_dim = min(H, W)
-    if kernel_size > max_dim:
-        kernel_size = max_dim if max_dim % 2 == 1 else max_dim - 1
-        kernel_size = max(3, kernel_size)
+    # NO clamping of the kernel to the image size. Until 2026-09-04 the
+    # kernel was cut to min(H, W) (= 255 px for the 256-px pitch grid): a
+    # PEB blur of σ = 19.9 nm at dx = 0.17 nm (695-px kernel) was truncated
+    # at ±1.1σ and renormalised, i.e. it was not a Gaussian any more -- its
+    # MTF at the pitch frequency was 0.12 instead of exp(−2π²σ²/P²) = 0.018
+    # (6.9× too much contrast; 1.7× at σ = 14 nm, 1.09× at 10 nm). The
+    # image is periodic in both axes (one pitch in x, the Y-tiled field in
+    # y), so the exact operation for ANY kernel size is the circular
+    # convolution, which the FFT path below computes with wrapped taps
+    # accumulated (tests/test_blur.py pins the analytic MTF).
 
     # --- build 1D Gaussian kernel ---
     radius = kernel_size // 2
@@ -411,8 +430,15 @@ def gaussian_se_blur(
     # path) route through FFT. Verified empirically (not just claimed) to
     # agree with the direct path to float32 precision on representative
     # inputs before this was adopted -- see docs/claude_code_arbeitslog.md.
-    if kernel_size > 64:
-        blurred = _fft_circular_blur(img_4d, kernel_1d, radius, H, W)
+    if kernel_size > 64 or kernel_size > min(H, W):
+        # One image at a time: each (H, W) plane is an independent circular
+        # convolution, so the result is identical, but the complex128 FFT
+        # intermediates (~6x the plane) are no longer allocated for the whole
+        # (N, H, W) stack at once -- the 61440-row LER fields exceeded 8 GB
+        # here (2026-09-05).
+        blurred = torch.cat(
+            [_fft_circular_blur(img_4d[b : b + 1], kernel_1d, radius, H, W) for b in range(B)], dim=0
+        )
     else:
         # separable convolution
         col_k = kernel_1d.view(1, 1, kernel_size, 1).repeat(C, 1, 1, 1)

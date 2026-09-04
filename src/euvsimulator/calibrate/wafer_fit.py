@@ -320,10 +320,16 @@ def bootstrap_fit(
     valid = ~np.any(np.isnan(boot_samples), axis=1)
     valid_samples = boot_samples[valid]
 
-    if len(valid_samples) < max(10, n_samples // 4):
+    n_valid = len(valid_samples)
+    if n_valid < n_samples and n_valid < max(10, n_samples // 4):
         warnings.warn(
-            f"Only {len(valid_samples)} / {n_samples} bootstrap runs succeeded; "
+            f"Only {n_valid} / {n_samples} bootstrap runs succeeded; "
             f"confidence intervals may be unreliable."
+        )
+    elif n_valid < 10:
+        warnings.warn(
+            f"Only {n_valid} bootstrap samples; percentile confidence intervals "
+            f"need more (>= 10) to be meaningful."
         )
 
     # Percentile confidence intervals

@@ -34,13 +34,33 @@ from euvsimulator.resist.exposure import gaussian_se_blur
 
 PITCH, LW = 44.0, 22.0
 DX = PITCH / 256
+# PEB blur for these tests: 7 nm (sigma_tot ≈ 8.6 nm with the 5 nm SE blur),
+# the regime in which the 22 nm line at 44 nm pitch prints. With the
+# default 19.9 nm the exact Gaussian (kernel no longer clamped since
+# 2026-09-04) leaves 1.8 % contrast at the pitch frequency and no line
+# prints at any dose -- an invariant cannot be tested on a non-existent
+# edge. This is a choice of operating point, not a physics parameter.
+SIGMA_PEB = 7.0
 
 
 def _cfg(**kw):
     base = dict(resist_model="full_chem", period_nm=PITCH, line_width_nm=LW, se_blur_nm=5.0,
-                grid=256)
+                grid=256, peb_sigma_diff=SIGMA_PEB)
     base.update(kw)
     return SimulationConfig(**base)
+
+
+def _dose_to_size(q_density, lo=1.0, hi=80.0, iters=16):
+    """Deterministic dose at which CD == LW (bisection; CD falls with dose)."""
+    f = lambda d: run_simulation(_cfg(dose_mj_cm2=d, quencher_density_per_nm3=q_density)).cd_nm
+    assert f(lo) >= LW >= f(hi), "no dose window for this chemistry"
+    for _ in range(iters):
+        mid = 0.5 * (lo + hi)
+        if f(mid) > LW:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
 
 
 def _stoch(rho, q_ratio, dose, seed=42, rows=1024):
@@ -60,36 +80,53 @@ def photon_noise_off(monkeypatch):
     monkeypatch.setattr(P, "photon_deposition_shot_noise", mean_field)
 
 
-@pytest.mark.parametrize("q_ratio, dose", [(0.0, 7.0), (0.25, 21.0)])
-def test_large_number_limit_recovers_deterministic_cd(photon_noise_off, q_ratio, dose):
-    """Dose chosen near dose-to-size of each chemistry (measured 6.6 / 21.2
-    mJ/cm² at 44 nm pitch without / with Mack-2011 quencher loading)."""
+@pytest.mark.parametrize("q_ratio", [0.0, 0.25])
+def test_large_number_limit_recovers_deterministic_cd(photon_noise_off, q_ratio):
+    """At the dose-to-size of each chemistry (without / with Mack-2011
+    quencher loading), found by bisection so the test follows the model."""
+    dose = _dose_to_size(0.2 * q_ratio)
     det = run_simulation(_cfg(dose_mj_cm2=dose, quencher_density_per_nm3=0.2 * q_ratio)).cd_nm
     assert det > 0.0
     cds = {}
     for rho in (0.2, 20.0, 2000.0):
         cds[rho] = _stoch(rho, q_ratio, dose).ler_metadata["stochastic_cd_nm"]
         assert math.isfinite(cds[rho])
-    # Converged: within one pixel of the deterministic CD (cd_nm itself is
-    # pixel-quantised), and monotonically closer than the sparse case.
-    assert abs(cds[2000.0] - det) <= DX, f"det {det:.2f}, stochastic {cds}"
+    # Converged: the deterministic cd_nm is pixel-quantised (integer-pixel
+    # run length of the binarised middle row, ±0.5 px per edge), the
+    # stochastic width is a sub-pixel crossing -> agree to 1.5 px; and the
+    # dense realisation is closer than the sparse one.
+    assert abs(cds[2000.0] - det) <= 1.5 * DX, f"det {det:.2f}, stochastic {cds}"
     assert abs(cds[2000.0] - det) <= abs(cds[0.2] - det) + 1e-9
 
 
-def test_large_number_limit_has_no_roughness_without_photon_noise(photon_noise_off):
-    r = _stoch(2000.0, 0.0, 7.0)
-    assert r.lwr_nm < 0.1 * DX  # only residual sub-pixel interpolation noise
+def test_molecular_noise_scales_as_inverse_sqrt_density(photon_noise_off):
+    """With the photon sampler replaced by its mean, the only noise left is
+    the molecular count: LWR ∝ ρ^(−1/2) (Poisson/Binomial counting). Measured
+    2026-09-05 at this operating point (rho_scaling.py): 2.55 / 0.56 / 0.23 /
+    0.088 / 0.017 nm for ρ = 0.2 … 2000 nm⁻³, i.e. ×150 over four decades
+    (√10⁴ = 100). An earlier version asserted "no roughness" below 0.1 px at
+    ρ = 2000 and passed by 0.0002 nm -- the residual is physics, not
+    interpolation noise, so the invariant is the scaling, not a floor."""
+    dose = _dose_to_size(0.0)
+    lwr = {rho: _stoch(rho, 0.0, dose).lwr_nm for rho in (0.2, 20.0, 2000.0)}
+    assert lwr[0.2] > lwr[20.0] > lwr[2000.0] > 0.0, lwr
+    # two decades of density -> one decade of LWR (factor 10), allow 2x either way
+    assert 5.0 < lwr[0.2] / lwr[20.0] < 20.0, lwr
+    assert 5.0 < lwr[20.0] / lwr[2000.0] < 20.0, lwr
 
 
 def test_molecular_noise_vanishes_to_photon_floor():
-    photon_only = run_simulation(_cfg(dose_mj_cm2=7.0, enable_stochastic=True, stochastic_seed=42,
+    """With photon noise on and the same seed, the dense-molecule chain must
+    reproduce the photon-only chain (same photon draw, count noise 0.02 nm
+    against a ~10 nm photon LWR at this operating point). The sparse chain
+    adds only ~2.5 nm in quadrature (+3 %), below the estimator's own
+    scatter at n_eff ≈ 9, so no ordering is asserted with photon noise on --
+    the molecular part is tested with the photon sampler off above."""
+    dose = _dose_to_size(0.0)
+    photon_only = run_simulation(_cfg(dose_mj_cm2=dose, enable_stochastic=True, stochastic_seed=42,
                                       stochastic_n_realisations=1, stochastic_ler_grid_y=1024,
                                       exposure_stochasticity=False)).lwr_nm
-    dense = _stoch(2000.0, 0.0, 7.0).lwr_nm
-    sparse = _stoch(0.2, 0.0, 7.0).lwr_nm
-    assert sparse > dense  # finite molecule count adds roughness
-    # At 2000 molecules/nm^3 the count noise is negligible against the
-    # photon noise: same seed, same photon draw -> within 10 %.
+    dense = _stoch(2000.0, 0.0, dose).lwr_nm
     assert dense == pytest.approx(photon_only, rel=0.10)
 
 

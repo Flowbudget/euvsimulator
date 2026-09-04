@@ -1981,3 +1981,353 @@ Ein Test in `test_pipeline.py` verwendete als „analytische Schranke" Σ|Δ_i|�
 (Σ|Δ_i|)²/4 (Cauchy-Schwarz über die Hopkins-Doppelsumme) — hielt nur, solange TE ≈ TM; korrigiert.
 
 ---
+
+## 2026-09-04 (Fortsetzung 14): Phase 2b — Blur-Kernel war auf die Bildbreite geklemmt; ADI-Massenerhaltung; z-Diffusion; Eikonal-Druckbarkeit
+
+### Der Blur-Kernel wurde stillschweigend abgeschnitten (nicht im Audit)
+
+Beim Isotropie-Test der neuen z-Diffusion fiel auf, dass ein einzeiliges Feld lateral kaum geblurrt
+wurde. Ursache in `gaussian_se_blur`: `kernel_size` wurde auf `min(H, W)` geklemmt (255 px beim
+256-px-Gitter). Für σ_PEB = 19,9 nm bei dx = 0,172 nm (Kernel 695 px) heißt das: Abschnitt bei
+±1,1σ, renormiert — keine Gaußfunktion mehr. Gemessen (Kosinus der Pitch-Frequenz, P = 44, 256 px):
+
+| σ_PEB | Kernel | MTF Code (alt) | MTF exakt | Verhältnis |
+|---|---|---|---|---|
+| 5 | 175 px (FFT) | 0,779 | 0,775 | 1,00 |
+| 7 | 245 px (FFT) | 0,611 | 0,607 | 1,01 |
+| 10 | 351 → 255 px | 0,395 | 0,361 | 1,09 |
+| 14 | 489 → 255 px | 0,229 | 0,136 | 1,69 |
+| **19,9** | **695 → 255 px** | **0,122** | **0,018** | **6,9** |
+
+**Konsequenzen:** (1) Jede Rechnung mit σ_PEB ≳ 7,3 nm bei Gitter 256 (P = 44) bzw. ≳ 10,6 nm (P = 64)
+lief mit einem abgeschnittenen Kernel — der „Default 19,9 nm" hatte effektiv eine MTF wie ≈ 13 nm.
+(2) Die σ-Skala der U-Kurve in Fortsetzung 10 ist für σ_PEB ≥ 9 nach rechts verzerrt; der Mechanismus
+(Kontrastverlust ∝ exp(−2π²σ²/P²) gegen Rauschdämpfung ∝ 1/σ) und das Minimum bei P/(2π) bleiben,
+die Verstärkungsfaktoren am Default sind mit exaktem Kernel **größer** (Neu-Messung unten).
+(3) Mit exaktem Kernel bleiben bei σ_PEB = 19,9 nm 1,8 % Kontrast — die 22-nm-Linie bei P = 44 druckt
+dann **bei keiner Dosis**, auch im Säulenmodell. Fix: kein Clamping; exakte periodische Faltung (FFT,
+gewickelte Kernel-Taps akkumuliert) für alle Kernel > 64 px oder > Bildbreite; Abschneiden bei 4σ statt
+3σ (MTF-Fehler 1e-4 statt 5e-3). `tests/test_blur.py` pinnt die analytische MTF exp(−2π²σ²f²) für
+σ = 1…40 nm, Massenerhaltung, einzeilige Felder, FFT = direkt.
+
+### ADI: Flussform statt Spiegelform
+
+Meine erste „Korrektur" (Spiegel-Ghost auch implizit) machte es schlimmer (+2,7 % Masse): die Spiegel-
+form hat Spaltensumme −1 und ist nicht konservativ. Konservativ ist die Flussform (1+α)A₀ − αA₁ mit
+explizit A₁ − A₀ — jetzt beidseitig; `tests/test_peb_numerics.py`: Masse auf 1e-12 erhalten
+(α = 2,5 / 10 / 0,5), Dirichlet verliert Masse. Der ADI-Löser ist nicht im Pipeline-Pfad.
+
+### z-Diffusion (Audit B2) — umgesetzt
+
+`reaction_diffusion_with_quenching(…, dz=…)`: derselbe Gauß entlang z, gesichtssymmetrische
+Spiegelung (Ghost −k = f_{k−1}; nur diese erhält die Spaltensumme exakt — „reflect" um das Randsample
+leckt Σ f_j k(j) − f₀ Σ k(k), gemessen +0,44 %). Pipeline übergibt dz an allen drei Aufrufstellen.
+Tests: Spaltensumme 1e-12, σ ≫ Film → Tiefenmittel, Isotropie (σ_z = σ_x auf 5 %). Preflight vorher
+(`audit_zdiff2.py`, noch mit geklemmtem lateralem Kernel): Dosis-zu-Größe −0,03 % (α = 1,06), −2,8 %
+(α = 8 µm⁻¹).
+
+### Eikonal-Druckbarkeit — ehrliches Ergebnis
+
+Mit lateraler Entwicklung (`preflight_eikonal.py`, `preflight_eikonal_sigma.py`) ~~ist die 22-nm-Linie
+bei P = 44 mit dem Yamamoto-Satz (Mack n = 18,2, R_max 68,6, 30 s) bei keinem σ_PEB ≤ 12 nm auf
+22 nm druckbar~~ — **FALSCH, korrigiert in Fortsetzung 15:** der Scan hatte 2,5 mJ/cm² Schrittweite und
+hat das ≈ 1 mJ/cm² breite Fenster übersprungen; P = 44/22 druckt mit σ_PEB ≤ 12 nm bei D2S 4,4–5,8.
+Richtig bleibt: P = 64/32 nm druckt mit glattem Fenster (D2S ≈ 5,9–6,4), und das Säulenmodell hat
+die Linie bei σ = 19,9 nm künstlich am Leben gehalten.
+
+Neu-Messung P = 64/32 nm mit **exaktem Kernel + z-Diffusion + Eikonal** (CD [nm] gegen Dosis [mJ/cm²]):
+
+| σ_PEB | 4,0 | 4,5 | 5,0 | 5,5 | 6,0 | 6,5 | 7,0 | 8,0 | 10 |
+|---|---|---|---|---|---|---|---|---|---|
+| 19,9 (Default) | 64 | 64 | 35,5 | 14 | 0 | 0 | 0 | 0 | 0 |
+| 12 | 35 | 28,5 | 24 | 20,5 | 17,5 | 15 | 12,5 | 7,5 | 0 |
+| 7 | 31,5 | 28,5 | 26 | 23,5 | 22 | 20,5 | 19 | 16,5 | 12,5 |
+| 3 | 31,5 | 29 | 27 | 25,5 | 24 | 22,5 | 21,5 | 19,5 | 16,5 |
+
+Mit dem Default σ = 19,9 nm existiert die 32-nm-Linie nur in einem Messerkanten-Fenster (5,0–5,5),
+mit σ ≤ 12 nm in einem glatten Fenster. Das ist konsistent mit Yamamotos eigener Aussage, dass sein
+Resist bei 26 nm L/S „considerable bridging" zeigte — ein 2011-Resist für ≥ 50-nm-Strukturen.
+**Konsequenz:** `development_model = "eikonal"` ist jetzt Default (mit `"column"` als dokumentierter
+Näherung); die stochastischen Regressionstests laufen an einem stabilen Arbeitspunkt
+(σ_PEB = 7 nm, 4,0 mJ/cm²), und die Frage des Default-σ (Phase 3) ist damit nicht mehr Kalibrierung
+gegen ein LWR-Ziel, sondern die Frage, welche Diffusionslänge zu welchem Resist gehört.
+
+### U-Kurve neu gemessen (exakter Kernel, absorbierte Photonen, z-Diffusion; noch Säulenmodell)
+
+`mechanism_check.py`, je σ an der eigenen Dosis-zu-Größe, Konfig A = nur Photonenrauschen:
+
+| P = 44 nm, σ_PEB | σ_tot | D2S | LWR_A [nm] | | P = 64 nm, σ_PEB (Konfig C) | D2S | LWR [nm] |
+|---|---|---|---|---|---|---|---|
+| 3 | 5,8 | 6,57 | **3,07** | | 5 | 6,06 | 2,20 |
+| 5 | 7,1 | 6,60 | 3,11 | | 7 | 5,89 | 2,17 |
+| 7 | 8,6 | 6,61 | 3,53 | | 10 | 5,71 | 2,24 |
+| 9 | 10,3 | 6,61 | 4,76 | | 14 | 5,64 | 3,35 |
+| 12 | 13,0 | 6,60 | 8,47 | | 19,9 | 5,64 | 8,00 |
+| 16 | 16,8 | 6,59 | 12,06 | | 25 | 5,65 | 13,17 |
+| 19,9 | 20,5 | 6,59 | 10,65 | | | | |
+
+Mit exaktem Kernel liegt das Minimum bei P = 44 am kleinsten gemessenen σ (5,8 nm), der Default ist
+3,5× darüber (P = 64: 3,7×). Bemerkenswert: **reines Photonenrauschen** mit korrekter Absorption und
+Dosis liefert bei P = 44 am Optimum ≈ 3,1 nm — am oberen Rand von Vesters' Band (2,17–3,43 nm) bei
+6,6 mJ/cm²; Vesters' Resists arbeiten bei 8–16 mJ/cm² (mehr Photonen: 3,1·√(6,6/12) ≈ 2,3 nm).
+Der Photonenboden ist also physikalisch dort, wo er sein sollte; die frühere „Überrauheit" war
+die Summe aus geklemmtem Kernel, einfallenden statt absorbierten Photonen, falscher Dosisskala
+und dem 19,9-nm-Blur.
+
+### P = 44 nm mit exaktem Kernel + Eikonal — ~~druckt keine 22-nm-Linie~~ (FALSCH, siehe Fortsetzung 15)
+
+`preflight_eikonal_sigma.py` (Dosis-Scan 1–60 in 25 Schritten = 2,46 mJ/cm² Schrittweite, Bisektion nur,
+wenn ein Scanpunkt innerhalb 22 ± 6 nm lag) meldete σ_PEB = 1–9 nm als „nicht druckbar" (Scanpunkte
+3,46 → CD 44; 5,92 → CD 14). **Das war ein Artefakt der Schrittweite:** der Feinscan (Fortsetzung 15)
+zeigt zwischen 4,4 und 5,4 mJ/cm² eine stetige CD-Dosis-Kurve durch 22 nm. Was von diesem Absatz
+bleibt: das Fenster ist schmal (CD 44 → 17 nm innerhalb von ≈ 1 mJ/cm² bei σ = 7), und die
+Phase-3-Schlussfolgerung — keine unterbestimmte Anpassung von vier Mack-Parametern an zwei
+Vesters-Zahlen, stattdessen `euv calibrate` auf Eikonal umstellen — gilt unverändert, jetzt mit
+richtiger Begründung (Fortsetzung 15: Photonen-LWR am D2S ≈ 9 nm, Faktor 3 über Vesters, *und*
+der Yamamoto-Satz reproduziert die Messungen seiner eigenen Quelle nicht).
+
+### Nebenbefund: NILS im full_chem-Pfad war bedeutungslos
+
+`_cd_via_full_chem` bewertete NILS an der Schwelle des aerial_threshold-Modells
+(0,5·mean·20/Dosis) — bei 4 mJ/cm² liegt diese über dem Bildmaximum → NILS = 0 (die Golden-Ableitung
+zeigte „NILS = 0.0000"). Jetzt: NILS = CD·|dI/dx|/I am Bildniveau der tatsächlich entwickelten Kante
+(Mack 2007 §4.5), NaN ohne gedruckte Linie; `resist_threshold_norm` beeinflusst full_chem nicht mehr.
+Ein Test hatte das alte Verhalten festgeschrieben („full_chem NILS must change with
+resist_threshold_norm") — invertiert.
+
+---
+
+## 2026-09-05 (Fortsetzung 15): Zwei eigene Fehler korrigiert, ein Anker gekippt
+
+### 1. „P = 44 nicht druckbar" war ein Scan-Artefakt
+
+Der Feinscan (`scan_p44_low.py`, Gitter 256, se_blur 5, Eikonal, exakter Kernel) mit 0,1–0,2 mJ/cm²
+Schritten — CD [nm] gegen Wafer-Dosis [mJ/cm²]:
+
+| σ_PEB | 4,4 | 4,6 | 4,8 | 5,0 | 5,2 | 5,4 | 5,6 | 5,8 | 6,0 | 6,5 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 3 | 22,7 | 21,0 | 19,6 | 18,2 | 17,2 | 16,5 | 15,5 | 14,8 | 14,1 | 12,7 |
+| 7 | 44,0 | 28,9 | 24,1 | 21,0 | 18,9 | 17,2 | 15,8 | 14,8 | 13,4 | 11,0 |
+
+Die Kurve ist stetig; die 22-nm-Linie existiert. `preflight_eikonal_sigma.py` hatte mit 2,46 mJ/cm²
+Schrittweite (Scanpunkte 3,46 und 5,92) das Fenster übersprungen und dann gar nicht erst bisektiert.
+Lehre, in die Memory übernommen: **nie „nicht druckbar" aus einem Scan schließen, dessen Schrittweite
+größer als die erwartete Fensterbreite ist.** CHANGELOG, Memory und die beiden Absätze in
+Fortsetzung 14 sind korrigiert (durchgestrichen, nicht gelöscht).
+
+### 2. σ-Scan bei P = 44 mit Bisektion (`p44_sigma_scan_eikonal.py`)
+
+Vorhersagen vorab: V1 D2S steigt monoton mit σ; V2 Photonen-LWR minimal bei kleinem σ, Anstieg
+> 9 nm; V3 Dosis-Latitude wird mit σ schlechter. Messung (D2S durch 12-fache Bisektion in [3,5; 7],
+CD bei ±5 % Dosis, LWR nur Photonenrauschen, 2 Realisierungen × 1024 Zeilen, Seed 42):
+
+| σ_PEB | σ_tot | D2S | CD | CD(−5 %) | CD(+5 %) | LWR_Photon | n_eff |
+|---|---|---|---|---|---|---|---|
+| 1 | 5,1 | 4,38 | 21,7 | 24,1 | 20,3 | 8,98 | 10,2 |
+| 3 | 5,8 | 4,48 | 22,0 | 24,1 | 19,9 | 9,09 | 10,1 |
+| 5 | 7,1 | 4,67 | 21,7 | 24,8 | 19,6 | 9,87 | 8,9 |
+| 7 | 8,6 | 4,94 | 21,7 | 26,1 | 19,3 | 10,49 | 7,7 |
+| 9 | 10,3 | 5,27 | 22,0 | 29,9 | 17,9 | 12,16 | 6,6 |
+| 12 | 13,0 | 5,80 | 21,7 | 44,0 | 13,4 | 12,62 | 5,7 |
+| 15 | 15,8 | 6,23 | 22,0 | 44,0 | 2,1 | 12,85 | 11,6 |
+
+V1, V2, V3 bestätigt. Ab σ_PEB = 12 nm liegt ±5 % Dosis außerhalb des Fensters (44 = Raum nicht
+klar, 2 = Linie weg). n_eff 6–12 heißt: die LWR-Werte sind auf ≈ ±25 % genau — die Größenordnung
+(9–13 nm) ist belastbar, die Nachkommastellen nicht.
+
+**Zuordnung des 9-nm-Photonenbodens** (`p44_lwr_attribution.py`): Fortsetzung 14 hatte mit dem
+Säulenmodell bei dessen D2S 6,57 ein Photonen-LWR von 3,07 nm gemessen. Vorhersage A (reiner
+Dosis-Effekt): Säulenmodell bei 4,48 → 3,07·√(6,57/4,48) = 3,7 nm. Gemessen:
+
+| Modell | Dosis | CD_det | LWR_Photon | n_eff |
+|---|---|---|---|---|
+| Eikonal, 4 Real., Seed 7 | 4,48 | 22,0 | **8,43** | 12,0 |
+| Säule | 4,48 | 32,0 | 6,11 | 9,2 |
+| Säule | 5,0 | 28,5 | 5,11 | 9,5 |
+| Säule | 6,0 | 23,7 | 3,15 | 9,1 |
+| Säule | 6,57 | 22,0 | 2,38 | 10,7 |
+
+Vorhersage A **falsifiziert**: das Säulenmodell steigt bei sinkender Dosis viel steiler als √(1/E)
+(2,4 → 6,1 nm), weil die gedruckte Kante bei kleiner Dosis auf dem flachen Fuß der Dosis-CD-Kurve
+sitzt (dCD/dE ≈ 8,5 nm pro mJ/cm² bei σ = 3). Eikonal verschiebt das D2S von 6,6 auf 4,5 (laterale
+Entwicklung frisst die Linie, also weniger Dosis für die Sollbreite) und verstärkt zusätzlich um
+≈ 1,4× (6,1 → 8,4). Der Photonenboden von ≈ 3 nm aus Fortsetzung 14 war also eine Eigenschaft des
+Säulenmodells an *dessen* Arbeitspunkt, nicht des Resists. Mit physikalischer Entwicklung liegt der
+Yamamoto-Satz bei 22 nm HP bei D2S ≈ 4,5 (Vesters 8–16) und Photonen-LWR ≈ 9 nm (Vesters 2,2–3,4).
+Beide Abweichungen zeigen in dieselbe Richtung: **zu wenig Photonen pro Kante** — d. h. der Satz ist
+im Modell zu empfindlich für einen 22-nm-HP-Vergleich. Ob das am Satz oder am Modell liegt, klärt
+Punkt 3.
+
+### 3. Der „Yamamoto-Anker" (Fortsetzung 12) war falsch gelesen — und der richtige Anker kippt den Satz
+
+Fortsetzung 12 nahm Yamamotos PROLITH-Dosen 20/25/30 mJ/cm² als Empfindlichkeitsanker („Faktor 3–5
+zu empfindlich"). Neu gelesen (`2011_Yamamoto_JPST_Dissolution_Kinetics_EUV_Resist.pdf`, S. 409):
+„The exposure dose is set to 20, 25, 30 mJ/cm²" — gesetzte Werte für Profilbilder, keine
+Dosis-zu-Größe. **Kein Anker.** Was die Arbeit aber *misst* — am selben Resist (Polymer A, 35 %
+Schutz, 3,1 mol % TPS-tf), bei derselben PEB (110 °C/60 s) und Entwicklung (2,38 % TMAH, 30 s):
+
+- **Fig. 3** (FTIR, Flutbelichtung 1,4 mJ/cm², EQ-10M): Schutzgrad P(t) bei 110 °C fällt in ≈ 15 s
+  auf ein Plateau ≈ 0,17; P(60 s) ≈ 0,18 (Ablesung ±0,03).
+- **Fig. 5** (RDA-800EUV, Auflösungsrate gegen Flutdosis, log/log): 35 %-Kurve bei 0,1 nm/s bis
+  0,65 mJ/cm², 1,5 nm/s bei 0,75, ≈ 60 nm/s ab 0,84 mJ/cm² (Achse kalibriert: 0,1 → px 362, 1 → px
+  740; Ablesung ±10 % in der Dosis). Schwelle (R_max/2) ≈ **0,8 mJ/cm²**.
+
+Unsere Kette mit Table 2 in Standard-Mack-Form (acid = 1 − e^{−C·E}, M = e^{−k·acid·t}, M₀ = 1 nach
+Mack 1997 Gl. 5.33/5.34 — die Pipeline macht das richtig, `inhib_in_3d = ones_like`; mein erster
+Testentwurf hatte fälschlich den PAG-Rest als M₀ genommen):
+
+| Größe | Yamamoto gemessen | Kette (Table 2) | Faktor in k·C |
+|---|---|---|---|
+| P(60 s, 110 °C, 1,4 mJ/cm²) | ≈ 0,18 | 0,598 | 3,3 |
+| Flut-Schwelle R_max/2 | ≈ 0,8 mJ/cm² | 2,75 mJ/cm² | 3,4 |
+
+Zwei unabhängige Figuren, derselbe Faktor ≈ 3,4: **Table 2 reproduziert in unserer (und Macks)
+Standardform die Messungen seiner eigenen Quelle nicht.** Erklärung im Paper selbst: Yamamotos
+PEB-Kinetik (Gl. 1) hat einen Säureverlust-Term (K_loss/τ) und eine Reaktionsordnung m; die
+FTIR-Kurven plateauen bei 0,17 (Säure verbraucht/verloren), was ein einfaches e^{−k·h·t} nicht kann.
+Werte für K_loss, m, T_d sind nicht publiziert; Table 2 ist PROLITHs Übersetzung ohne diese Terme.
+Das Kdp bei 110 °C aus Fig. 4 (Arrhenius-Plot, 35 %-Punkte, Achsen kalibriert: 1/T 0,0020 → px 350,
+0,0035 → px 1330; log K 10 → px 75, 0,1 → px 815) liegt bei ≈ 1,4 s⁻¹ (Punkt bei 1/T = 0,002616 =
+109 °C: K = 1,41; ±15 %) — Table 2 gibt 0,072 s⁻¹, **Faktor ≈ 19.** Die Steigung der 35 %-Punkte
+(2,3 bei 119 °C → 0,11 bei 78 °C) ergibt Ea ≈ 84 kJ/mol ≈ 20 kcal/mol; Table 1 nennt 27,8 **kcal**/mol,
+Table 2 „27,8 **kJ**/mol" mit ln(Ar) = 6,1 — die Table-2-Arrhenius-Paarung ist also PROLITHs
+Ersatz-Parametrisierung, nicht das FTIR-Kdp (mit kcal wäre k bei 110 °C ≈ 10⁻¹³ s⁻¹). Damit ist die
+Fortsetzung-12-Hypothese „uns fehlt τ" nur die halbe Wahrheit: mit Kdp ≈ 1,4 *und* τ ≈ 11 s wäre das
+Plateau 0,17 erklärbar (e^{−1,4·0,118·11} = 0,16), mit Table 2 allein nicht — dort fehlt zuerst der
+Faktor 19 in k, und der Faktor 3,4 in der Flutschwelle ist das, was davon nach Sättigung durch
+M_th/n übrig bleibt.
+
+**Konsequenz (keine Kalibrierung, keine Abkürzung):**
+- Die *Form*-Parameter (M_th, n, R_max/R_min, B) bleiben die einzige komplette EUV-Quelle und
+  Default. Die *absolute Dosisskala* des Default-Resists ist um mindestens Faktor 3,4 unsicher —
+  in **beide** Richtungen kein Empfindlichkeitsanker mehr. So steht es jetzt im `dill_A`-Kommentar
+  in `pipeline.py`.
+- `tests/test_yamamoto_anchor.py`: beide Messungen als **`xfail(strict=True)`**-Tests kodiert. Sie
+  schlagen heute aus dokumentiertem Grund fehl und schlagen als *unerwartet bestanden* an, sobald
+  eine Modelländerung die Kette zur eigenen Quelle konsistent macht; ein dritter Test pinnt die
+  heutigen Kettenzahlen (0,598 / 2,75), damit der Faktor nicht stillschweigend driftet.
+- Ein Säureverlust-Term ohne publizierte Zeitkonstante wäre ein versteckter Knopf → **nicht**
+  eingebaut. Wer Fig. 3/5 reproduzieren will, braucht Kdp und τ aus einer Quelle; Yamamoto liefert
+  nur die Kurven.
+- Vesters bleibt damit ein *Ziel* für einen 22-nm-HP-Resist mit eigenem Satz (`euv calibrate`,
+  jetzt mit `--period/--cd/--grid/--se-blur`), nicht für den Yamamoto-Default.
+
+### 4. Stand der Regressionsmodule
+
+Notebooks 01–06 laufen mit dem Phase-2b-Code fehlerfrei durch (nbconvert, 6 × „Writing"). Die vier
+Stochastik-Module (51 Tests) laufen zur Zeit erneut mit sichtbarer Zusammenfassung; der erste Lauf
+hatte Exit 0, aber nur 28 Punkte und keine Summenzeile — das habe ich nicht als „grün" gewertet.
+
+---
+
+### 5. `euv calibrate`: Rauchtest findet einen Verdrahtungsfehler und eine Numerik-Grenze
+
+Falsifikationsaufbau: synthetische FEM aus dem Modell selbst (P = 64/32, Gitter 64, se_blur 5,
+σ_PEB = 7, Dosen 4,0/4,5/5,0/5,5 → CD 32/28/26/24), dann `euv calibrate` mit Startwert σ = 12 und
+nur `peb_sigma_diff` als Fit-Parameter. Vorhersage: σ = 7 ± 1 wird wiedergefunden.
+
+**Ergebnis 1 (Bug):** σ = 1,0, RMSE 6,56 nm. Spur mit gepatchtem `run_simulation`: die Pipeline
+simulierte `line_width_nm = 24` — die Schleifenvariable `cd` des CSV-Loaders (`for d, f, cd in …`)
+überschrieb die Typer-Option `--cd`; jeder Fit nahm die *letzte gemessene CD* als Sollbreite.
+Fix in `cli.py` (Umbenennung, Kommentar), Regressionstest `tests/test_cli_calibrate.py` (CliRunner
+mit Stub-Simulation prüft, dass `--period/--cd/--grid/--se-blur` unverändert ankommen und nur die
+Parameter der Startwert-Datei gefittet werden). Vor 2026-09-04 war die Geometrie fest 64/32 —
+der Bug war damit unsichtbar, weil `cd` gar nicht existierte.
+
+**Ergebnis 2 (Numerik):** nach dem Fix σ = 11,4, RMSE 1,73 (42 Auswertungen). RMSE-Landschaft
+direkt gemessen: σ ≤ 3 → 1,73; 5 → 1,00; **6–8 → 0,00**; 9 → 1,00; 10 → 1,41; 12 → 2,45. Das
+Minimum existiert, aber die CD ist bei Gitter 64 auf 1 nm (= dx) quantisiert, das Objektiv ist
+stückweise konstant, und Nelder-Mead mit 5 %-Anfangsschritt (0,6 nm) sieht von 12 aus nur ein
+Plateau. Keine Optimierer-Kosmetik als Abhilfe (größerer Startsimplex würde das Symptom
+verschieben); die richtige Stelle ist die CD-Extraktion: sub-pixel-Interpolation der
+Entwicklungstiefe an der Kante, wie sie bei NILS schon gemacht wird. → nächster Preflight
+(Vorhersage: CD bei Gitter 64 dann innerhalb ±0,5 nm der Gitter-256-Referenz; Fit findet 7 ± 0,5).
+
+### 6. Preflight Sub-Pixel-CD: Tiefenkarte falsifiziert, Ankunftszeit bestätigt
+
+Vorhersagen vorab (`preflight_subpixel_cd.py`, `preflight_subpixel_T.py`; P = 64/32, σ = 7,
+se_blur 5, Dosen 4,0–5,5): P1 |CD_sub(Gitter 64) − CD_pix(Gitter 256)| ≤ 0,5 nm; P2 monoton,
+Schritte < 1 nm pro 0,1 mJ/cm²; P3 |CD_sub(256) − CD_pix(256)| ≤ 0,25 nm.
+
+**Variante A — Interpolation der Entwicklungstiefe** (wie im Stochastik-Pfad für LER): falsifiziert.
+Sägezahn bei Gitter 64 (4,1–4,3: 30,80/30,79/30,66, dann 4,4: 30,00, dann 28,80), P1 in 10 von 13,
+P2 in 4 Fällen verletzt. Grund: an der Resistflanke fällt die Tiefe innerhalb eines Pixels von
+„durch + Überschuss" (52,5) auf einen Teilwert — die lineare Interpolation misst dort die zufällige
+Teiltiefe des Nachbarpixels, nicht die Kantenlage.
+
+**Variante B — Interpolation der Ankunftszeit T auf der untersten Schicht** (Eikonal): bestätigt.
+T wächst hinter der Kante linear mit ≈ 10 s pro Pixel (Front im unbelichteten Resist mit
+R_min = 0,1 nm/s), die Kreuzung T = t_dev ist also die Strecke, die die laterale Front in den
+Nachbarpixel eingedrungen ist — erster Ordnung exakt.
+
+| Dosis | CD_pix(64) | CD_T(64) | CD_pix(256) | CD_T(256) |
+|---|---|---|---|---|
+| 4,0 | 32,00 | 31,65 | 31,50 | 31,42 |
+| 4,2 | 30,00 | 30,33 | 30,00 | 30,07 |
+| 4,4 | 30,00 | 29,14 | 29,00 | 28,87 |
+| 4,6 | 28,00 | 28,06 | 28,00 | 27,78 |
+| 4,8 | 28,00 | 27,06 | 26,50 | 26,78 |
+| 5,0 | 26,00 | 26,14 | 26,00 | 25,84 |
+| 5,5 | 24,00 | 24,08 | 23,50 | 23,77 |
+
+CD_T(64) ist monoton und glatt (Schritte 0,45–0,6 nm pro 0,1 mJ/cm²) und liegt in allen 13 Punkten
+innerhalb 0,35 nm von CD_T(256). Gegen die *quantisierte* Referenz CD_pix(256) verletzen 3 Punkte P1
+um ≤ 0,06 nm und 3 Punkte P3 um ≤ 0,03 nm — P1/P3 waren gegen eine Referenz mit ±0,25 nm eigener
+Unschärfe formuliert; das ist kein Befund gegen die Methode, aber ich notiere es, statt die
+Schwelle nachträglich zu verschieben. Umsetzung: CD des deterministischen Pfads aus T_unten
+(Eikonal); das Säulenmodell hat keine laterale Information und bleibt pixelquantisiert
+(dokumentiert).
+
+**Umgesetzt:** `eikonal_development(..., return_arrival=True)`, neue Funktion
+`edge_positions_from_arrival(T_row, t_develop, dx)` (periodisch, längster ungeklärter Lauf, NaN ohne
+Linie/Raum), `_develop_depth(..., return_arrival=True)` liefert die unterste T-Schicht; der
+deterministische Pfad nimmt die Sub-Pixel-Breite, wenn sie existiert, sonst die Pixelzahl; NILS
+arbeitet weiter mit den Pixelindizes der Kante. Säulenmodell unverändert (pixelquantisiert).
+Tests `tests/test_subpixel_cd.py`: exakte Kreuzung auf synthetischer Zeile, periodischer Umlauf,
+Degenerationen, Monotonie/Glattheit bei Gitter 64, Gitter 64 vs 256 < 0,5 nm. 13/13 grün
+(inkl. bestehender Eikonal-Tests).
+
+**Rauchtest nach Sub-Pixel-CD:** `euv calibrate` (Start σ = 12, 36 Auswertungen) findet
+**σ = 7,51 nm, RMSE 0,30 nm**. Vorhersage war 7 ± 0,5 — um 0,01 verfehlt, und zwar aus einem
+benennbaren Grund: die synthetische FEM wurde *vor* der Änderung mit pixelquantisierten CDs
+(32/28/26/24) erzeugt, gegen die eine glatte Kurve nicht exakt bei 7 liegen kann. Kein
+Nachjustieren der Schwelle; mit einer glatten FEM wäre der Test zu wiederholen (offen, klein).
+
+### 7. Regression der Stochastik-Module: OOM-Kill gefunden und behoben
+
+Die ersten zwei Läufe der vier Stochastik-Module endeten nach 28 Punkten ohne Summenzeile bei
+Exit 0 — der Exit-Code war der von `tail` in der Pipe, nicht der von pytest. Einzeln mit echtem
+Exit-Code: `test_stochastic_pipeline` 5/5, `test_development_stochasticity` 9/9,
+`test_ler_production_integration` **Exit 137 (SIGKILL)** bei `test_arbitrary_n_rows[61440]`,
+auch allein (Peak-Footprint 43,7 GB auf einer 8,6-GB-Maschine). Speichersonde (`memprobe.py`,
+Feld 21 × 4096 × 256, 0,18 GB): PEB-Schritt 2,0 GB, Eikonal 2,1 GB Zusatz — je ≈ 11× Feldgröße;
+bei 61440 Zeilen (2,6 GB Feld) also ≈ 30 GB pro Schritt. Ursache: Phase 2b hat die PEB auf 3D
+(z-Blur) und die Entwicklung auf die 3D-Eikonal-Front gehoben, beides auf dem vollen Stapel.
+
+**Behebung ohne Ergebnisänderung:** (1) Eikonal zeilenweise in Blöcken (`chunk_rows`, bitweise
+identisch, Test); (2) xy-FFT-Blur schichtweise, z-Blur zeilenweise (bitweise identisch bzw.
+5e-15); (3) die verrauschte Kette Belichtung → PEB → Entwicklung läuft in y-Kacheln (1024 Zeilen)
+mit periodischem Halo = 4σ/dx + 1 Zeilen (`pipeline._noisy_depth_map`). Exaktheitsargument: alle
+Schritte sind punktweise, spaltenweise (z-Blur, Beer-Lambert), zeilenweise (Eikonal) oder die
+bei 4σ abgeschnittene zirkuläre Faltung — mit Halo ≥ Radius erhalten die Innenzeilen einer Kachel
+genau die Beiträge der Vollfeld-Faltung. Gemessen (`tests/test_stochastic_chunking.py`,
+1536 Zeilen, 1 Kachel vs 3): max|Δdepth| < 1e-9, LWR identisch auf 1e-9. Für gesampelte Moleküle
+zieht jede Kachel aus einem eigenen, einmal aus dem Lauf-RNG geseedeten Generator, damit die
+Halo-Zeilen dieselben Moleküle tragen wie als Innenzeilen — eine Realisierung, unabhängig von
+der Gruppierung. Felder ≤ 1024 Zeilen bleiben eine Kachel direkt aus dem Lauf-RNG (Goldens
+unverändert). Nach der Änderung: PEB 1,5 GB, Eikonal 1,1 GB Zusatz bei 4096 Zeilen — und die
+Kette sieht nie mehr als ≈ 1024 + 2·Halo Zeilen. 61440-Test läuft erneut mit Speichermessung.
+
+**Konsistenztests:** `test_large_number_limit_has_no_roughness_without_photon_noise` (LWR < 0,1 px
+bei ρ = 2000) war mit 0,0172 gegen 0,0172 nur um 0,0002 nm bestanden — der Rest ist Molekül-
+rauschen, kein Interpolationsrauschen. Messung mit Photonen-Sampler = Mittelwert (`rho_scaling.py`,
+P = 44, D2S 4,94): LWR = 2,55 / 0,557 / 0,232 / 0,088 / 0,017 nm für ρ = 0,2 / 2 / 20 / 200 / 2000 —
+Faktor 150 über vier Dekaden, ρ^(−1/2) erwartet 100. Test umgeschrieben auf dieses Skalengesetz
+(Faktor 5–20 pro zwei Dekaden). `test_molecular_noise_vanishes_to_photon_floor` verlangte
+„sparse > dense" mit Photonenrauschen: 10,08 vs 10,83 nm — die Molekülkomponente (2,5 nm) addiert
+sich quadratisch zu +3 %, unter der Streuung des Schätzers bei n_eff ≈ 9; die Ordnung ist mit
+Photonenrauschen nicht prüfbar und wird nicht mehr behauptet. Geblieben: dense ≈ photon_only
+(gleicher Seed) auf 10 %.
+
+**Ergebnis:** `test_arbitrary_n_rows[61440]` allein: **bestanden in 312 s, Spitzen-RSS 1,82 GB**
+(vorher 43,7 GB Footprint, SIGKILL). Konsistenzmodul nach Umschreibung 5/5.

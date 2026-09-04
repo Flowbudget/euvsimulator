@@ -29,8 +29,17 @@ class TestPipeline:
         assert all(v.item() in (0.0, 1.0) for v in vals)
 
     def test_nils_realistic(self):
-        """NILS with realistic SE blur (10nm) should be in literature range ~1.5-4.0."""
-        result = run_simulation(grid=128, se_blur_nm=10.0, resist_model="full_chem")
+        """NILS with realistic SE blur (10nm) should be in literature range ~1.5-4.0.
+
+        full_chem reports NILS at the edge the chemistry prints (2026-09-04),
+        so a printed line is required: dose 4.0 mJ/cm² / sigma_PEB 7 nm is the
+        printable operating point of the default resist parameters (see
+        test_ler_production_integration._car_cfg); at the config default of
+        20 mJ/cm² the resist is fully cleared and NILS is NaN by design.
+        """
+        result = run_simulation(grid=128, se_blur_nm=10.0, resist_model="full_chem",
+                                dose_mj_cm2=4.0, peb_sigma_diff=7.0)
+        assert result.cd_nm > 0
         # For 64nm pitch, 32nm line, NA=0.33, sigma=0.8 with SE blur
         # NILS should be in realistic range (literature: ~2-3 for k1≈0.78)
         assert 1.5 <= result.nils_value <= 4.0, (
@@ -62,14 +71,17 @@ class TestConfigThreshold:
         assert r.cd_nm < 27.0, f"threshold=0.3 should give CD < 27.0, got {r.cd_nm}"
 
     def test_full_chem_threshold_unchanged(self):
-        """full_chem path uses mack_M_th for development, not resist_threshold_norm."""
-        r_default = run_simulation(SimulationConfig(resist_model="full_chem"))
-        r_norm = run_simulation(SimulationConfig(resist_model="full_chem", resist_threshold_norm=0.3))
-        # full_chem CD is determined by mack_M_th, not resist_threshold_norm
-        # NILS uses resist_threshold_norm though, so NILS should change
-        assert abs(r_norm.nils_value - r_default.nils_value) > 0.001, (
-            "full_chem NILS must change with resist_threshold_norm"
-        )
+        """full_chem ignores resist_threshold_norm entirely: CD comes from the
+        chemistry and, since 2026-09-04, NILS is measured at the printed edge
+        (a previous version of this test asserted the opposite -- that NILS
+        followed the aerial_threshold model's reference level, which had no
+        meaning for the chemistry chain)."""
+        kw = dict(resist_model="full_chem", dose_mj_cm2=4.0, peb_sigma_diff=7.0, grid=128)
+        r_default = run_simulation(SimulationConfig(**kw))
+        r_norm = run_simulation(SimulationConfig(resist_threshold_norm=0.3, **kw))
+        assert r_default.cd_nm > 0
+        assert r_norm.cd_nm == r_default.cd_nm
+        assert r_norm.nils_value == r_default.nils_value
 
 
 class TestConfigDose:

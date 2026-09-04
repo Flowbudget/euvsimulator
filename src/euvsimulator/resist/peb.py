@@ -58,6 +58,7 @@ def _build_tridiagonal_matrix(
     diag_boundary: float,
     device: torch.device,
     dtype: torch.dtype,
+    off_boundary: float | None = None,
 ) -> torch.Tensor:
     """Build a tridiagonal matrix of size n×n.
 
@@ -75,20 +76,30 @@ def _build_tridiagonal_matrix(
         Tensor device.
     dtype : torch.dtype
         Tensor dtype.
+    off_boundary : float, optional
+        Off-diagonal value in the boundary rows (default: *off_diag*). The
+        zero-flux condition in flux (finite-volume) form is the row
+        (1 + α) A_0 − α A_1, i.e. ``diag_boundary = 1 + α`` with the interior
+        off-diagonal: the discrete diffusion operator then has zero column
+        sums and conserves mass. Before 2026-09-04 the explicit half-step
+        used the mirror form 2(A_1 − A_0) (column sum −1) against this
+        implicit flux form; the mismatch created mass in a zero-flux problem
+        (+0.14 % at α = 2.5, +1.6 % at α = 10 after ten steps -- audit C1).
 
     Returns
     -------
     T : torch.Tensor
         Tridiagonal matrix of shape (n, n).
     """
+    ob = off_diag if off_boundary is None else off_boundary
     T = torch.zeros(n, n, device=device, dtype=dtype)
     T[0, 0] = diag_boundary
-    T[0, 1] = off_diag
+    T[0, 1] = ob
     for i in range(1, n - 1):
         T[i, i - 1] = off_diag
         T[i, i] = diag
         T[i, i + 1] = off_diag
-    T[n - 1, n - 2] = off_diag
+    T[n - 1, n - 2] = ob
     T[n - 1, n - 1] = diag_boundary
     return T
 
@@ -101,8 +112,13 @@ def _laplacian_y_explicit(A: torch.Tensor, boundary: str) -> torch.Tensor:
     lap[1:-1, :] = A[2:, :] - 2.0 * A[1:-1, :] + A[:-2, :]
     # boundaries
     if boundary == "neumann":
-        lap[0, :] = 2.0 * (A[1, :] - A[0, :])
-        lap[H - 1, :] = 2.0 * (A[H - 2, :] - A[H - 1, :])
+        # Flux (finite-volume) form: the boundary cell exchanges with ONE
+        # neighbour only, so the discrete operator has zero column sums and
+        # the scheme conserves mass. The mirror form 2(A1 - A0) does not
+        # (column sum -1), and mixing it with the implicit flux-form row
+        # created mass (audit C1, fixed 2026-09-04).
+        lap[0, :] = A[1, :] - A[0, :]
+        lap[H - 1, :] = A[H - 2, :] - A[H - 1, :]
     else:  # dirichlet
         lap[0, :] = -2.0 * A[0, :]
         lap[H - 1, :] = -2.0 * A[H - 1, :]
@@ -115,8 +131,8 @@ def _laplacian_x_explicit(A: torch.Tensor, boundary: str) -> torch.Tensor:
     lap = torch.zeros_like(A)
     lap[:, 1:-1] = A[:, 2:] - 2.0 * A[:, 1:-1] + A[:, :-2]
     if boundary == "neumann":
-        lap[:, 0] = 2.0 * (A[:, 1] - A[:, 0])
-        lap[:, W - 1] = 2.0 * (A[:, W - 2] - A[:, W - 1])
+        lap[:, 0] = A[:, 1] - A[:, 0]  # flux form, see _laplacian_y_explicit
+        lap[:, W - 1] = A[:, W - 2] - A[:, W - 1]
     else:  # dirichlet
         lap[:, 0] = -2.0 * A[:, 0]
         lap[:, W - 1] = -2.0 * A[:, W - 1]
@@ -187,14 +203,17 @@ def reaction_diffusion_adi(
     off_diag = -alpha
 
     if boundary == "neumann":
-        main_b = 1.0 + alpha  # Neumann: zero-flux at boundaries
+        # Zero flux in finite-volume (flux) form: (1 + α) A_0 − α A_1 -- the
+        # boundary cell exchanges with one neighbour only, zero column sums,
+        # mass conserved; the explicit half-step uses the same form.
+        main_b, off_b = 1.0 + alpha, off_diag
     elif boundary == "dirichlet":
-        main_b = main_diag  # Dirichlet: standard interior diag
+        main_b, off_b = main_diag, off_diag  # ghost = 0: standard interior row
     else:
         raise ValueError(f"Unknown boundary condition: '{boundary}'")
 
-    T_x = _build_tridiagonal_matrix(W, main_diag, off_diag, main_b, device, dtype)
-    T_y = _build_tridiagonal_matrix(H, main_diag, off_diag, main_b, device, dtype)
+    T_x = _build_tridiagonal_matrix(W, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b)
+    T_y = _build_tridiagonal_matrix(H, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b)
 
     for _ in range(n_steps):
         # --- half-step 1: implicit in x, explicit in y ---
@@ -340,6 +359,61 @@ def _reaction_limited_quench(
     return torch.clamp(h_final, min=0.0), torch.clamp(q_final, min=0.0)
 
 
+def _gaussian_blur_z(field: torch.Tensor, sigma_nm: float, dz: float) -> torch.Tensor:
+    """Gaussian blur along the first (depth) axis of an ``(N, H, W)`` tensor.
+
+    Mirror (Neumann) boundaries: the film's top and bottom surfaces are
+    no-flux boundaries for the acid, so the profile is reflected there. The
+    kernel is truncated at 3σ and renormalised; for σ larger than the film
+    this tends to the depth average, as it should. The column total (Σ over
+    z) is conserved exactly by the face-symmetric padding (see body).
+    """
+    N = field.shape[0]
+    s_px = sigma_nm / dz
+    if s_px < 1e-12:
+        return field
+    r = int(3.0 * s_px + 0.5)
+    if r < 1:
+        return field
+    x = torch.arange(-r, r + 1, dtype=field.dtype, device=field.device)
+    k = torch.exp(-0.5 * (x / s_px) ** 2)
+    k = k / k.sum()
+    # Symmetric (face-mirror) padding along z, repeated if r >= N (thin films):
+    # ghost −k = f_{k−1}, i.e. the no-flux boundary lies on the face between
+    # sample 0 and its ghost. Only this padding conserves the column total
+    # exactly for a symmetric kernel ("reflect" padding, which mirrors about
+    # the boundary SAMPLE, leaks Σ_j f_j k(j) − f_0 Σ_k k(k)); it is the
+    # finite-volume counterpart of the ADI solver's flux-form Neumann rows.
+    padded = field
+    left, right = r, r
+    while left > 0 or right > 0:
+        n_now = padded.shape[0]
+        pl, pr = min(left, n_now), min(right, n_now)
+        parts = []
+        if pl > 0:
+            parts.append(padded[:pl].flip(0))
+        parts.append(padded)
+        if pr > 0:
+            parts.append(padded[-pr:].flip(0))
+        padded = torch.cat(parts, dim=0)
+        left, right = left - pl, right - pr
+    # Convolve along z: (H*W, 1, N_pad) -> conv1d, in row chunks so the
+    # permuted copy and the conv output never hold the whole field twice
+    # (memory bound for the 61440-row LER fields, 2026-09-05; columns are
+    # independent, so the result is bitwise identical to one call).
+    H, W = field.shape[1], field.shape[2]
+    kk = k.view(1, 1, -1)
+    rows_per_chunk = max(1, (1 << 22) // max(1, W * padded.shape[0]))
+    outs = []
+    for y0 in range(0, H, rows_per_chunk):
+        p = padded[:, y0 : y0 + rows_per_chunk]
+        h = p.shape[1]
+        v = p.permute(1, 2, 0).reshape(-1, 1, padded.shape[0])
+        o = torch.nn.functional.conv1d(v, kk)
+        outs.append(o.reshape(h, W, -1).permute(2, 0, 1)[:N])
+    return torch.cat(outs, dim=1)
+
+
 def reaction_diffusion_with_quenching(
     acid: torch.Tensor,
     quencher: torch.Tensor | float,
@@ -351,6 +425,7 @@ def reaction_diffusion_with_quenching(
     sigma_diff: float | torch.Tensor | None = None,
     dx: float = 1.0,
     pag_density: float | None = None,
+    dz: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """PEB with explicit acid-base quenching, for the sampled-PAG/quencher path.
 
@@ -438,6 +513,15 @@ def reaction_diffusion_with_quenching(
         Initial PAG number density G0 [nm⁻³] used to normalise *acid* and
         *quencher*. Required (no default): the rate conversion is
         meaningless without it.
+    dz : float, optional
+        Layer spacing [nm] of a 3D ``(N, H, W)`` input. When given, the
+        diffusion is ISOTROPIC: the same Gaussian is applied along z
+        (mirror/Neumann boundaries at the top and bottom surfaces -- no acid
+        flux out of the film). Without it (or for 2D input) the diffusion is
+        lateral only, as before 2026-09-04; that left the Beer-Lambert depth
+        profile of the acid untouched while smearing it 20 nm laterally,
+        which is inconsistent for a 50 nm film (measured effect on dose-to-
+        size: −0.03 % at α = 1.06 µm⁻¹, −2.8 % at α = 8 µm⁻¹).
 
     Returns
     -------
@@ -471,6 +555,8 @@ def reaction_diffusion_with_quenching(
         from euvsimulator.resist.exposure import gaussian_se_blur
 
         h = gaussian_se_blur(h, sigma=blur_sigma, dx=dx)
+        if dz is not None and h.ndim == 3 and h.shape[0] > 1:
+            h = _gaussian_blur_z(h, sigma_nm=float(blur_sigma), dz=dz)
 
     uniform_q = not isinstance(quencher, torch.Tensor)
     if uniform_q and float(quencher) == 0.0:
@@ -483,6 +569,8 @@ def reaction_diffusion_with_quenching(
             q = quencher
             if blur_sigma is not None:
                 q = gaussian_se_blur(q, sigma=blur_sigma, dx=dx)
+                if dz is not None and q.ndim == 3 and q.shape[0] > 1:
+                    q = _gaussian_blur_z(q, sigma_nm=float(blur_sigma), dz=dz)
         # 2. React (reaction-limited closed form on the mixed fields).
         A_quenched, Q_final = _reaction_limited_quench(h, q, rate_rel, t_bake)
 

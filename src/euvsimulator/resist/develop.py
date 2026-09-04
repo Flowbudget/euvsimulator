@@ -424,8 +424,14 @@ def eikonal_development(
     dz: float,
     t_develop: float,
     n_iter: int = 6,
-) -> torch.Tensor:
+    return_arrival: bool = False,
+    chunk_rows: int = 2048,
+) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """Developed depth map [nm] from a 2D (x, z) Eikonal development front.
+
+    With ``return_arrival=True`` the arrival-time field ``T`` (shape
+    ``(N, H, W)``, seconds) is returned as well; its bottom layer is what
+    :func:`edge_positions_from_arrival` uses for a sub-pixel line width.
 
     Replaces the vertical-column time-of-flight of
     :func:`surface_advancement_level_set` (which cannot represent lateral
@@ -434,9 +440,85 @@ def eikonal_development(
     Returns the same continuous depth field (shape ``(H, W)``) so the
     pipeline's CD/LER/LWR extraction is unchanged.
     """
+    # Rows (y) are independent 2D (x, z) problems: solve them in chunks so the
+    # solver's working set (~12x the field, measured 2026-09-05) stays bounded
+    # for the 61440-row LER fields. Bitwise identical to one call.
+    N, H, W = inhibitor_3d.shape
+    if H > chunk_rows:
+        depths, arrivals = [], []
+        for y0 in range(0, H, chunk_rows):
+            out = eikonal_development(
+                inhibitor_3d[:, y0 : y0 + chunk_rows], mack, dx=dx, dz=dz, t_develop=t_develop,
+                n_iter=n_iter, return_arrival=return_arrival, chunk_rows=chunk_rows,
+            )
+            if return_arrival:
+                depths.append(out[0]); arrivals.append(out[1])
+            else:
+                depths.append(out)
+        depth = torch.cat(depths, dim=0)
+        return (depth, torch.cat(arrivals, dim=1)) if return_arrival else depth
     R = mack.rate(inhibitor_3d)
     T = eikonal_arrival_time(R, dx=dx, dz=dz, n_iter=n_iter)
-    return developed_depth_from_arrival(T, t_develop, dz)
+    depth = developed_depth_from_arrival(T, t_develop, dz)
+    if return_arrival:
+        return depth, T
+    return depth
+
+
+def edge_positions_from_arrival(
+    T_row: torch.Tensor,
+    t_develop: float,
+    dx: float,
+) -> tuple[float, float]:
+    """Sub-pixel left/right edge [nm] of the longest undeveloped run in one
+    row of the bottom-layer arrival-time field.
+
+    A pixel is cleared when the front reached the film bottom within
+    *t_develop*. Between the last cleared pixel (T_a ≤ t_develop) and the
+    first uncleared one (T_b > t_develop) the front has travelled a fraction
+    (t_develop − T_a)/(T_b − T_a) of the pixel: T is linear in x behind the
+    edge (the lateral front moves at the local rate, ≈ R_min in the
+    unexposed line), so the crossing is first-order exact. Verified
+    2026-09-05 against a 4× finer grid (preflight_subpixel_T.py: 64-px CD
+    within 0.35 nm of the 256-px CD, monotone in dose; interpolating the
+    developed-depth map instead gave a 0.8 nm sawtooth). Periodic in x.
+
+    Returns ``(nan, nan)`` when no pixel is uncleared (no line) or none is
+    cleared (space not open).
+    """
+    if T_row.ndim != 1:
+        raise ValueError(f"expected a 1D row, got shape {tuple(T_row.shape)}")
+    W = T_row.shape[0]
+    cleared = T_row <= t_develop
+    if not cleared.any() or cleared.all():
+        return float("nan"), float("nan")
+    # longest run of uncleared pixels (periodic): rotate so that the row
+    # starts with a cleared pixel, then take the longest 0-run
+    start = int(torch.nonzero(cleared).flatten()[0])
+    rolled = torch.roll(~cleared, -start)
+    best_len, best_i0 = 0, 0
+    i = 0
+    while i < W:
+        if bool(rolled[i]):
+            j = i
+            while j < W and bool(rolled[j]):
+                j += 1
+            if j - i > best_len:
+                best_len, best_i0 = j - i, i
+            i = j
+        else:
+            i += 1
+    i0 = (best_i0 + start) % W                  # first uncleared pixel
+    i1 = (best_i0 + best_len - 1 + start) % W   # last uncleared pixel
+    Ta, Tb = float(T_row[(i0 - 1) % W]), float(T_row[i0])
+    Ta2, Tb2 = float(T_row[(i1 + 1) % W]), float(T_row[i1])
+    frac_l = (t_develop - Ta) / (Tb - Ta) if Tb > Ta else 1.0
+    frac_r = (t_develop - Ta2) / (Tb2 - Ta2) if Tb2 > Ta2 else 1.0
+    x_left = ((i0 - 1) + frac_l) * dx
+    x_right = ((i1 + 1) - frac_r) * dx
+    if x_right < x_left:  # run wraps around the periodic boundary
+        x_right += W * dx
+    return x_left, x_right
 
 
 # ──────────────────────────────────────────────

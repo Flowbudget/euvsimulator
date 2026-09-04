@@ -65,21 +65,23 @@ SEED = 42
 # _car_cfg() now uses the plain SimulationConfig default (dill_Q=0.5,
 # Mack et al. 2011's own real baseline). Re-measured reproducibly
 # (seed=42, se_blur=5, plain _car_cfg() defaults).
-TEST_DOSE = 5.5  # mJ/cm² at the wafer, near dose-to-size of the default resist (see _car_cfg)
-# Golden values re-measured 2026-09-04 (Phase 0 of the audit, see CHANGELOG
-# "Fixed (physics)"): wafer-dose convention, absorbed-photon shot noise,
-# dill_B no longer shadowed, dill_Q removed, TEST_DOSE 20 -> 5.5. They are
-# regression pins of the test configuration (seed 42, se_blur 5, P=64),
-# measured with scratchpad/derive_goldens.py -- not calibrated to anything.
-# Previous values (pre-Phase-0): LEGACY_LER 0.0860674324, LEGACY_LWR
-# 0.1297861139, LARGE_N_LER 0.3251749642, N_EFF 17.8463, L_INT_NM 29.2004.
-# The ~9x larger photon-only LER is the expected consequence of counting only
-# the 5.2 % absorbed photons at a 2.3x lower wafer dose (see audit A1/A2).
-GOLDEN_LEGACY_LER = 0.6648028427
-GOLDEN_LEGACY_LWR = 1.2965263709
-GOLDEN_LARGE_N_LER = 2.8802534977
-GOLDEN_N_EFF = 15.7462
-GOLDEN_L_INT_NM = 33.1447
+TEST_DOSE = 4.0  # mJ/cm² at the wafer, near dose-to-size at TEST_SIGMA (see _car_cfg)
+TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg)
+# Golden values are regression pins of the test configuration (seed 42,
+# se_blur 5, P=64, TEST_SIGMA/TEST_DOSE), measured with
+# scratchpad/derive_goldens.py -- never calibrated to anything.
+# History (2026-09-04): Phase 0 (wafer-dose convention, absorbed-photon shot
+# noise, dill_B fix, dill_Q removed; dose 20 -> 5.5): LEGACY_LER 0.6648028427,
+# LEGACY_LWR 1.2965263709, LARGE_N_LER 2.8802534977, N_EFF 15.7462,
+# L_INT_NM 33.1447. Phase 2b (exact Gaussian blur -- kernel no longer clamped
+# to the image, isotropic z-diffusion, Eikonal development front, operating
+# point sigma_PEB 7 nm / 4.0 mJ/cm2): values below. Pre-Phase-0 values:
+# 0.0860674324 / 0.1297861139 / 0.3251749642 / 17.8463 / 29.2004.
+GOLDEN_LEGACY_LER = 0.8469136421
+GOLDEN_LEGACY_LWR = 1.4741479568
+GOLDEN_LARGE_N_LER = 2.3891057997
+GOLDEN_N_EFF = 30.2642
+GOLDEN_L_INT_NM = 17.1421
 GOLDEN_RHO_TRUNC = 200
 
 
@@ -103,6 +105,14 @@ def _car_cfg(**kw):
         # adding it (Phase 1) is expected to move dose-to-size up by the
         # dose the quencher neutralises (~3 mJ/cm² for Mack 2011's loading).
         dose_mj_cm2=TEST_DOSE,
+        # Operating point (2026-09-04, Phase 2b): with the exact PEB blur and
+        # the Eikonal development front, the default sigma_PEB = 19.9 nm gives
+        # the 32 nm line at 64 nm pitch only in a knife-edge dose window (CD
+        # 35.5 -> 14 -> 0 between 5.0 and 6.0 mJ/cm2); the stochastic machinery
+        # is therefore exercised at sigma_PEB = 7 nm (smooth window, CD 31.5 nm
+        # at 4.0 mJ/cm2). This is a choice of test operating point, not a
+        # physics default -- the default sigma is Phase 3's subject.
+        peb_sigma_diff=TEST_SIGMA,
         # dill_Q no longer pinned to 1.0 here (2026-09-03): that override
         # was chosen for the OLD, un-wired full_chem chain, where a
         # non-degenerate result needed dill_Q pushed well past any real
@@ -502,7 +512,7 @@ def test_edge_both_equivalence():
 # ── 20. Deterministic observables unchanged ─────────────────────
 
 def test_deterministic_observables_unchanged():
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE))
+    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE, peb_sigma_diff=TEST_SIGMA))
     r_st = run_simulation(_car_cfg())
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
@@ -510,7 +520,7 @@ def test_deterministic_observables_unchanged():
 
 def test_deterministic_observables_unchanged_3000():
     """CD/NILS invariance also holds for arbitrary N=3000."""
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE))
+    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE, peb_sigma_diff=TEST_SIGMA))
     r_st = run_simulation(_car_cfg(stochastic_ler_grid_y=3000))
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
