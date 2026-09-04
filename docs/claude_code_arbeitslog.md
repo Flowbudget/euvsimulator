@@ -971,3 +971,89 @@ direkt weiterzuverwenden. Kein Code geändert in dieser Runde (reine Literaturre
 Charakterisierung).
 
 ---
+
+## 2026-09-04 (Fortsetzung 3): KRITISCHE KORREKTUR — 3σ-vs-1σ-Konventionsfehler kehrt die gesamte Vesters-Schlussfolgerung um
+
+**Auslöser:** "ja suche" — weitere Suche nach exakteren unbiased-Referenzdaten für die
+SEM-Metrologie-Hypothese (voriger Eintrag). Bei dieser Suche (u.a. im Paper "E-beam metrology
+and line local critical dimension uniformity", pitch 24-32nm, unbiased LWR 3σ dort im Bereich
+2,6-4,0nm) fiel auf, dass DORT die Achsenbeschriftung explizit "Unbiased LWR 3σ (nm)" lautet —
+was den Verdacht auslöste, dass auch Vesters' Table 4.2 eine 3σ-Konvention verwenden könnte,
+die bisher nicht mit unserer eigenen Simulator-Konvention abgeglichen wurde.
+
+**Verifiziert, mit Zitat:** Vesters' Thesis, Abschnitt 1.5 (S. 33), definiert LER/LWR EXPLIZIT
+und mit Formel als 3σ-Größen: *"line edge roughness (LER) and line width roughness (LWR).
+These are expressed as the 3\*sigma variation..."*, mit der expliziten Formel
+`LWR = 3σ_w = 3·√(Σ(wᵢ-w̄)²/N)` (Gl. 1.4, S. 33). Das ist die Standard-Halbleiterindustrie-
+Konvention (3σ ≈ 99,7%-Bandbreite), NICHT willkürlich.
+
+**Eigener Code verifiziert:** `extract_lwr()` in
+[stochastic.py:884](../src/euvsimulator/resist/stochastic.py) gibt wörtlich
+`float(torch.std(width_finite, unbiased=False))` zurück — die REINE Standardabweichung
+(1σ), OHNE jeden Faktor 3. Durchgängig im Code selbst als "(1σ)" dokumentiert
+(`pipeline.py:73/75`, `stochastic.py:29/31/553/866`) — unser Code ist intern
+KONSISTENT und korrekt dokumentiert, aber diese 1σ-Konvention wurde in KEINEM der bisherigen
+Vesters-Vergleiche (weder in der ursprünglichen Validierung bdea3b6 noch in den beiden
+vorigen Einträgen von heute) gegen Vesters' 3σ-Konvention umgerechnet — beide Seiten wurden
+die ganze Zeit direkt, unkorrigiert nebeneinandergestellt.
+
+**Korrigierte Rechnung** (Vesters Table 4.2, 3σ → 1σ durch Division durch 3):
+
+| Sample | 3σ (Vesters, roh) | 1σ (korrekt umgerechnet) |
+|---|---|---|
+| A0 | 7,4 | 2,47 |
+| ALow | 6,5 | 2,17 |
+| AHigh | 9,2 | 3,07 |
+| B0 | 6,7 | 2,23 |
+| BLow | 9,4 | 3,13 |
+| BHigh | 10,3 | 3,43 |
+
+**1σ-Bereich (korrekt umgerechnet, weiterhin biased/SEM-rauschbehaftet): 2,17–3,43nm.**
+
+**Vergleich mit unserem simulierten LWR (bereits 1σ, kombinierter Mechanismus, Vesters-
+Geometrie, aus dem Ablations-Eintrag von heute):**
+
+| Dosis/CD | simuliert (1σ) | Verhältnis zu 2,17–3,43nm (1σ, biased) |
+|---|---|---|
+| dose=22, CD=30nm | 3,69nm | **1,07–1,70x zu hoch** |
+| dose=24, CD=17nm | 5,17nm | **1,51–2,39x zu hoch** |
+| dose=25, CD=10nm | 4,83nm | **1,41–2,23x zu hoch** |
+
+**Das kehrt die Schlussfolgerung der letzten drei Einträge (und der ursprünglichen Validierung
+bdea3b6) VOLLSTÄNDIG um:** statt "unser Modell unterschätzt LWR um Faktor 1,25–2x" ist es bei
+korrekter Sigma-Konvention **"unser Modell überschätzt LWR um Faktor ~1,1–2,4x gegenüber den
+biased (SEM-rauschbehafteten) Messwerten"** — und da biased-Werte SYSTEMATISCH HÖHER als die
+wahre physikalische Rauheit liegen (SEM-Rauschen addiert sich, siehe voriger Eintrag zur
+SEM-Metrologie-Hypothese), wäre die Überschätzung gegenüber der WAHREN physikalischen Rauheit
+(unbiased) sogar noch GRÖSSER, nicht kleiner. Die beiden Korrekturen (SEM-Rauschen entfernen,
+3σ→1σ umrechnen) wirken in dieser Kombination also in DIESELBE Richtung, nicht gegeneinander.
+
+**Wichtige Einordnung, was das NICHT bedeutet:** dies bedeutet NICHT, dass die Photon-Schrot-
+rauschen-Physik oder die PAG/Quencher-Diskretheit-Implementierung selbst fehlerhaft sind (beide
+wurden unabhängig als real und nicht-degeneriert verifiziert, siehe die entsprechenden
+Bugfix-Einträge). Es bedeutet, dass der QUANTITATIVE Zielwert, gegen den diese Mechanismen
+in den letzten Tagen bewertet wurden, systematisch falsch war (3x zu hoch angesetzt). Die
+`development_strength=20,0`-Kalibrierung selbst war davon NICHT betroffen — sie wurde
+ursprünglich nur gegen "produziert überhaupt ein nicht-degeneriertes Ergebnis" kalibriert,
+nicht gegen einen spezifischen Vesters-Zielwert (siehe der entsprechende Eintrag oben), ist
+also nicht direkt durch diesen Fehler verzerrt worden — aber jede quantitative Aussage darüber,
+"wie nah" das Modell an der Realität ist, muss neu bewertet werden.
+
+**Verbleibend offen / nächste Schritte (nicht in dieser Runde umgesetzt):**
+1. Systematische Prüfung, ob DIESELBE 3σ/1σ-Verwechslung auch in anderen Teilen des Projekts
+   vorliegt (z.B. `nils`/NILS-Vergleiche, andere Zitate in `pipeline.py`-Kommentaren, die
+   Literaturwerte referenzieren, ohne deren Sigma-Konvention zu prüfen).
+2. Bei Bedarf: `development_strength` und ggf. `se_blur_nm`/`pag_density_per_nm3`/
+   `quencher_density_per_nm3` neu kalibrieren, DIESMAL gegen den korrekt umgerechneten
+   1σ-Zielbereich (2,17–3,43nm biased, vermutlich noch niedriger unbiased) statt den
+   ursprünglichen (falschen) 3σ-Rohwerten.
+3. `docs/claude_code_arbeitslog.md`s frühere Einträge (insbesondere die ursprüngliche
+   bdea3b6-Validierung und die letzten zwei Einträge von heute) NICHT gelöscht, sondern
+   bewusst stehengelassen als Teil der ehrlichen Fehlerhistorie — dieser Eintrag ist die
+   maßgebliche Korrektur.
+
+Kein Code geändert in dieser Runde (reine Verifikations-/Dokumentationsarbeit). Dies ist der
+wichtigste Einzelbefund der gesamten Vesters-Validierungsserie und sollte vor jeder weiteren
+quantitativen Aussage über die LWR-Modellgüte berücksichtigt werden.
+
+---
