@@ -831,13 +831,26 @@ class SimulationConfig:
     # Binomial conversion of that finite population -- see resist/
     # exposure.py's sample_pag_quencher_acid() docstring for the full
     # model. Motivated directly by a validation finding the same day
-    # (docs/claude_code_arbeitslog.md): simulated LWR undershot Vesters'
-    # real measured LWR (6.5-10.3nm) by ~3-5x even with photon-shot-noise
-    # and development_stochasticity both on, suggesting a real, missing
-    # noise source upstream of development -- this is the hypothesis
-    # that finding pointed at, now implemented (closing the gap is NOT
-    # yet re-verified as of writing this comment -- see the arbeitslog
-    # entry for this change for the actual before/after numbers).
+    # (docs/claude_code_arbeitslog.md): simulated LWR appeared to undershoot
+    # Vesters' real measured LWR (6.5-10.3nm) by ~3-5x even with
+    # photon-shot-noise and development_stochasticity both on, suggesting
+    # a real, missing noise source upstream of development -- this is the
+    # hypothesis that finding pointed at, now implemented. CORRECTION
+    # (2026-09-04, see arbeitslog): that 6.5-10.3nm figure is Vesters'
+    # thesis's own 3-sigma LWR convention (stated explicitly there,
+    # "LWR = 3*sigma_w"), while this codebase's extract_lwr()/ler_estimate()
+    # report 1-sigma throughout (see their own docstrings) -- the two were
+    # never reconciled before this comment was written. Converted to
+    # 1-sigma (divide by 3), the real range is ~2.2-3.4nm, and this
+    # codebase's simulated LWR (with exposure_stochasticity on, at the
+    # correct 44nm-pitch/22nm-HP geometry) turned out to OVERshoot that
+    # range by roughly 1.1-2.4x, not undershoot it -- see the arbeitslog
+    # entry dated 2026-09-04 ("KRITISCHE KORREKTUR") for the full
+    # corrected numbers. This does not mean the physics implemented below
+    # is wrong (independently verified as real and non-degenerate, see
+    # the same day's other arbeitslog entries) -- only that the
+    # quantitative target this feature was originally motivated against
+    # was off by the 3x sigma-convention factor.
     #
     # Off by default (exposure_stochasticity=False): this is a NEW,
     # separate noise source layered on top of an already-working
