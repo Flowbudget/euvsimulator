@@ -259,14 +259,24 @@
 260|| Tutorials & documentation | ✅ 6 notebooks complete |
 261|| Docker deployment | ✅ |
 262|| **CI/CD pipeline** | ✅ **GitHub Actions: Linux/macOS/Windows × Python 3.10–3.13** |
-263||| **Test count** | **797 / 797 passing** (2026-09-04) |
+263||| **Test count** | **873 collected, 2 expected failures** (2026-09-05; the two `xfail(strict)` tests in `tests/test_yamamoto_anchor.py` record that the default resist parameters do not reproduce their own source's measurements, see below) |
 264|| **License** | Apache 2.0 |
 265|
 266|---
 267|
 268|## Roadmap / Known TODOs
 269|
-270|> **Note:** The core physics pipeline is internally validated. These items are enhancements for specific use cases.
+270|> **Validation status (2026-09-05).** The numerics are validated against exact solutions and
+> conservation laws (Fresnel/effective-medium limits and R+T=1 for the RCWA, mass conservation of
+> the PEB solver, exact Eikonal arrival times, tiling and grid-refinement invariance of the CD).
+> The **absolute dose scale of the default resist is not a validated quantity**: the default
+> Dill/Mack parameters (Yamamoto et al. 2011, Table 2) are the only complete, single-source EUV
+> set found, but implemented in the standard Mack forms they deprotect ≈ 3.4× too little against
+> the same paper's own FTIR and dissolution-rate measurements (`tests/test_yamamoto_anchor.py`,
+> `docs/claude_code_arbeitslog.md` Fortsetzung 15). Shape parameters (M_th, n, R_max/R_min, B) are
+> sourced; sensitivity and LWR of the default resist should not be compared with the literature
+> without a resist-specific calibration (`euv calibrate`). The 19.9 nm default PEB blur is
+> back-calculated from Anderson 2009 and has no source for the 22 nm half-pitch regime.
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|
