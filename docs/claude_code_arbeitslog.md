@@ -1057,3 +1057,66 @@ wichtigste Einzelbefund der gesamten Vesters-Validierungsserie und sollte vor je
 quantitativen Aussage über die LWR-Modellgüte berücksichtigt werden.
 
 ---
+
+## 2026-09-04 (Fortsetzung 4): systematische Prüfung auf denselben 3σ/1σ-Fehler + development_strength-Rekalibrierung
+
+**Auslöser 1:** "prüf den Rest auf denselben Fehler" — systematische Suche im gesamten `src/`-
+Baum nach weiteren Stellen, die einen externen Literatur-LER/LWR-Wert ohne Sigma-Konventions-
+Prüfung zitieren.
+
+**Ergebnis:** genau EINE weitere Fundstelle, `pipeline.py`s `exposure_stochasticity`-
+Motivationskommentar (zitierte Vesters' 6,5-10,3nm als unkonvertierten Zielwert). Korrigiert
+(Commit 774fde4): Kommentar verweist jetzt auf die korrigierten Zahlen und den vorigen
+Arbeitslog-Eintrag, statt die (jetzt widerlegte) "unterschätzt"-Aussage als Fakt stehen zu
+lassen. Geprüft und als NICHT betroffen ausgeschlossen: Test-Golden-Values (Selbstkonsistenz-
+Schnappschüsse über Commits hinweg, kein externer Vergleich), CDU/LCDU (kommt im Code nirgends
+vor), der interne `stochastic_ler_grid_y`-Referenzwert (`N_eff≈59, LER≈0,07nm bei 40mJ/cm²`,
+reiner Selbstvergleich ohne externe Quelle), der Forschungskatalog unter `/Users/flo/mack
+fits/` (Hintergrundnotizen, in keinen Simulator-Default eingeflossen), und `development_
+strength=20,0` selbst (war nie gegen einen Vesters-Zahlenwert kalibriert, sondern nur gegen
+"produziert überhaupt ein nicht-degeneriertes Ergebnis").
+
+**Auslöser 2:** "development_strength gegen den korrigierten 1σ-Zielbereich neu kalibrieren" —
+da `development_strength` NIE gegen einen echten externen Zielwert kalibriert war (siehe oben),
+jetzt erstmals eine echte Kalibrierung gegen den korrigierten 1σ-Zielbereich (~2,2-3,4nm,
+Vesters' Table 4.2 bei 44nm Pitch/22nm HP, korrekt von 3σ auf 1σ umgerechnet).
+
+**Sweep** (`development_stochasticity=True`, `exposure_stochasticity=False`, korrekte Vesters-
+Geometrie, drei Dosen × vier Seeds):
+
+| strength | dose=22 [nm] | dose=24 [nm] | dose=25 [nm] |
+|---|---|---|---|
+| 5 | 0,00 | 0,00 | 0,00 |
+| 10 | 2,09 | 2,43 | 2,30 |
+| 12 | 3,97 | 7,20 | 8,45 (instabiler Übergang, siehe unten) |
+| 14 | 2,73 | 3,70 | 5,06 |
+| **15** | **2,47** | **2,28** | **3,02** |
+| 16 | 2,34 | 1,88 | 2,43 |
+| 18 | 2,40 | 1,83 | 2,36 |
+| 20 (alter Default) | 2,84 | 1,80 | 2,26 |
+| 30 | 2,98 | 1,94 | 2,12 |
+| 40 | 2,51 | 1,91 | 2,22 |
+
+`strength=15` trifft den Zielbereich [2,17; 3,43] an allen drei Dosen (Mittel über 4 Seeds:
+2,47/2,28/3,02nm) — konsistenter als der alte Default 20,0, der bei dose=24 knapp
+unterschreitet (1,80nm). Bei `strength≈12` zeigt sich ein scharfer, instabiler Übergang
+(LWR springt auf 4-8,4nm) — dieselbe, bereits an anderer Stelle dokumentierte numerische
+Empfindlichkeit durch `mack_n=18,2`s Steilheit, kein neuer Fund. `strength=15` liegt
+komfortabel jenseits dieser Kante.
+
+**Fix:** `development_strength`-Default von 20,0 auf **15,0** geändert (Commit 76c27e0),
+Kommentar entsprechend erweitert (Historie beider Kalibrierungsrunden dokumentiert, nicht
+überschrieben).
+
+**Getestet** (ressourcenschonend, einzeln): `test_development_stochasticity.py` (19 grün),
+`test_full_chem_config.py` + `test_stochastic_pipeline.py` (12 grün),
+`test_ler_production_integration.py` (32 grün) — alle unverändert grün, KEINE
+Golden-Value-Anpassung nötig, da keiner der gepinnten Werte den strength-sensitiven Pfad bei
+einem verschobenen Wert prüft.
+
+**Weiterhin nicht literaturzitiert** (bewusst, wie schon beim alten Wert): `development_
+strength` bleibt ein numerischer Raten-Regler, keine physikalische Resist-Eigenschaft — jetzt
+aber gegen einen korrekt umgerechneten externen Zielwert geprüft statt nur gegen "produziert
+überhaupt ein Ergebnis".
+
+---
