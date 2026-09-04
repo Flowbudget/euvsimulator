@@ -811,15 +811,41 @@ class SimulationConfig:
     # empirically, max drive ~0.05 at the defaults -- so strength=1.0
     # (the old default, "events per pixel AT drive=1") gave a rate near
     # zero everywhere and development_stochasticity=True was silently
-    # inert (LER stayed exactly 0.0 regardless of noise). Recalibrated by
-    # direct empirical search (not guessed): strength=20.0 reliably gives
+    # inert (LER stayed exactly 0.0 regardless of noise). First recalibrated
+    # by direct empirical search (not guessed): strength=20.0 reliably gave
     # a nonzero, ON-mode-adds-roughness-over-OFF-mode result across
-    # multiple seeds (see docs/claude_code_arbeitslog.md for the actual
-    # numbers). This is a real, if rough, recalibration to restore this
-    # feature's intended behaviour under the new chain -- not a precision
-    # fit, and not itself literature-cited (it calibrates a numerical
-    # event-rate knob, not a physical resist property).
-    development_strength: float = 20.0  # dimensionless dissolution events per pixel at drive=1 -- see note above
+    # multiple seeds -- a real, if rough, recalibration to restore this
+    # feature's intended behaviour under the new chain, not itself
+    # literature-cited (it calibrates a numerical event-rate knob, not a
+    # physical resist property), but at that point not yet checked against
+    # any external roughness target either.
+    #
+    # RECALIBRATED AGAIN (2026-09-04, "development_strength gegen den
+    # korrigierten 1sigma-Zielbereich neu kalibrieren"): the earlier
+    # Vesters LWR comparison this codebase's docs relied on turned out to
+    # have compared this codebase's 1-sigma LWR output directly against
+    # Vesters' thesis's own 3-sigma LWR convention (LWR = 3*sigma_w,
+    # stated explicitly there) without converting -- see the arbeitslog
+    # entry "KRITISCHE KORREKTUR" (2026-09-04) for the full derivation.
+    # Converted to 1-sigma, the real (still SEM-noise-biased) target band
+    # at Vesters' own 44nm-pitch/22nm-HP geometry is ~2.2-3.4nm. Swept
+    # strength=5..40 (development_stochasticity=True, exposure_
+    # stochasticity=False, i.e. this mechanism alone) at that geometry
+    # across doses 22/24/25 mJ/cm2 and seeds 1/2/3/42: strength=15 landed
+    # all 12 (dose x seed) points inside or within 0.05nm of [2.17, 3.43]
+    # nm (means per dose: 2.47, 2.28, 3.02nm), a materially tighter and
+    # more consistent fit than the previous default of 20.0 (which
+    # undershot the band at one of the three doses: 1.80nm at dose=24).
+    # Values below ~13 hit a sharp, unstable transition (LWR jumping to
+    # 4-8nm at strength=12 -- the same near-discontinuous mack_n=18.2
+    # CD-vs-dose sensitivity flagged elsewhere in this file, not a new
+    # issue), so 15 was chosen as a value comfortably past that edge, not
+    # the literal argmin of some fit residual. Still not literature-cited
+    # (same caveat as before: a numerical event-rate knob, not a physical
+    # resist property) -- now checked against a correctly-converted
+    # external target rather than only against "produces a nonzero
+    # result."
+    development_strength: float = 15.0  # dimensionless dissolution events per pixel at drive=1 -- see note above
     development_correlation_nm: float = 0.5  # molecular aggregate correlation length [nm]
 
     # PAG/quencher molecular discreteness (2026-09-03, "baue die PAG-/
