@@ -2764,3 +2764,70 @@ zu unserem Modell acid = 1 − e^{−C·E} mit *einfallender* Dosis E.
 
 **Umsetzung A1:** `pipeline.acids_per_absorbed_photon(cfg)`; `tests/test_acid_yield.py` mit strict-xfail auf das Band
 [1,3; 3,0] (fällt heute mit 6,0) und einem Pin des heutigen Werts. Kein Default geändert — das ist A2.
+
+## 2026-09-06 (Fortsetzung 25): Stufe A2 — Preflight „direkt gemessenes C" (Vorhersagen VOR dem Lauf)
+
+**Befund aus den Quellen (vor jeder Code-Änderung):**
+1. LBNL (OSTI 1004159) definiert C in Gl. (1) exakt in unserer Konvention: Säuren = [PAG]·(1 − e^{−C·E})·N_A mit E = einfallende
+   Dosis; C wird per Base-Titration/Clearing-Dose bestimmt — eine *chemische* Messung der Säure gegen Dosis, unabhängig von
+   der PEB-Kinetik. Table 3: **MET-2D (XP5271D) C = 0,0152 cm²/mJ**, XP-5496 0,0167, EUV-2D 0,046.
+2. Sekiguchi Table 6 gibt für *denselben* MET-2D C = 0,090 (FT-IR-Deprotektion + PROLITH-Fit); Yamamotos Polymer A 0,08997.
+   Faktor 6. Dass das PROLITH-C ein *effektiver* Parameter ist, zeigt Sekiguchi IEEJ 2013: C fällt mit Quencherbeladung
+   (0,128 → 0,0435) — ein reines Belichtungs-C dürfte vom Quencher nicht abhängen.
+3. Degeneration in unserem Modell: Deprotektion M = exp(−k·H·t_eff) mit H = 1 − e^{−C·E} ≈ C·E bei C·E ≪ 1. Yamamotos Fig. 3/4
+   (Flood 1,4 mJ/cm²) bestimmen daher nur das Produkt k·H(1,4) = 1,4·0,1184 = 0,166 s⁻¹, nicht k und C getrennt. Mit
+   C = 0,0152 folgt H(1,4) = 0,02105 und **k = 0,166/0,02105 = 7,87 s⁻¹** (kein neuer Freiheitsgrad — dieselbe Messung, anders
+   aufgeteilt). Yamamotos „Kdp = 1,4 s⁻¹" ist eine Modellgröße *seines* C, keine C-unabhängige Beobachtung.
+4. Aus LBNL Table 3 lässt sich [PAG] rückrechnen (FQY = C·[PAG]/(N_ph·(1−T)/d)): MET-2D ≈ 0,22 nm⁻³, EUV-2D ≈ 0,10 nm⁻³.
+   Macks G₀ = 0,2 liegt also bei MET-2D innerhalb 10 % — G₀ bleibt.
+
+**Vorschlag A2:** dill_C 0,08997 → **0,0152** (LBNL MET-2D, direkte Messung, unsere Konvention), peb_k 1,4 → **7,87 s⁻¹**
+(k·H aus Yamamoto Fig. 3 erhalten), G₀ 0,2 unverändert. Ergibt FQY (Oberfläche, Kleindosis) = 1,01; LBNL-Stil (80-nm-Film,
+T 0,71) = 1,24 vs. gemessen 1,39 (−11 %, erklärbar durch [PAG] 0,2 vs. 0,22).
+
+**Vorab festgelegte, falsifizierbare Vorhersagen (Monkey-Patch C = 0,0152, k = 7,87):**
+- V1 Yamamoto-Anker: P(60 s, 1,4 mJ/cm²) unverändert 0,18 ± 0,005; Fig.-5-Schwelle 0,73 ± 0,01 (Pin 0,75 ± 0,03 hält).
+- V2 D2S (deterministisch, full_chem): P = 64: 1,277 → **1,20–1,26**; P = 44: 1,669 → **1,55–1,62** (Säure jetzt linearer,
+  alte Sättigung −5,5 %/−7,3 % entfällt fast).
+- V3 LWR nur Photonenrauschen, P = 44, 3 Seeds: Mittel innerhalb **±10 % von 9,5 nm** (Rauschen hängt nicht von C ab,
+  nur die Steigung dM/dE bei D2S).
+- V4 LWR Photonen + molekular (exposure_stochasticity), P = 44, 2 Seeds: Mittel **12–16 nm** (vorher 11,2; jetzt ≈ 1 Säure
+  pro absorbiertem Photon → Säurezählrauschen vergleichbar mit Photonenrauschen).
+- V5 `acids_per_absorbed_photon` = 1,01 ± 0,01; Bandtest [1,3; 3,0] fällt weiterhin (Definitionsunterschied Oberfläche vs.
+  Filmmittel; LBNL-Stil 1,24).
+Falsifikation: V2 außerhalb ±10 % oder V3 > ±15 % → Degenerationsannahme falsch, Vorschlag zurück.
+
+**Preflight-Ergebnis (Monkey-Patch C = 0,0152, k = 7,87; scratchpad/preflight_C.py):**
+
+| | Vorhersage | Messung | Status |
+|---|---|---|---|
+| V1 P(60 s, 1,4 mJ/cm²) | 0,18 ± 0,005 | 0,1765 | hält |
+| V1 Fig.-5-Schwelle | 0,73 ± 0,01 | **0,764** | **Richtung falsch** (Pin 0,75 ± 0,03 hält) |
+| V2 D2S P = 64 | 1,20–1,26 | **1,312** (+2,7 %) | **Richtung falsch**; Kriterium ±10 % hält |
+| V2 D2S P = 44 | 1,55–1,62 | **1,718** (+2,9 %) | **Richtung falsch**; Kriterium ±10 % hält |
+| V3 LWR Photonen, P = 44 | 9,5 ± 10 % | 9,77 (8,86/10,07/10,38) | hält |
+| V4 LWR Photonen + molekular | 12–16 | 10,38 (8,65/12,11), +6 % | **falsifiziert / unterbestimmt** |
+| V5 FQY Oberfläche | 1,01 | 1,007 | hält |
+
+Fehleranalyse V1/V2: Ich hatte die Sättigungskorrektur gegen das *lineare* Gesetz gerechnet statt gegen den Ankerpunkt
+1,4 mJ/cm², an dem k·H erhalten wird. Relativ zum Anker hat das neue (linearere) Modell bei der Kantendosis ≈ 0,76 mJ/cm²
+**2,3 % weniger** Säure (alt: H(0,75)/H(1,4) = 0,5515; neu: 0,5387) → Schwelle und D2S steigen um 2–3 %. Alle drei Abweichungen
+haben dieselbe Ursache und Größe; die Degenerationsannahme (nur k·H zählt bei C·E ≪ 1) ist damit bestätigt, meine Vorzeichen-
+rechnung war falsch. V4: mit 2 Seeds à n_eff ≈ 8 ist jede LWR-Schätzung ±20 % unsicher (Seed 42 mit molekularem Rauschen
+8,65 < 8,86 ohne — anderer RNG-Strom, also nicht „dasselbe Photonenrauschen plus Zusatz"). Der frühere Befund „+18 %"
+(Fortsetzung 23) hatte dieselbe Schwäche. Ein Lauf mit 6 Seeds × 4 Realisationen × 2048 Zeilen für alt/neu wurde gestartet und
+wegen Laufzeit (> 2 h, CPU-Konkurrenz mit der Golden-Ableitung) abgebrochen — wird nach der Suite mit kleinerer Statistik
+nachgeholt. Vorregistrierung dafür bleibt: Überschussvarianz (molekular) neu/alt ≈ 5,6, falls binomiales Säurezählen dominiert.
+
+**Entscheidung:** Kriterien V2 ±10 %/V3 ±15 % gehalten → umgesetzt: dill_C 0,0152, peb_k 7,87, CLI-Defaults, Pins in
+test_acid_yield (1,007 Oberfläche; LBNL-Stil 80 nm 1,20; MET-2D-Nachrechnung 1,24 vs. 1,39 innerhalb 20 %), Table-2-Guard-Test
+mit explizitem C = 0,08997. Zweite direkte C-Quelle gesichert: Fallica et al. 2017 (PSI/ARCNL, SPIE 10143; im Code bisher
+falsch als „Kazazis" zitiert): 0,010–0,021 cm²/mJ, Bleaching-Methode. Goldens werden neu abgeleitet (derive_goldens.py).
+
+**Suite nach A2:** zwei Testtoleranzen waren Zahlen des alten Betriebspunkts, keine Invarianten — beide skalieren mit der
+Säurezahl pro Voxel (∝ C·G₀·E): `test_stochastic_chunking` (Mittelwertvergleich zweier Tilings, Toleranz 1 px bei C·G₀ = 0,18)
+→ G₀ im Test 2,0 → 12,0 (gleiche Säurezahl, rein statistische Größe); `test_stochastic_consistency` absolute Schranke
+0,3 px → 1 px (Erwartung 0,3·√(0,090/0,0152) = 0,73 px, gemessen 0,44 px). Alle Invarianten (Monotonie, ≥ 5× über zwei
+Dekaden, Breite ±0,5 px) hielten unverändert. Golden-Werte neu: LER 3,490 (vorher 2,735) bei festem 1,1 mJ/cm² — reiner
+Betriebspunkt-Effekt: alte Defaults bei dosisgleich skaliertem Punkt (1,0707) geben CD 37,7/LER 3,78, neue bei 1,1
+CD 37,9/LER 3,49. Läufe: volle Suite 891 bestanden + 1 (die Schranke), danach das Modul allein 5/5, Chunking-Modul 4/4.

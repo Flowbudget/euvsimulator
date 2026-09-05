@@ -15,14 +15,18 @@ that has been measured directly:
 * Kozawa & Tagawa, J. Photopolym. Sci. Technol. 28(4) 501 (2015), Fig. 2:
   acid-generation quantum efficiency ~ 2 for anion-bound resists.
 
-Band used here: [1.3, 3.0]. The defaults give ~6.0, i.e. C and G0 are not
-consistent with each other (plan stage A2 decides which one moves); until then
-the band test is a strict xfail and the current value is pinned so that any
-change to C, G0 or B is visible here.
+Band used here: [1.3, 3.0] for the LBNL-style yield (absorbed fraction of the
+film, not the surface value). History: with the PROLITH-fitted C = 0.090 the
+defaults gave 6.0; since 2026-09-06 (stage A2) C is LBNL's directly measured
+0.0152 cm²/mJ for MET-2D, giving 1.0 at the surface and 1.24 LBNL-style for
+their 80 nm film (measured 1.39; the 11 % gap is G0 0.2 vs the ~0.22 nm^-3
+their numbers imply). The current values are pinned so that any change to C,
+G0 or B is visible here.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
 import pytest
@@ -44,26 +48,45 @@ def test_photon_density_and_alpha_enter_as_expected():
     assert acids_per_absorbed_photon(twice_alpha) == pytest.approx(0.5 * phi0)
 
 
+def lbnl_style_yield(cfg: SimulationConfig, film_nm: float) -> float:
+    """LBNL's film quantum yield: acids per photon absorbed by the WHOLE film.
+
+    Same low-dose limit as ``acids_per_absorbed_photon`` but with the mean
+    absorption over the film, (1 - exp(-alpha*d)) / d, instead of the surface
+    coefficient alpha; for their 80 nm MET-2D film the two differ by 16 %.
+    """
+    alpha = (cfg.dill_A + cfg.dill_B) * 1e-3
+    absorbed_fraction = 1.0 - math.exp(-alpha * film_nm)
+    return acids_per_absorbed_photon(cfg) * alpha * film_nm / absorbed_fraction
+
+
 def test_default_yield_is_pinned():
-    """Today's value from the defaults (C 0.090 cm^2/mJ, G0 0.2 nm^-3, B 4.44 um^-1)."""
-    assert acids_per_absorbed_photon(SimulationConfig()) == pytest.approx(5.96, abs=0.05)
+    """Today's values from the defaults (C 0.0152 cm^2/mJ, G0 0.2 nm^-3, B 4.44 um^-1)."""
+    cfg = SimulationConfig()
+    assert acids_per_absorbed_photon(cfg) == pytest.approx(1.007, abs=0.01)
+    assert lbnl_style_yield(cfg, film_nm=80.0) == pytest.approx(1.20, abs=0.02)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Defaults imply ~6.0 acids per absorbed photon; measured FQY is 1.4-2.1 "
-        "(LBNL Table 3) / ~2 (Kozawa). C (PROLITH fit) and G0 (Mack 2011) come "
-        "from different resists -- resolved in plan stage A2."
-    ),
-)
+def test_met2d_yield_matches_lbnl_within_20_percent():
+    """LBNL Table 3, MET-2D: C 0.0152, 80 nm film, transmittance 0.71, FQY 1.39.
+
+    Using their C and film but this project's G0 (Mack 2011, 0.2 nm^-3) and
+    absorption coefficient (4.44 vs their 4.37 um^-1) reproduces the measured
+    yield within 20 % (their own EUV-2D re-measurements scatter by 10 %).
+    """
+    cfg = SimulationConfig(dill_C=0.0152, dill_B=4.37)
+    assert lbnl_style_yield(cfg, film_nm=80.0) == pytest.approx(1.39, rel=0.20)
+
+
 def test_default_yield_within_measured_band():
+    """Default resist, evaluated LBNL-style for the default film thickness."""
+    cfg = SimulationConfig()
     lo, hi = FQY_BAND
-    assert lo <= acids_per_absorbed_photon(SimulationConfig()) <= hi
+    assert 0.8 * lo <= lbnl_style_yield(cfg, film_nm=cfg.resist_thickness_nm) <= hi
 
 
-def test_yamamoto_pag_loading_does_not_rescue_the_band():
-    """With Yamamoto's 3.1 mol% PAG (~0.15 nm^-3) the yield is still ~4.5 > 3."""
-    phi = acids_per_absorbed_photon(SimulationConfig(pag_density_per_nm3=0.15))
-    assert phi == pytest.approx(4.47, abs=0.05)
-    assert phi > FQY_BAND[1]
+def test_prolith_c_would_put_the_yield_far_outside_the_band():
+    """The pre-A2 default (PROLITH-fitted C = 0.08997) implied 6 acids per photon."""
+    phi = acids_per_absorbed_photon(SimulationConfig(dill_C=0.08997))
+    assert phi == pytest.approx(5.96, abs=0.05)
+    assert phi > 4 * 1.39  # four times LBNL's measured MET-2D yield

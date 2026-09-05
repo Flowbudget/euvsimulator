@@ -266,16 +266,20 @@
 267|
 268|## Roadmap / Known TODOs
 269|
-270|> **Validation status (2026-09-05).** The numerics are validated against exact solutions and
+270|> **Validation status (2026-09-06).** The numerics are validated against exact solutions and
 > conservation laws (Fresnel/effective-medium limits and R+T=1 for the RCWA, mass conservation of
 > the PEB solver, exact Eikonal arrival times, tiling and grid-refinement invariance of the CD).
-> The default resist is Yamamoto et al. 2011, Polymer A -- the only complete, single-source EUV
-> parameter set found. Its dose scale is anchored to that paper's own flood-exposure
-> measurements: deprotection rate and acid lifetime from the FT-IR kinetics (Figs. 3/4), which
-> then reproduce the independent dissolution threshold of Fig. 5 (0.75 vs ≈ 0.8 mJ/cm²,
+> The default resist is built around Yamamoto et al. 2011, Polymer A (dissolution parameters,
+> PEB kinetics), with every number traceable to a measurement in the source comments of
+> `pipeline.py`: the dose scale is anchored to that paper's own flood-exposure measurements
+> (deprotection rate and acid lifetime from the FT-IR kinetics, Figs. 3/4), which then reproduce
+> the independent dissolution threshold of Fig. 5 (0.76 vs ≈ 0.8 mJ/cm²,
 > `tests/test_yamamoto_anchor.py`); Table 2's PROLITH Arrhenius pair did not (≈ 3.4× off) and is
 > kept as a guard test. The absorption coefficient B is computed from the resist composition
-> via the CXRO tables (4.44 µm⁻¹, `tests/test_absorption_coefficient.py`). Two caveats remain:
+> via the CXRO tables (4.44 µm⁻¹, `tests/test_absorption_coefficient.py`), and the Dill C is a
+> direct base-titration measurement (LBNL, MET-2D, 0.0152 cm²/mJ) rather than the PROLITH fit
+> value, so that the implied acids per absorbed photon (1.0–1.2) sit near the measured 1.4–2.1
+> instead of 6 (`tests/test_acid_yield.py`). Two caveats remain:
 > this is a very sensitive 2011 research resist (dose-to-size ≈ 1.3 mJ/cm² at 64 nm pitch), so
 > its sensitivity and LWR are not those of a production resist and should not be compared with
 > the literature without a resist-specific calibration (`euv calibrate`); and the default PEB blur (9.4 nm = sqrt(2·D·t_eff) with D = 4.2 nm²/s measured by Kang 2010 at

@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed (physics, 2026-09-06, plan stage A2)
+- **Default Dill C 0.08997 → 0.0152 cm²/mJ; default deprotection rate k 1.4 → 7.87 s⁻¹.** The old C
+  was a PROLITH fit (Yamamoto 2011 / Sekiguchi 2011) that lumps PEB kinetics into the exposure
+  parameter (it even changes with quencher loading, Sekiguchi IEEJ 2013) and implied 6 acids per
+  absorbed photon against measured 1.4–2.1. Direct measurements in this model's convention,
+  acid = G0·(1 − e^{−C·E}) with incident E, give 0.010–0.05: LBNL base titration (OSTI 1004159,
+  Table 3; MET-2D 0.0152 — the same resist Sekiguchi fits at 0.090) and PSI/ARCNL bleaching
+  (Fallica et al. 2017, SPIE 10143, seven EUV CARs 0.010–0.021). Yamamoto's Fig. 3/4 fix only the
+  rate k·H = 0.166 s⁻¹ at 1.4 mJ/cm², so k is re-derived from the same data; Fig. 3/5 anchors are
+  kept (P(60 s) 0.177, threshold 0.764 mJ/cm²). Effect: dose-to-size +2.7 % (P = 64) / +2.9 %
+  (P = 44), photon-shot-noise LWR at dose-to-size unchanged within ±3 %; stochastic goldens
+  re-derived. Acids per absorbed photon now 1.0 (surface) / 1.24 LBNL-style vs their 1.39.
+- CLI defaults (`--dill-C`, `--peb-k`, calibrate initial guess) follow. `Kazazis et al. 2017` in the
+  pipeline comments is Fallica et al. 2017 (same paper, wrong first author).
+
 ### Added (diagnostics, 2026-09-05)
 - **`pipeline.acids_per_absorbed_photon(cfg)`** – film quantum yield implied by the configured
   Dill C, PAG density G0 and absorption coefficient (C·G0 / (N_ph·α), low-dose limit). Measured

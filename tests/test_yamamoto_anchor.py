@@ -14,9 +14,12 @@ TMAH 30 s):
 History: with Table 2's PROLITH Arrhenius pair (k = 0.0723 s⁻¹, no acid
 loss) the chain gave P(60 s) = 0.60 and a threshold of 2.75 mJ/cm² -- both
 ≈ 3.4× off -- and no acid lifetime alone could fix it (log Fortsetzung
-15/20). Since 2026-09-05 the defaults are Kdp = 1.4 s⁻¹ (Fig. 4) and an
-acid lifetime τ = 10.5 s (from the Fig. 3 plateau); Fig. 5 was NOT used to
-set either, so the threshold test below is an independent check.
+15/20). Since 2026-09-05 the defaults carry the Fig. 3/4 rate (k·H = 0.166 s⁻¹
+at 1.4 mJ/cm²) and an acid lifetime τ = 10.5 s (from the Fig. 3 plateau);
+Fig. 5 was NOT used to set either, so the threshold test below is an
+independent check. Since 2026-09-06 (stage A2) dill_C is the directly
+measured 0.0152 cm²/mJ and the same rate is carried as k = 7.87 s⁻¹ (the
+Table-2 guard test below keeps Table 2's own C = 0.08997).
 """
 
 from __future__ import annotations
@@ -137,7 +140,7 @@ def test_table2_arrhenius_pair_is_rejected_for_a_reason():
     """The former default (Table 2: k = 0.0723 s⁻¹, no loss) misses both
     measurements by the same factor -- kept as a guard against reverting.
     """
-    cfg = SimulationConfig(peb_k=0.0723, peb_acid_lifetime_s=None)
+    cfg = SimulationConfig(dill_C=0.08997, peb_k=0.0723, peb_acid_lifetime_s=None)
     _, M, _ = _chain_surface(FIG3_DOSE_MJ_CM2, cfg)
     assert M == pytest.approx(0.60, abs=0.02)
     assert _threshold_dose(cfg) == pytest.approx(2.75, abs=0.1)

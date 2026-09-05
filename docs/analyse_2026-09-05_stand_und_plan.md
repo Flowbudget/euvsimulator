@@ -81,10 +81,15 @@ verteilt, ein konsolidiertes `docs/physics.md` fehlt; 61440-Zeilen-Test 5 min (C
 ## 4. Neuer Plan — priorisiert, jede Stufe mit falsifizierbarer Vorhersage
 
 **Stufe A — Konsistenz der Säureerzeugung (klein, hohe Hebelwirkung)**
-A1 Test „Säuren pro absorbiertem Photon" (Formel oben) gegen LBNL/Kozawa-Band 1,5–3,5; heute 6,0 → fällt.
-A2 G₀-Default auf Yamamotos 3,1 mol % (0,15 nm⁻³) *mit Dichte aus §Dill B*; C neu bewerten: entweder C aus FQY und G₀
-   ableiten (C = FQY·α·N_ph/G₀) oder Yamamotos C behalten und den Widerspruch dokumentieren. Preflight: D2S, LWR (Photon
-   ∝ C·G₀, Molekül ∝ G₀^(−1/2)); Vorhersage: D2S steigt ∝ 1/C, Photonen-LWR steigt.
+A1 ✅ (2026-09-05, 67f844e) Test „Säuren pro absorbiertem Photon" (`pipeline.acids_per_absorbed_photon`): mit dem alten C
+   6,0 gegen gemessen 1,4–2,1 (LBNL Table 3: MET-2D 1,39, EUV-2D 1,94–2,08) / ≈ 2 (Kozawa).
+A2 ✅ (2026-09-06) — anders gelöst als hier geplant: nicht G₀, sondern **C** war das Problem. LBNL Gl. (1) definiert C in
+   unserer Konvention und misst per Base-Titration MET-2D 0,0152 (Sekiguchis PROLITH-Fit für denselben Resist: 0,090);
+   Fallica 2017 (PSI/ARCNL, Bleaching) 0,010–0,021 für sieben EUV-CARs. PROLITH-C ist effektiv (quencherabhängig; bei
+   C·E ≪ 1 nur k·C bestimmt). Umgesetzt: C 0,0152, k 7,87 s⁻¹ (Yamamotos Rate k·H = 0,166 s⁻¹ bei 1,4 mJ/cm² erhalten),
+   G₀ 0,2 (LBNL-Zahlen implizieren ≈ 0,22 für MET-2D). Preflight: D2S +2,7/+2,9 %, Photonen-LWR bei D2S ±3 %, Anker halten.
+   Die Vorhersage „D2S ∝ 1/C" aus dem Plan war falsch gedacht — sie galt nur bei festem k. Offen: molekulares Rauschen
+   (exposure_stochasticity) statistisch sauber messen (Log Fortsetzung 25, V4).
 A3 Sekundärelektronen-Blur-Default aus Quellen (2,5–3 nm statt 0/5); Preflight gegen Thackeray-Zerlegung (Gesamtblur
    10,6–11,8 nm = Säure 9,3 ⊕ Elektronen 2,5–4,3).
 

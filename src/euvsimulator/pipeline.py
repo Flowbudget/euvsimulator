@@ -370,10 +370,34 @@ class SimulationConfig:
     # a value that is fit jointly with dill_A/B/mack_R_max/mack_R_min/
     # mack_M_th/mack_n from one real EUV measurement rather than picked
     # independently.
-    # Photo-rate constant [cm²/mJ] -- Yamamoto et al. 2011 (EUV-native, self-consistent with
-    # dill_A/B and mack_* below); within the ~0.010-0.43 cm²/mJ range independently spanned by
-    # Fallica et al. 2016 / Kazazis et al. 2017; see note above
-    dill_C: float = 0.08997
+    # UPDATE (2026-09-06, plan stage A2, log Fortsetzung 25): 0.08997 -> 0.0152.
+    # The PROLITH-fitted C values (Yamamoto 2011 Polymer A 0.090; Sekiguchi
+    # InTech 2011 Table 6 MET-1K/2D 0.086/0.090; Sekiguchi IEEJ 2013 0.128 ->
+    # 0.0435 WITH QUENCHER) are effective parameters: a pure exposure C cannot
+    # depend on the quencher, and in the low-dose regime (C*E << 1) the
+    # deprotection data they were fitted to only fix the product k*C. Direct
+    # measurements of C in exactly this model's convention, acid = G0*(1 -
+    # exp(-C*E)) with E the INCIDENT dose, are a factor 4-9 lower:
+    #   * Brainard et al. (LBNL), "Film Quantum Yields of EUV & Ultra-High PAG
+    #     Photoresists", OSTI 1004159, Eq. (1) and Table 3 -- base-titration /
+    #     clearing-dose method (chemical acid count): MET-2D (XP5271D) 0.0152,
+    #     XP-5496 0.0167, EUV-2D 0.046-0.051 cm²/mJ.
+    #   * Fallica et al. (PSI/ARCNL), Proc. SPIE 10143, 101430A (2017) -- EUV
+    #     bleaching (PAG decay with incident flux), Fig. 9: seven EUV CARs
+    #     0.010-0.021 cm²/mJ, no PAG-loading dependence up to +40 %. (Cited
+    #     as "Kazazis et al." in the paragraph above; first author is Fallica.)
+    # 0.0152 is LBNL's value for MET-2D, the resist for which Sekiguchi's
+    # Table 6 gives the PROLITH set (B 5.21, C 0.090) -- the same resist,
+    # measured two ways, factor 6 apart. With G0 = 0.2 nm^-3 and B = 4.44 µm^-1
+    # the acids per absorbed photon become 1.0 at the surface (LBNL-style,
+    # 80 nm film: 1.24 vs their measured 1.39) instead of 6.0 with C = 0.090
+    # (tests/test_acid_yield.py). Yamamoto's Fig. 3/4/5 anchors are kept by
+    # re-deriving peb_k from the same data (see peb_k). Preflight (monkey-
+    # patch, pre-registered): dose-to-size +2.7/+2.9 % (P = 64/44), photon-
+    # shot-noise LWR unchanged within ±3 %, anchors within their pins.
+    # Photo-rate constant [cm²/mJ]; includes the PAG quantum efficiency (Mack 2013 EUV exposure
+    # model), no separate Q factor.
+    dill_C: float = 0.0152
     # dill_Q -- REMOVED 2026-09-04. The former field multiplied the Dill
     # acid yield, acid = Q·(1 − e^{−C·E}), capping it at Q = 0.5. That
     # double-counts the PAG quantum efficiency: in Mack's EUV exposure model
@@ -527,11 +551,20 @@ class SimulationConfig:
     # chain reproduces Fig. 3 at all five read points (≤ 0.08) and the
     # independent Fig. 5 threshold (0.75 vs ≈ 0.8 mJ/cm²), tests/
     # test_yamamoto_anchor.py. No fit to Fig. 5 was made.
-    peb_k: float = 1.4
+    # UPDATE (2026-09-06, A2): 1.4 -> 7.87 s⁻¹ together with dill_C 0.090 ->
+    # 0.0152. Fig. 3/4 determine the deprotection rate k*H at the flood dose
+    # of 1.4 mJ/cm², i.e. k*H = 1.4 s⁻¹ * 0.1184 = 0.166 s⁻¹ (Yamamoto's "Kdp"
+    # is normalised to HIS acid concentration, which his C = 0.090 puts at
+    # H = 0.118). With the directly measured C the same dose gives H = 0.02105,
+    # so the same measured rate is k = 0.166 / 0.02105 = 7.87 s⁻¹. No new
+    # degree of freedom -- the same measurement, split differently. Chain
+    # after the change: P(60 s) = 0.177 (Fig. 3: 0.18), threshold 0.764 mJ/cm²
+    # (Fig. 5: ≈ 0.8), tests/test_yamamoto_anchor.py.
+    peb_k: float = 7.87
     # Average acid lifetime τ [s] during the PEB (first-order acid loss;
     # Yamamoto et al. 2011 Eq. 1 "τ", Kang et al. 2010 "trapping"). 10.5 s
     # follows from the Fig. 3 plateau at 110 °C: M∞ = exp(−Kdp·H0·τ) = 0.17
-    # with H0 = 1 − exp(−C·1.4 mJ/cm²) = 0.118 and Kdp = 1.4 s⁻¹. None = no
+    # with k·H0 = 0.166 s⁻¹ (H0 = 1 − exp(−C·1.4 mJ/cm²), see peb_k). None = no
     # loss (the model before 2026-09-05). Deprotection, D·t diffusion length
     # and neutralisation use the effective time τ(1 − e^{−t/τ})
     # (resist.peb.effective_reaction_time). Consequence: the default resist

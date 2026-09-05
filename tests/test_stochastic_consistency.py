@@ -196,7 +196,11 @@ def test_large_number_limit_recovers_deterministic_cd(
     # fewer acid molecules per voxel, so an absolute 0.1 px bound set at the
     # old operating point was a number, not an invariant)
     assert dev[2000.0] < dev[20.0] / 5.0, dev
-    assert dev[2000.0] < 0.3 * DX, dev
+    # the coarse absolute bound scales with the acid count per voxel, i.e.
+    # with C*G0*E: 0.3 px held at C = 0.090; with the directly measured
+    # C = 0.0152 (2026-09-06, A2) the count noise is sqrt(0.090/0.0152) = 2.4x
+    # larger, so 0.73 px is the expectation and 1 px the guard
+    assert dev[2000.0] < 1.0 * DX, dev
     # sanity against the pipeline's own deterministic CD (different extractor,
     # so only a coarse bound)
     assert abs(w_mean - det) <= 3.0 * DX, f"det {det:.2f}, mean-field width {w_mean:.2f}"

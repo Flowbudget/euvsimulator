@@ -74,7 +74,12 @@ def test_sampled_chain_is_reproducible_and_grouping_independent():
     # from its own seeded generator, the realisation must not depend on how
     # many tiles are processed per chunk -- here tile_rows 512 vs 1024 give
     # different tilings, so only reproducibility is checked at fixed tiling
-    kw = dict(exposure_stochasticity=True, pag_density_per_nm3=2.0)
+    # pag_density 12.0: the 1.0 px tolerance below was set when C*G0 was
+    # 0.090 * 2.0 = 0.18 cm²/mJ·nm⁻³; the molecular scatter of the row-mean
+    # width scales with the acid count per voxel (∝ C*G0), so with the
+    # directly measured C = 0.0152 (2026-09-06, A2) the same count needs
+    # G0 = 12 nm⁻³. Statistical bound, not a physical PAG loading.
+    kw = dict(exposure_stochasticity=True, pag_density_per_nm3=12.0)
     _, a = _run_with_tile_rows(512, **kw)
     _, b = _run_with_tile_rows(512, **kw)
     assert torch.equal(a, b)

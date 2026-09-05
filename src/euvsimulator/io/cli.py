@@ -127,11 +127,13 @@ def simulate(
         ),
     ),
     dill_C: float = typer.Option(
-        0.08997,
+        0.0152,
         "--dill-C",
         help=(
-            "Photo-rate constant [cm²/mJ]; includes the PAG quantum efficiency (Mack 2013), no "
-            "separate Q factor"
+            "Photo-rate constant [cm²/mJ] for acid = G0*(1-exp(-C*E)), E incident; default = "
+            "LBNL base-titration value for MET-2D (OSTI 1004159 Table 3); direct EUV-CAR "
+            "measurements span 0.010-0.05 (Fallica 2017, LBNL); includes the PAG quantum "
+            "efficiency, no separate Q factor"
         ),
     ),
     # PEB options
@@ -145,11 +147,12 @@ def simulate(
         ),
     ),
     peb_k: float = typer.Option(
-        1.4,
+        7.87,
         "--peb-k",
         help=(
-            "Deprotection rate constant [s⁻¹] at the PEB temperature; default = Kdp(110 °C) "
-            "read from Yamamoto et al. 2011 Fig. 4 (see pipeline.py peb_k note)"
+            "Deprotection rate constant [s⁻¹] at the PEB temperature, per unit relative acid; "
+            "default = Yamamoto et al. 2011 Fig. 3/4 rate k*H = 0.166 s⁻¹ at 1.4 mJ/cm² divided "
+            "by the acid fraction that --dill-C gives there (see pipeline.py peb_k note)"
         ),
     ),
     peb_acid_lifetime: Optional[float] = typer.Option(
@@ -808,8 +811,8 @@ def calibrate(
     else:
         # Default initial guess for typical EUV CAR resist
         initial_params = {
-            "dill_C": 0.08997,  # Yamamoto et al. 2011, EUV-native (see pipeline.py dill_C comment)
-            "peb_k": 1.4,  # Yamamoto et al. 2011 Fig. 4 Kdp(110 C) (see pipeline.py peb_k comment)
+            "dill_C": 0.0152,  # LBNL MET-2D, direct measurement (see pipeline.py dill_C comment)
+            "peb_k": 7.87,  # Yamamoto 2011 Fig. 3/4 rate / acid fraction (see pipeline.py peb_k)
             "peb_t_bake": 60.0,
             # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference"
             # formulations cluster 17-35nm
