@@ -20,9 +20,19 @@ from euvsimulator.pipeline import SimulationConfig, run_simulation
 
 
 def _cfg(**kw):
-    base = dict(resist_model="full_chem", period_nm=44.0, line_width_nm=22.0, se_blur_nm=5.0, grid=128,
-                peb_sigma_diff=7.0, dose_mj_cm2=4.9, enable_stochastic=True, stochastic_seed=7,
-                stochastic_n_realisations=1, stochastic_ler_grid_y=1536)
+    base = dict(
+        resist_model="full_chem",
+        period_nm=44.0,
+        line_width_nm=22.0,
+        se_blur_nm=5.0,
+        grid=128,
+        peb_sigma_diff=7.0,
+        dose_mj_cm2=4.9,
+        enable_stochastic=True,
+        stochastic_seed=7,
+        stochastic_n_realisations=1,
+        stochastic_ler_grid_y=1536,
+    )
     base.update(kw)
     return SimulationConfig(**base)
 
@@ -45,8 +55,8 @@ def _run_with_tile_rows(tile_rows, **kw):
 
 
 def test_photon_only_chain_is_tiling_invariant():
-    r1, d1 = _run_with_tile_rows(10**6)   # one tile, no halo
-    r2, d2 = _run_with_tile_rows(512)     # three tiles with halo
+    r1, d1 = _run_with_tile_rows(10**6)  # one tile, no halo
+    r2, d2 = _run_with_tile_rows(512)  # three tiles with halo
     assert d1.shape == d2.shape
     assert torch.allclose(d1, d2, atol=1e-9, rtol=0.0), float((d1 - d2).abs().max())
     assert math.isclose(r1.lwr_nm, r2.lwr_nm, rel_tol=1e-9, abs_tol=1e-9)
@@ -72,3 +82,15 @@ def test_sampled_chain_is_reproducible_and_grouping_independent():
     # different tiling = different draw, but the same physics: the mean
     # width must agree within the molecular-noise scatter of the row mean
     assert abs(float(c.mean()) - float(a.mean())) < 1.0
+
+
+def test_row_count_not_a_multiple_of_the_tile_is_still_exact():
+    """A short remainder tile would contribute fewer halo rows than assumed
+    and misalign the interior slice; rows are therefore distributed evenly
+    over floor(H / tile_rows) tiles, each at least `halo` rows long.
+    """
+    r1, d1 = _run_with_tile_rows(10**6, stochastic_ler_grid_y=1300)
+    r2, d2 = _run_with_tile_rows(512, stochastic_ler_grid_y=1300)  # 2 tiles of 650
+    assert d1.shape == d2.shape == (1300, 128)
+    assert torch.allclose(d1, d2, atol=1e-9, rtol=0.0), float((d1 - d2).abs().max())
+    assert math.isclose(r1.lwr_nm, r2.lwr_nm, rel_tol=1e-9, abs_tol=1e-9)

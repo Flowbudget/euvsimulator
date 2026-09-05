@@ -112,7 +112,8 @@ def dill_abc_exposure(
     # ``B, H, W = dose.shape``, silently replacing dill_B by the batch size
     # (1 for a 2D dose map), so the absorption coefficient was A + 1.0 µm⁻¹
     # regardless of the configured dill_B. Found by
-    # tests/test_photon_absorption.py::test_absorbed_fraction_uses_same_coefficient_as_depth_profile.
+    # tests/test_photon_absorption.py::
+    # test_absorbed_fraction_uses_same_coefficient_as_depth_profile.
     n_batch, H, W = dose.shape
 
     # depth positions
@@ -244,7 +245,11 @@ def sample_pag_quencher_acid(
 
     n_pag = torch.poisson(torch.full_like(dose_z, mean_pag), generator=rng)
     p_convert = torch.clamp(1.0 - torch.exp(-C * dose_z), 0.0, 1.0)
-    n_acid = torch.binomial(n_pag, p_convert, generator=rng) if hasattr(torch, "binomial") else _binomial_fallback(n_pag, p_convert, rng)
+    n_acid = (
+        torch.binomial(n_pag, p_convert, generator=rng)
+        if hasattr(torch, "binomial")
+        else _binomial_fallback(n_pag, p_convert, rng)
+    )
     n_quencher = torch.poisson(torch.full_like(dose_z, mean_quencher), generator=rng)
 
     acid = n_acid / mean_pag
@@ -253,9 +258,7 @@ def sample_pag_quencher_acid(
     return acid, quencher
 
 
-def _binomial_fallback(
-    n: torch.Tensor, p: torch.Tensor, rng: torch.Generator
-) -> torch.Tensor:
+def _binomial_fallback(n: torch.Tensor, p: torch.Tensor, rng: torch.Generator) -> torch.Tensor:
     """Binomial(n, p) via a normal approximation with continuity correction.
 
     Only used if the installed torch build lacks ``torch.binomial``
@@ -437,7 +440,8 @@ def gaussian_se_blur(
         # (N, H, W) stack at once -- the 61440-row LER fields exceeded 8 GB
         # here (2026-09-05).
         blurred = torch.cat(
-            [_fft_circular_blur(img_4d[b : b + 1], kernel_1d, radius, H, W) for b in range(B)], dim=0
+            [_fft_circular_blur(img_4d[b : b + 1], kernel_1d, radius, H, W) for b in range(B)],
+            dim=0,
         )
     else:
         # separable convolution

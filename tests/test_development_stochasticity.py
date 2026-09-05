@@ -74,18 +74,24 @@ def _acid_large(seed, n_tiles=4):
     dose_map = torch.tile(aerial.float(), (n_tiles, 1))
     rng = torch.Generator().manual_seed(seed)
     d_eff = photon_deposition_shot_noise(
-        dose_map, 5.0, dx_nm=DX, photon_energy_eV=E_PH,
-        dose_to_energy_factor=F, rng=rng,
+        dose_map,
+        5.0,
+        dx_nm=DX,
+        photon_energy_eV=E_PH,
+        dose_to_energy_factor=F,
+        rng=rng,
     )
     return dose_to_acid(d_eff, C=0.05, Q=1.0, apply_blur=False), rng
 
 
 # ── Pipeline: the switch is refused ─────────────────────────────
 
+
 def test_development_stochasticity_is_refused():
     with pytest.raises(NotImplementedError, match="development_stochasticity"):
-        SimulationConfig(resist_model="full_chem", enable_stochastic=True,
-                         development_stochasticity=True)
+        SimulationConfig(
+            resist_model="full_chem", enable_stochastic=True, development_stochasticity=True
+        )
 
 
 def test_removed_strength_fields_are_rejected():
@@ -96,6 +102,7 @@ def test_removed_strength_fields_are_rejected():
 
 
 # ── Pipeline: OFF path unchanged ────────────────────────────────
+
 
 def test_off_mode_unchanged():
     r = run_simulation(_car_cfg())
@@ -114,10 +121,12 @@ def test_legacy_off_golden_unchanged():
 
 # ── Function-level tests of the standalone building block ───────
 
+
 def test_stochastic_development_basic():
     acid, rng = _acid_large(90000, n_tiles=4)
-    dev = stochastic_development(acid, threshold=THRESH, strength=1.0,
-                                 correlation_nm=0.5, dx=DX, rng=rng)
+    dev = stochastic_development(
+        acid, threshold=THRESH, strength=1.0, correlation_nm=0.5, dx=DX, rng=rng
+    )
     assert dev.shape == acid.shape
     assert set(torch.unique(dev).tolist()) <= {0.0, 1.0}
     det = (acid > THRESH).float()
@@ -135,11 +144,12 @@ def test_stochastic_development_validation():
 
 
 def test_stochastic_development_limit_strong():
-    """strength -> large approaches the deterministic threshold."""
+    """Strength -> large approaches the deterministic threshold."""
     acid, rng = _acid_large(90000, n_tiles=1)
     det = (acid > THRESH).float()
-    dev_strong = stochastic_development(acid, threshold=THRESH, strength=50.0,
-                                        correlation_nm=0.5, dx=DX, rng=rng)
+    dev_strong = stochastic_development(
+        acid, threshold=THRESH, strength=50.0, correlation_nm=0.5, dx=DX, rng=rng
+    )
     assert float((dev_strong != det).float().mean()) < 0.05
 
 
@@ -154,8 +164,9 @@ def test_different_seed_independent():
 
 def test_no_256_periodicity():
     acid, rng = _acid_large(90000, n_tiles=16)
-    dev = stochastic_development(acid, threshold=THRESH, strength=1.0,
-                                 correlation_nm=0.5, dx=DX, rng=rng)
+    dev = stochastic_development(
+        acid, threshold=THRESH, strength=1.0, correlation_nm=0.5, dx=DX, rng=rng
+    )
     left, right = extract_edges(dev, threshold=THRESH, dx=DX, intensity=acid)
     fin = ~(torch.isnan(left) | torch.isnan(right))
     lf = left[fin]

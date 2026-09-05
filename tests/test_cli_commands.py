@@ -42,7 +42,9 @@ def test_materials_list_and_nk():
 
 def test_make_mask_writes_a_gds_file(tmp_path):
     out = tmp_path / "m.gds"
-    r = runner.invoke(app, ["make-mask", "--pitch", "64", "--cd", "32", "--n-lines", "3", "--out", str(out)])
+    r = runner.invoke(
+        app, ["make-mask", "--pitch", "64", "--cd", "32", "--n-lines", "3", "--out", str(out)]
+    )
     assert r.exit_code == 0, r.output
     assert out.exists() and out.stat().st_size > 0
     import gdstk
@@ -56,9 +58,29 @@ def test_process_window_small_grid(tmp_path):
     out = tmp_path / "pw.json"
     r = runner.invoke(
         app,
-        ["process-window", "--period", "64", "--cd", "32", "--grid", "64",
-         "--dose-start", "15", "--dose-end", "25", "--dose-steps", "3",
-         "--focus-start", "-30", "--focus-end", "30", "--focus-steps", "3", "--output", str(out)],
+        [
+            "process-window",
+            "--period",
+            "64",
+            "--cd",
+            "32",
+            "--grid",
+            "64",
+            "--dose-start",
+            "15",
+            "--dose-end",
+            "25",
+            "--dose-steps",
+            "3",
+            "--focus-start",
+            "-30",
+            "--focus-end",
+            "30",
+            "--focus-steps",
+            "3",
+            "--output",
+            str(out),
+        ],
     )
     assert r.exit_code == 0, r.output
     payload = json.loads(out.read_text())

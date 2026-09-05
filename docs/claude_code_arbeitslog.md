@@ -2346,3 +2346,39 @@ Abweichung 7,51 zuvor war die Quantisierung der alten Zieldaten.
 - Audit E8 (`dx` vs `dx_nm`, 16 gegen 7 Signaturen): alle `dx` sind Nanometer; eine
   Massenumbenennung öffentlicher Parameter ist kosmetisch und bleibt offen.
 - Notebooks 01–06 nach Sub-Pixel-CD und Kachelung erneut ausgeführt (6 × „Writing", keine Fehler).
+
+## 2026-09-05 (Fortsetzung 16): Lokale Vollprüfung („auf Herz und Nieren"), weil die CI steht
+
+GitHub Actions ist seit 2026-08-31 durch das Ausgabenlimit blockiert (jeder Job endet nach ~10 s mit
+der Billing-Annotation). Deshalb lokal alles, was die CI täte, plus Falsifikation der heute neuen Pfade.
+
+1. **Lint (CI-Job „Lint & Type Check", nicht beratend):** `ruff check` fand 157 Befunde, `ruff format
+   --check` 35 unformatierte Dateien — der Job war seit den Kommentar-Erweiterungen vom 2026-09-02/03
+   gebrochen, unbemerkt, weil die CI nicht lief. Bereinigt: `ruff format` (35 Dateien), Auto-Fixes
+   (Importreihenfolge, Docstring-Anführungszeichen), 33 überlange Zeilen per Skript umgebrochen
+   (Trailing-Kommentare der `SimulationConfig`-Felder als vorangestellte Kommentarblöcke, CLI-Hilfetexte
+   als Klammer-Konkatenation — Text byteweise identisch, per Assertion geprüft), toter
+   `__main__`-Block in `test_full_chem_config.py` mit Aufruf einer gelöschten Testfunktion (F821)
+   entfernt, ein Lambda zu `def`. Jetzt: „All checks passed", 101 Dateien formatiert.
+2. **mypy --strict (in der CI `|| true`):** 140 Befunde in 24 Dateien, überwiegend Tensor/float-Unionen,
+   komplexe Skalare in Tensor-Zuweisungen, untypisierte Defs. Durchgesehen: keiner ist ein
+   Laufzeitfehler (z. B. `(None, None)`-Bounds sind für SciPy gültig). Nicht bereinigt — das wäre
+   Typannotations-Arbeit ohne Physiknutzen; bleibt offen.
+3. **Zwei echte Randfälle in heutigem Code gefunden und behoben** (vor dem Suite-Lauf): (a) in
+   `_noisy_depth_map` konnte die letzte Kachel kürzer als der Halo sein (H kein Vielfaches von 1024)
+   → weniger Halo-Zeilen als angenommen, Innenausschnitt verschoben; jetzt gleichmäßige Verteilung
+   auf floor(H/1024) Kacheln, jede ≥ Halo; Test mit H = 1300 (2 × 650) bitgenau bis 1e-9 gegen
+   ungestückelt. (b) `edge_positions_from_arrival` bei T = ∞ im Nachbarpixel (nur bei R = 0
+   möglich): Kante auf die Pixelfläche statt Division durch ∞.
+4. **Paketbau (CI-Job „Build"):** `uv build` → Wheel + sdist 1.0.3 fehlerfrei.
+5. **Python-Matrix:** lokal läuft 3.14; CI testet 3.10–3.13. Frisches 3.10-venv (uv, torch 2.14):
+   schnelle Suite **825 bestanden, 2 xfail** — keine 3.10-Inkompatibilität in den heutigen Annotationen.
+6. **CLI Ende-zu-Ende:** `euv simulate --resist-model full_chem --grid 128 --dose 4.0 --peb-sigma-diff 7
+   --se-blur 5` → CD 31,49 nm, NILS 3,93 (Sub-Pixel-CD sichtbar: keine Ganzzahl mehr).
+7. **Volle Suite mit `-n auto` und echtem Exit-Code** (alle 4 Stochastik-Module inklusive
+   61440-Zeilen-Test): siehe Zeile unten.
+
+**Ergebnis volle Suite (`pytest tests -n auto`, Exit 0): 876 bestanden, 2 xfail (Yamamoto-Anker),
+11 min 36 s.** Nach der Lint-Bereinigung zusätzlich die schnelle Suite unter Python 3.10 (825 + 2 xfail)
+und die von der Umformatierung berührten Module (55 + 2 xfail) — die Umformatierung ist semantikfrei
+(ruff format; Kommentar-/String-Umbrüche mit Byte-Identität geprüft).

@@ -109,23 +109,80 @@ def simulate(
     # Dill ABC exposure options -- defaults match SimulationConfig in pipeline.py:
     # Yamamoto et al. 2011, EUV-native, self-consistent with the Mack
     # development parameters below (see pipeline.py dill_A/B comment).
-    dill_A: float = typer.Option(0.0, "--dill-A", help="Bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, Fallica et al. 2016) suggests << dill-B"),
-    dill_B: float = typer.Option(
-        1.06, "--dill-B", help="Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, Fallica et al. 2016) suggests this dominates over dill-A"
+    dill_A: float = typer.Option(
+        0.0,
+        "--dill-A",
+        help=(
+            "Bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. 2011, "
+            "Fallica et al. 2016) suggests << dill-B"
+        ),
     ),
-    dill_C: float = typer.Option(0.08997, "--dill-C", help="Photo-rate constant [cm²/mJ]; includes the PAG quantum efficiency (Mack 2013), no separate Q factor"),
+    dill_B: float = typer.Option(
+        1.06,
+        "--dill-B",
+        help=(
+            "Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. "
+            "2011, Fallica et al. 2016) suggests this dominates over dill-A"
+        ),
+    ),
+    dill_C: float = typer.Option(
+        0.08997,
+        "--dill-C",
+        help=(
+            "Photo-rate constant [cm²/mJ]; includes the PAG quantum efficiency (Mack 2013), no "
+            "separate Q factor"
+        ),
+    ),
     # PEB options
-    peb_D: float = typer.Option(3.3, "--peb-D", help="Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake) unless --peb-sigma-diff overrides it directly"),
-    peb_k: float = typer.Option(0.0723, "--peb-k", help="Deprotection rate constant [s⁻¹]; Yamamoto et al. 2011's own Arrhenius fit"),
+    peb_D: float = typer.Option(
+        3.3,
+        "--peb-D",
+        help=(
+            "Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake)"
+            " unless --peb-sigma-diff overrides it directly"
+        ),
+    ),
+    peb_k: float = typer.Option(
+        0.0723,
+        "--peb-k",
+        help="Deprotection rate constant [s⁻¹]; Yamamoto et al. 2011's own Arrhenius fit",
+    ),
     peb_t_bake: float = typer.Option(60.0, "--peb-t-bake", help="Bake time [s]"),
     peb_sigma_diff: Optional[float] = typer.Option(
-        None, "--peb-sigma-diff", help="Analytical diffusion sigma [nm]; overrides --peb-D/--peb-t-bake when set"
+        None,
+        "--peb-sigma-diff",
+        help="Analytical diffusion sigma [nm]; overrides --peb-D/--peb-t-bake when set",
     ),
     # Depth-resolved exposure/development options (2026-09-03)
-    resist_thickness_nm: float = typer.Option(50.0, "--resist-thickness", help="Resist film thickness [nm]; Yamamoto et al. 2011's own better-resolved PROLITH case"),
-    develop_time_s: float = typer.Option(30.0, "--develop-time", help="Development time [s]; Yamamoto et al. 2011's own dissolution-rate measurement condition"),
-    n_develop_layers: int = typer.Option(21, "--n-develop-layers", help="Number of depth layers for the resolved exposure/PEB/development chain (numerical resolution, not physical)"),
-    development_model: str = typer.Option("eikonal", "--development-model", help="Development front: 'eikonal' (isotropic front, lateral dissolution; physical) or 'column' (vertical time-of-flight approximation)"),
+    resist_thickness_nm: float = typer.Option(
+        50.0,
+        "--resist-thickness",
+        help="Resist film thickness [nm]; Yamamoto et al. 2011's own better-resolved PROLITH case",
+    ),
+    develop_time_s: float = typer.Option(
+        30.0,
+        "--develop-time",
+        help=(
+            "Development time [s]; Yamamoto et al. 2011's own dissolution-rate measurement "
+            "condition"
+        ),
+    ),
+    n_develop_layers: int = typer.Option(
+        21,
+        "--n-develop-layers",
+        help=(
+            "Number of depth layers for the resolved exposure/PEB/development chain (numerical "
+            "resolution, not physical)"
+        ),
+    ),
+    development_model: str = typer.Option(
+        "eikonal",
+        "--development-model",
+        help=(
+            "Development front: 'eikonal' (isotropic front, lateral dissolution; physical) or "
+            "'column' (vertical time-of-flight approximation)"
+        ),
+    ),
     # Stochastic / Shot Noise options
     enable_stochastic: bool = typer.Option(
         False, "--stochastic", help="Enable photon shot noise and LER/LWR extraction"
@@ -498,7 +555,15 @@ def process_window(
 @app.command()
 def materials(
     element: Optional[str] = typer.Argument(None, help="Element symbol (e.g. Si, Mo, Ta)"),
-    energy: float = typer.Option(91.84, "--energy", "-e", help="Photon energy [eV]. Default is 91.84 eV (corresponding to 13.5 nm wavelength via E = hc/λ)."),
+    energy: float = typer.Option(
+        91.84,
+        "--energy",
+        "-e",
+        help=(
+            "Photon energy [eV]. Default is 91.84 eV (corresponding to 13.5 nm wavelength via E ="
+            " hc/λ)."
+        ),
+    ),
 ):
     """Query the CXRO material database.
 
@@ -635,10 +700,14 @@ def calibrate(
     method: str = typer.Option("Nelder-Mead", "--method", help="SciPy minimisation method"),
     maxiter: int = typer.Option(500, "--maxiter", help="Maximum iterations for optimiser"),
     seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for bootstrap"),
-    period: float = typer.Option(64.0, "--period", help="Pattern period of the measured FEM [nm] (wafer scale)"),
+    period: float = typer.Option(
+        64.0, "--period", help="Pattern period of the measured FEM [nm] (wafer scale)"
+    ),
     cd: float = typer.Option(32.0, "--cd", help="Nominal line width of the measured FEM [nm]"),
     grid: int = typer.Option(128, "--grid", help="Simulation grid for the fit"),
-    se_blur: float = typer.Option(5.0, "--se-blur", help="Secondary-electron blur sigma [nm] held fixed during the fit"),
+    se_blur: float = typer.Option(
+        5.0, "--se-blur", help="Secondary-electron blur sigma [nm] held fixed during the fit"
+    ),
 ):
     """Calibrate resist-model parameters to measured wafer CD data.
 
@@ -728,11 +797,21 @@ def calibrate(
             "dill_C": 0.08997,  # Yamamoto et al. 2011, EUV-native (see pipeline.py dill_C comment)
             "peb_k": 0.0723,  # Yamamoto et al. 2011 Arrhenius fit (see pipeline.py peb_k comment)
             "peb_t_bake": 60.0,
-            "peb_sigma_diff": 20.0,  # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference" formulations cluster 17-35nm
-            "mack_R_max": 68.6,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_R_max comment)
-            "mack_R_min": 0.10,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_R_min comment)
-            "mack_n": 18.2,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_n comment)
-            "mack_M_th": 0.39,  # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py mack_M_th comment)
+            # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference"
+            # formulations cluster 17-35nm
+            "peb_sigma_diff": 20.0,
+            # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py
+            # mack_R_max comment)
+            "mack_R_max": 68.6,
+            # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py
+            # mack_R_min comment)
+            "mack_R_min": 0.10,
+            # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py
+            # mack_n comment)
+            "mack_n": 18.2,
+            # Yamamoto et al. 2011, EUV-native, self-consistent with dill_C above (see pipeline.py
+            # mack_M_th comment)
+            "mack_M_th": 0.39,
         }
 
     # Load bounds
@@ -750,10 +829,21 @@ def calibrate(
             "dill_C": (0.01, 0.2),
             "peb_k": (0.05, 2.0),
             "peb_t_bake": (30.0, 120.0),
-            "peb_sigma_diff": (1.0, 40.0),  # widened: Anderson et al. 2009 (OSTI 961531) measured real EUV resists up to 38.4nm -- a 20nm cap would have artificially excluded valid fits
+            "peb_sigma_diff": (
+                1.0,
+                40.0,
+                # widened: Anderson et al. 2009 (OSTI 961531) measured real EUV resists up to
+                # 38.4 nm -- a 20 nm cap would have artificially excluded valid fits
+            ),
             "mack_R_max": (10.0, 500.0),
             "mack_R_min": (0.01, 10.0),
-            "mack_n": (1.5, 30.0),  # widened: Schnattinger PhD thesis (FAU, 193nm CAR resist, see pipeline.py mack_n comment) measured n=25.14 -- a 20 cap would have excluded that real (if wavelength-caveated) value
+            "mack_n": (
+                1.5,
+                30.0,
+                # widened: Schnattinger PhD thesis (FAU, 193nm CAR resist, see pipeline.py mack_n
+                # comment) measured n=25.14 -- a 20 cap would have excluded that real (if
+                # wavelength-caveated) value
+            ),
             "mack_M_th": (0.1, 0.9),
         }
 

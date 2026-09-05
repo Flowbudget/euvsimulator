@@ -254,15 +254,19 @@ class RCWA1D:
             if self.cfg.polarization == "TE":
                 Y_ML_top = torch.diag(kz_ML / k0).to(torch.complex128)
             else:
-                Y_ML_top = torch.diag(kz_ML / (k0 * n_ML_top ** 2)).to(torch.complex128)
+                Y_ML_top = torch.diag(kz_ML / (k0 * n_ML_top**2)).to(torch.complex128)
 
             # Interface: eigenmode ↔ Rayleigh modes in ML top layer
             S_interface = self._eigenmode_to_rayleigh_smatrix(Y_ML_top, W, V)
 
             # Build order-diagonal ML reflection operator
             S_ML = _build_ml_reflection_operator(
-                ml_stack, k_xm, k0, self.cfg.wavelength,
-                self.cfg.polarization, self.device,
+                ml_stack,
+                k_xm,
+                k0,
+                self.cfg.wavelength,
+                self.cfg.polarization,
+                self.device,
             )
 
             # Cascade: S_bot = S_interface ⨂ S_ML
@@ -546,8 +550,11 @@ def _build_ml_reflection_operator(
     for m in range(M):
         kx_norm = float(k_xm[m].real.item()) / k0
         r_m = reflectivity_at_kx(
-            n_layers, thicknesses, wavelength,
-            kx_norm=kx_norm, te=te,
+            n_layers,
+            thicknesses,
+            wavelength,
+            kx_norm=kx_norm,
+            te=te,
             n_incident=complex(float(n_inc.real), float(n_inc.imag)),
             n_substrate=complex(float(n_sub.real), float(n_sub.imag)),
         )

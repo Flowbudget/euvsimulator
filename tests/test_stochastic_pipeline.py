@@ -22,7 +22,7 @@ def test_stochastic_requires_full_chem():
 
 def test_stochastic_produces_ler_lwr():
     """Stochastic pipeline returns positive LER/LWR.
-    
+
     2026-09-03: no longer pins dill_Q=1.0 -- that was chosen for the
     OLD, un-wired full_chem chain (see pipeline.py mack_R_max "RESOLVED"
     note); with MackModel/dill_abc_exposure now wired in, dill_Q=1.0

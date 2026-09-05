@@ -47,7 +47,8 @@ def test_origin_shift_moves_the_pattern():
 
 def test_missing_layer_is_an_empty_mask():
     """A layer absent from the GDS is an empty absorber layer (documented
-    behaviour in rasterize_geometry), not an error."""
+    behaviour in rasterize_geometry), not an error.
+    """
     g = _geom()
     grid = rasterize_geometry(g, (7, 0), 64.0, 100.0, 64, 4)
     assert grid.shape == (4, 64) and grid.dtype == bool and not grid.any()

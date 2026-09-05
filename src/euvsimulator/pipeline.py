@@ -20,6 +20,7 @@ import torch
 
 from euvsimulator.accel.device import select_device, set_default_dtype
 from euvsimulator.aerial.abbe import aerial_from_orders, nils
+from euvsimulator.constants import HC_EV_NM
 from euvsimulator.materials import CXROTable
 from euvsimulator.optics.multilayer import mo_si_stack
 from euvsimulator.optics.tmm import reflectivity
@@ -36,7 +37,6 @@ from euvsimulator.resist.exposure import (
 from euvsimulator.resist.peb import (
     reaction_diffusion_with_quenching,
 )
-from euvsimulator.constants import HC_EV_NM
 from euvsimulator.resist.stochastic import (
     extract_edges,
     extract_ler,
@@ -298,8 +298,15 @@ class SimulationConfig:
     # is NOT a validation of sensitivity in either direction. The PROLITH
     # doses of 20-30 mJ/cm² quoted in the paper are set values for profile
     # plots, not a dose-to-size, and are not an anchor either.
-    dill_A: float = 0.0  # Bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_B/C and mack_* below); Fallica et al. 2016 independently confirms the same A<<B regime (their range 0.2-0.45); see note above
-    dill_B: float = 1.06  # Non-bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/C and mack_* below); Fallica et al. 2016 found a higher range (4-5) for a different, undisclosed EUV-CAR formulation -- both real, resist-specific; see note above
+    # Bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native, self-consistent
+    # with dill_B/C and mack_* below); Fallica et al. 2016 independently confirms the same A<<B
+    # regime (their range 0.2-0.45); see note above
+    dill_A: float = 0.0
+    # Non-bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native,
+    # self-consistent with dill_A/C and mack_* below); Fallica et al. 2016 found a higher range
+    # (4-5) for a different, undisclosed EUV-CAR formulation -- both real, resist-specific; see note
+    # above
+    dill_B: float = 1.06
     #
     # dill_C ADDITIONAL CROSS-CHECK (2026-09-02, third research pass): Kazazis,
     # D. et al. (ARCNL), "Absorption coefficient and exposure kinetics of
@@ -323,7 +330,10 @@ class SimulationConfig:
     # a value that is fit jointly with dill_A/B/mack_R_max/mack_R_min/
     # mack_M_th/mack_n from one real EUV measurement rather than picked
     # independently.
-    dill_C: float = 0.08997  # Photo-rate constant [cm²/mJ] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B and mack_* below); within the ~0.010-0.43 cm²/mJ range independently spanned by Fallica et al. 2016 / Kazazis et al. 2017; see note above
+    # Photo-rate constant [cm²/mJ] -- Yamamoto et al. 2011 (EUV-native, self-consistent with
+    # dill_A/B and mack_* below); within the ~0.010-0.43 cm²/mJ range independently spanned by
+    # Fallica et al. 2016 / Kazazis et al. 2017; see note above
+    dill_C: float = 0.08997
     # dill_Q -- REMOVED 2026-09-04. The former field multiplied the Dill
     # acid yield, acid = Q·(1 − e^{−C·E}), capping it at Q = 0.5. That
     # double-counts the PAG quantum efficiency: in Mack's EUV exposure model
@@ -382,7 +392,10 @@ class SimulationConfig:
     # of bug as the earlier-fixed CLI --threshold dead-parameter issue.
     # Fixed by making peb_sigma_diff Optional (None default) and passing
     # D=cfg.peb_D through in run_simulation()'s _cd_via_full_chem() call.
-    peb_D: float = 3.3  # Acid diffusivity [nm²/s] -- within Lavery et al. 2006's measured 2-8 nm²/s; chosen with peb_t_bake=60s to reproduce Anderson et al. 2009's measured EUV deprotection blur (see note above)
+    # Acid diffusivity [nm²/s] -- within Lavery et al. 2006's measured 2-8 nm²/s; chosen with
+    # peb_t_bake=60s to reproduce Anderson et al. 2009's measured EUV deprotection blur (see note
+    # above)
+    peb_D: float = 3.3
     # peb_k STATUS (2026-09-02): UNCITED. A real EUV-adjacent kinetics study
     # was found -- Prabhu, V. M. et al. (NIST), "Characterization of the
     # Photoacid Diffusion Length and Reaction Kinetics in EUV Photoresists
@@ -452,9 +465,18 @@ class SimulationConfig:
     # ADOPTED as the new default for the same reason as dill_Q above: this
     # is Yamamoto et al. 2011's own real, cited Arrhenius-derived rate (kJ/mol
     # reading, see above), not a new or re-guessed number.
-    peb_k: float = 0.0723  # Deprotection rate constant [s⁻¹] -- Yamamoto et al. 2011's own Arrhenius fit (Ea=27.8 kJ/mol, ln(Ar)=6.1/s) evaluated at their own PEB condition (110C); see note above for the unit-ambiguity resolution and why this is now adopted (works with the depth-resolved MackModel chain, did not with the old simplified one). CAVEAT 2026-09-05: the paper's own Fig. 4 Arrhenius plot gives Kdp(110C) ~ 1.4 s^-1 for this polymer (axis-calibrated reading), 19x this value; together with the missing acid-loss term this is why the chain deprotects ~3.4x too little against Figs. 3/5 -- see the dill_A caveat and tests/test_yamamoto_anchor.py
+    # Deprotection rate constant [s⁻¹] -- Yamamoto et al. 2011's own Arrhenius fit (Ea=27.8 kJ/mol,
+    # ln(Ar)=6.1/s) evaluated at their own PEB condition (110C); see note above for the
+    # unit-ambiguity resolution and why this is now adopted (works with the depth-resolved MackModel
+    # chain, did not with the old simplified one). CAVEAT 2026-09-05: the paper's own Fig. 4
+    # Arrhenius plot gives Kdp(110C) ~ 1.4 s^-1 for this polymer (axis-calibrated reading), 19x this
+    # value; together with the missing acid-loss term this is why the chain deprotects ~3.4x too
+    # little against Figs. 3/5 -- see the dill_A caveat and tests/test_yamamoto_anchor.py
+    peb_k: float = 0.0723
     peb_t_bake: float = 60.0  # Bake time [s]
-    peb_sigma_diff: float | None = None  # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see note above
+    # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see
+    # note above
+    peb_sigma_diff: float | None = None
 
     # Mack development parameters.
     #
@@ -643,8 +665,20 @@ class SimulationConfig:
     # degeneracy's root cause is peb_k/dill_Q, not dill_C/mack_M_th, per the
     # quantified analysis below) and means adopting these values is safe:
     # it does not silently change any already-reported simulation result.
-    mack_R_max: float = 68.6  # Max development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_min/Mth/n); cross-validated in order of magnitude by Vesters et al. 2017 (174-241 nm/s) and Itani et al. 2008 (85-93 nm/s). Wired into the level-set development front via MackModel/surface_advancement_level_set since round 9's CD=64nm degeneracy fix (see note below) -- DOES affect simulation output (verified: mack_R_max=68.6/10/200 -> CD=36.5/64.0/29.5nm at defaults); an earlier version of this comment ("currently has no effect") predated that wiring and was stale, corrected 2026-09-04
-    mack_R_min: float = 0.10  # Min development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/Mth/n); matches Itani et al. 2008's molecular-resist value (0.1) exactly, within Vesters et al. 2017's order of magnitude (0.012-0.017). DOES affect simulation output (verified: mack_R_min=0.10/1.0/5.0 -> CD=36.5/30.5/0.0nm at defaults); see mack_R_max comment above for why an older "no effect" claim here was stale and has been corrected
+    # Max development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with
+    # dill_A/B/C and mack_R_min/Mth/n); cross-validated in order of magnitude by Vesters et al. 2017
+    # (174-241 nm/s) and Itani et al. 2008 (85-93 nm/s). Wired into the level-set development front
+    # via MackModel/surface_advancement_level_set since round 9's CD=64nm degeneracy fix (see note
+    # below) -- DOES affect simulation output (verified: mack_R_max=68.6/10/200 ->
+    # CD=36.5/64.0/29.5nm at defaults); an earlier version of this comment ("currently has no
+    # effect") predated that wiring and was stale, corrected 2026-09-04
+    mack_R_max: float = 68.6
+    # Min development rate [nm/s] -- Yamamoto et al. 2011 (EUV-native, self-consistent with
+    # dill_A/B/C and mack_R_max/Mth/n); matches Itani et al. 2008's molecular-resist value (0.1)
+    # exactly, within Vesters et al. 2017's order of magnitude (0.012-0.017). DOES affect simulation
+    # output (verified: mack_R_min=0.10/1.0/5.0 -> CD=36.5/30.5/0.0nm at defaults); see mack_R_max
+    # comment above for why an older "no effect" claim here was stale and has been corrected
+    mack_R_min: float = 0.10
     # PRIMARY-SOURCE RE-VERIFICATION (2026-09-04, scientific-development mandate
     # Phase 3): re-fetched Yamamoto et al. 2011 directly from J-STAGE (open
     # access, https://www.jstage.jst.go.jp/article/photopolymer/24/4/24_4_405/_pdf)
@@ -683,8 +717,19 @@ class SimulationConfig:
     # Conclusion: KEPT UNCHANGED. This is a correctly-sourced, correctly-used
     # real value; the sensitivity it produces is a genuine property of this
     # specific resist's contrast, not a bug to fix or a number to adjust.
-    mack_n: float = 18.2  # Dissolution selectivity (contrast) -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/Mth); notably steeper than Itani et al. 2008's PHS value (2.5) or Mack's generic textbook 5 -- flagged, not silently trusted. DOES affect simulation output (verified: mack_n=18.2/5.0/40.0 -> CD=36.5/0.0/60.0nm at defaults); see mack_R_max comment above for why an older "no effect" claim here was stale and has been corrected; see the primary-source re-verification note directly above for the quantified reason this value makes CD so sensitive
-    mack_M_th: float = 0.39  # Threshold inhibitor concentration -- Yamamoto et al. 2011 (EUV-native, self-consistent with dill_A/B/C and mack_R_max/R_min/n); first real EUV-native value found for this parameter (previously Mack's own generic textbook illustration, 0.5); used by the full_chem development step
+    # Dissolution selectivity (contrast) -- Yamamoto et al. 2011 (EUV-native, self-consistent with
+    # dill_A/B/C and mack_R_max/R_min/Mth); notably steeper than Itani et al. 2008's PHS value (2.5)
+    # or Mack's generic textbook 5 -- flagged, not silently trusted. DOES affect simulation output
+    # (verified: mack_n=18.2/5.0/40.0 -> CD=36.5/0.0/60.0nm at defaults); see mack_R_max comment
+    # above for why an older "no effect" claim here was stale and has been corrected; see the
+    # primary-source re-verification note directly above for the quantified reason this value makes
+    # CD so sensitive
+    mack_n: float = 18.2
+    # Threshold inhibitor concentration -- Yamamoto et al. 2011 (EUV-native, self-consistent with
+    # dill_A/B/C and mack_R_max/R_min/n); first real EUV-native value found for this parameter
+    # (previously Mack's own generic textbook illustration, 0.5); used by the full_chem development
+    # step
+    mack_M_th: float = 0.39
 
     # Depth-resolved exposure/development parameters (2026-09-03, round 9 --
     # added when wiring dill_abc_exposure()/MackModel into the full_chem
@@ -703,8 +748,12 @@ class SimulationConfig:
     #   develop_time_s: the paper's own dissolution-rate measurement
     #   (Sec. 2, the same measurement Table 2's Rmax/Rmin/Mth/n are fit
     #   from) developed in NMD-3 (2.38% TMAH) for 30s at 23C.
-    resist_thickness_nm: float = 50.0  # Resist film thickness [nm] -- Yamamoto et al. 2011's own better-resolved PROLITH case (26nm showed sidewall bridging in their own results); see note above
-    develop_time_s: float = 30.0  # Development time [s] -- Yamamoto et al. 2011's own dissolution-rate measurement condition (NMD-3, 2.38% TMAH, 23C), self-consistent with mack_R_max/R_min/Mth/n above; see note above
+    # Resist film thickness [nm] -- Yamamoto et al. 2011's own better-resolved PROLITH case (26nm
+    # showed sidewall bridging in their own results); see note above
+    resist_thickness_nm: float = 50.0
+    # Development time [s] -- Yamamoto et al. 2011's own dissolution-rate measurement condition
+    # (NMD-3, 2.38% TMAH, 23C), self-consistent with mack_R_max/R_min/Mth/n above; see note above
+    develop_time_s: float = 30.0
     # Development front model (2026-09-04). "eikonal": the dissolution front is
     # an isotropic wave with local speed R(M); its first-arrival time obeys
     # |∇T| = 1/R with T = 0 on the top surface (fast sweeping, Zhao 2005) --
@@ -717,7 +766,10 @@ class SimulationConfig:
     # model artificially keeps lines alive that lateral development would
     # erode (Fortsetzung 14): it is NOT a physical development model.
     development_model: str = "eikonal"
-    n_develop_layers: int = 21  # Number of depth layers for the resolved exposure/PEB/development chain -- a NUMERICAL resolution choice, not a physical parameter; matches this codebase's own n_rcwa_orders convention, not independently cited
+    # Number of depth layers for the resolved exposure/PEB/development chain -- a NUMERICAL
+    # resolution choice, not a physical parameter; matches this codebase's own n_rcwa_orders
+    # convention, not independently cited
+    n_develop_layers: int = 21
 
     # ─────────────────────────────────────────────────────────────────
     # RESOLVED (2026-09-03, round 9): `full_chem`'s CD=64.0nm degeneracy.
@@ -879,10 +931,16 @@ class SimulationConfig:
     #    No freely available single source with exposure + PEB + quenching +
     #    development parameters for one real resist was found (see
     #    docs/claude_code_arbeitslog.md "Fortsetzung 7").
-    exposure_stochasticity: bool = False  # ON = sample discrete PAG/quencher populations instead of mean-field acid; see note above
-    pag_density_per_nm3: float = 0.2  # Initial PAG number density [nm^-3] -- Mack, Biafore & Smith 2011 Table I; see note above
-    quencher_density_per_nm3: float = 0.0  # Initial quencher (base) number density [nm^-3]; 0 = the quencher-free chemistry of the Yamamoto 2011 parameter set -- see note above (Mack 2011 Table I would be 0.05)
-    acid_base_quench_rate_nm3_per_s: float = 15.0  # Acid-base quenching rate constant [nm^3/s] -- same source/table
+    # ON = sample discrete PAG/quencher populations instead of mean-field acid; see note above
+    exposure_stochasticity: bool = False
+    # Initial PAG number density [nm^-3] -- Mack, Biafore & Smith 2011 Table I; see note above
+    pag_density_per_nm3: float = 0.2
+    # Initial quencher (base) number density [nm^-3]; 0 = the quencher-free chemistry of the
+    # Yamamoto 2011 parameter set -- see note above (Mack 2011 Table I would be 0.05)
+    quencher_density_per_nm3: float = 0.0
+    acid_base_quench_rate_nm3_per_s: float = (
+        15.0  # Acid-base quenching rate constant [nm^3/s] -- same source/table
+    )
 
     # Mask-3D / RCWA parameters (Phase 4)
     use_rcwa: bool = False  # Use full RCWA instead of thin-mask analytic
@@ -1042,20 +1100,23 @@ def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False):
 
     With ``return_arrival=True`` also returns the bottom-layer arrival-time
     row field (H, W) for the Eikonal model, or ``None`` for the column model
-    (which has no lateral information; its CD stays pixel-quantised)."""
+    (which has no lateral information; its CD stays pixel-quantised).
+    """
     if cfg.development_model == "eikonal":
         depth, T = eikonal_development(
             inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s, return_arrival=True
         )
         return (depth, T[-1]) if return_arrival else depth
-    depth = surface_advancement_level_set(inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s)
+    depth = surface_advancement_level_set(
+        inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
+    )
     return (depth, None) if return_arrival else depth
-
 
 
 def _peb_blur_radius_px(cfg, dx_nm: float) -> int:
     """Half-width [px] of the lateral PEB Gaussian exactly as gaussian_se_blur
-    truncates it (4 sigma, rounded), or 0 when the PEB does not blur."""
+    truncates it (4 sigma, rounded), or 0 when the PEB does not blur.
+    """
     sigma = None
     if cfg.peb_sigma_diff is not None and cfg.peb_sigma_diff > 0:
         sigma = float(cfg.peb_sigma_diff)
@@ -1093,7 +1154,15 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
     radius = _peb_blur_radius_px(cfg, dx_nm)
     halo = radius + 1 if radius > 0 else 0
     tile_rows = max(int(tile_rows), halo)
-    n_tiles = max(1, math.ceil(H / tile_rows))
+    # Rows are distributed evenly over floor(H / tile_rows) tiles so that EVERY
+    # tile (including the last) has at least tile_rows >= halo rows -- a short
+    # remainder tile would otherwise contribute fewer halo rows than assumed
+    # and misalign the interior slice.
+    n_tiles = max(1, H // tile_rows)
+    base, extra = divmod(H, n_tiles)
+    bounds = [0]
+    for t in range(n_tiles):
+        bounds.append(bounds[-1] + base + (1 if t < extra else 0))
     thickness_um = cfg.resist_thickness_nm / 1000.0
     alpha = cfg.dill_A + cfg.dill_B  # [1/um]
     z_um = torch.linspace(0.0, thickness_um, n_layers, device=d_eff.device)
@@ -1109,7 +1178,7 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
             tile_gens.append(g)
 
     def tile_rows_of(t):
-        return t * tile_rows, min((t + 1) * tile_rows, H)
+        return bounds[t], bounds[t + 1]
 
     def sampled_tile(t):
         """Acid/quencher sample of whole tile t (own generator, reproducible)."""
@@ -1180,6 +1249,7 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
         depth_parts.append(depth[halo : halo + n_int])
     return torch.cat(depth_parts, dim=0)
 
+
 def _cd_via_full_chem(
     aerial: torch.Tensor,
     cfg: SimulationConfig,
@@ -1230,6 +1300,7 @@ def _cd_via_full_chem(
 
     # Apply SE blur to dose map (this is what resist sees)
     from euvsimulator.resist.exposure import gaussian_se_blur
+
     if cfg.se_blur_nm > 0.0:
         dose_map_blurred = gaussian_se_blur(dose_map, sigma=cfg.se_blur_nm, dx=dx_nm)
     else:
@@ -1248,7 +1319,9 @@ def _cd_via_full_chem(
     # fully-protected M=1 start, not during exposure itself (matching the
     # pre-existing 2D chain's own convention, unchanged here).
     n_layers = max(int(cfg.n_develop_layers), 2)
-    dz_nm = cfg.resist_thickness_nm / (n_layers - 1)  # layer spacing [nm]; used by PEB (z-diffusion) and development
+    dz_nm = cfg.resist_thickness_nm / (
+        n_layers - 1
+    )  # layer spacing [nm]; used by PEB (z-diffusion) and development
     acid_3d, _ = dill_abc_exposure(
         dose_map_blurred,
         A=cfg.dill_A,
@@ -1277,10 +1350,10 @@ def _cd_via_full_chem(
     )
 
     # Continuous Mack development, time-integrated through the resist depth.
-    mack = MackModel(
-        R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, n=cfg.mack_n, M_th=cfg.mack_M_th
+    mack = MackModel(R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, n=cfg.mack_n, M_th=cfg.mack_M_th)
+    depth_map, arrival_bottom = _develop_depth(
+        inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=True
     )
-    depth_map, arrival_bottom = _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=True)
     # Resist-Profil für Visualisierung (1 = developed/dissolved all the way
     # through the film, 0 = undeveloped/remaining) -- same binary semantics
     # as the previous threshold_development() output, now derived from a
@@ -1362,7 +1435,14 @@ def _cd_via_full_chem(
             # 61440-row LER fields never hold the full 3D stack (see
             # _noisy_depth_map). Same physics as the deterministic path.
             depth_map_noisy = _noisy_depth_map(
-                d_eff, cfg, n_layers=n_layers, dx_nm=dx_nm, dz_nm=dz_nm, q0_rel=q0_rel, mack=mack, rng=rng
+                d_eff,
+                cfg,
+                n_layers=n_layers,
+                dx_nm=dx_nm,
+                dz_nm=dz_nm,
+                q0_rel=q0_rel,
+                mack=mack,
+                rng=rng,
             )
             # developed is left as the raw continuous depth field here
             # (NOT pre-binarised) so extract_ler/lwr's own `developed >
@@ -1414,7 +1494,9 @@ def _cd_via_full_chem(
             # field), aggregated over seeds (between-seed SE/CI).
             est = ler_estimate(
                 dev_fields,
-                threshold=edge_threshold,  # defined in the loop above; constant across realisations (depends only on cfg.development_stochasticity)
+                # defined in the loop above; constant across realisations (depends only on
+                # cfg.development_stochasticity)
+                threshold=edge_threshold,
                 dx=dx_nm,
                 intensity=intensity_fields,
                 edge="both",
@@ -1440,7 +1522,8 @@ def _cd_via_full_chem(
                 # nonlinearities on the noise; converges to cd_nm as the
                 # molecule density -> inf (tests/test_stochastic_consistency.py).
                 "stochastic_cd_nm": float(torch.tensor(stochastic_cd_vals).nanmean())
-                if stochastic_cd_vals else float("nan"),
+                if stochastic_cd_vals
+                else float("nan"),
             }
         else:
             ler_nm = float(torch.tensor(ler_vals).nanmean())
@@ -1467,7 +1550,9 @@ def _cd_via_full_chem(
             # which made every CD-vs-parameter curve a staircase (and
             # `euv calibrate` blind on coarse grids, 2026-09-05). Falls back
             # to the pixel count if the interpolation finds no line.
-            x_l, x_r = edge_positions_from_arrival(arrival_bottom[half, :], cfg.develop_time_s, dx_nm)
+            x_l, x_r = edge_positions_from_arrival(
+                arrival_bottom[half, :], cfg.develop_time_s, dx_nm
+            )
             if x_r == x_r and x_l == x_l:
                 cd_nm = x_r - x_l
         # NILS at the printed edges: the image intensity at the boundary
@@ -1628,7 +1713,7 @@ def run_simulation(
     order_indices = list(range(-n_orders, n_orders + 1))
 
     if cfg.use_rcwa:
-        from euvsimulator.mask3d.geometry import build_permittivity_profile, MaskLayer, MaskStack
+        from euvsimulator.mask3d.geometry import MaskLayer, MaskStack, build_permittivity_profile
         from euvsimulator.mask3d.rcwa_torch import RCWA1D, RCWAConfig
 
         # Build mask stack WITHOUT Ru in the absorber layers.

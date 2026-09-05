@@ -289,10 +289,11 @@ class TestTMFormulation:
     def test_tm_equals_te_at_normal_incidence(self):
         """For a homogeneous slab at normal incidence, TE and TM must be
         degenerate (identical R0). This is a fundamental electromagnetic
-        symmetry for isotropic media."""
+        symmetry for isotropic media.
+        """
         period = 200e-9
         n_mat = 0.94 + 0.03j  # Ta-like absorber at EUV
-        eps_mat = n_mat ** 2
+        eps_mat = n_mat**2
 
         profile = torch.full((256,), eps_mat, dtype=torch.complex128)
 
@@ -316,10 +317,11 @@ class TestTMFormulation:
 
     def test_tm_physical_reflectivity(self):
         """For a passive (absorbing) structure, |R_m|^2 must be <= 1 for all
-        orders. The old TM solver produced |R_0|^2 > 1 for many configurations."""
+        orders. The old TM solver produced |R_0|^2 > 1 for many configurations.
+        """
         period = 200e-9
         n_mat = 0.94 + 0.03j
-        eps_mat = n_mat ** 2
+        eps_mat = n_mat**2
         profile = torch.full((256,), eps_mat, dtype=torch.complex128)
         d = torch.tensor([50e-9], dtype=torch.float64)
 
@@ -331,18 +333,17 @@ class TestTMFormulation:
         eff = RCWA1D(cfg).diffraction_efficiency(orders)
 
         for m, r in eff.items():
-            assert r <= 1.0 + 1e-10, (
-                f"TM R({m}) = {r:.6f} > 1 (unphysical for passive structure)"
-            )
+            assert r <= 1.0 + 1e-10, f"TM R({m}) = {r:.6f} > 1 (unphysical for passive structure)"
 
     def test_tm_matches_tmm_uniform_slab(self):
         """TM RCWA for a uniform slab should match transfer-matrix (TMM)
-        reflectivity at multiple incidence angles."""
+        reflectivity at multiple incidence angles.
+        """
         from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
 
         period = 200e-9
         n_mat = 0.94 + 0.03j
-        eps_mat = n_mat ** 2
+        eps_mat = n_mat**2
         profile = torch.full((256,), eps_mat, dtype=torch.complex128)
         d_m = 50e-9
         d_t = torch.tensor([d_m], dtype=torch.float64)
@@ -358,7 +359,8 @@ class TestTMFormulation:
             R_tmm, _ = tmm_reflectivity(
                 torch.tensor([n_mat], dtype=torch.complex128),
                 torch.tensor([d_m], dtype=torch.float64),
-                wl, theta,
+                wl,
+                theta,
                 n_incident=torch.tensor(1.0 + 0.0j, dtype=torch.complex128),
                 n_substrate=torch.tensor(1.0 + 0.0j, dtype=torch.complex128),
                 te=False,
@@ -377,13 +379,15 @@ class TestTMFormulation:
 
     def test_tm_fresnel_bare_interface(self):
         """TM RCWA for a bare substrate (zero-thickness layer) should match
-        Fresnel TM reflection coefficient at oblique incidence."""
-        from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
+        Fresnel TM reflection coefficient at oblique incidence.
+        """
         import math
+
+        from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
 
         period = 200e-9
         n_sub = 1.46
-        eps_sub = n_sub ** 2
+        eps_sub = n_sub**2
         profile = torch.full((256,), eps_sub, dtype=torch.complex128)
         d = torch.tensor([0.0], dtype=torch.float64)
 
@@ -398,7 +402,7 @@ class TestTMFormulation:
             n1, n2 = 1.0, n_sub
             cos_i = math.cos(math.radians(theta_deg))
             sin_t = n1 / n2 * math.sin(math.radians(theta_deg))
-            cos_t = math.sqrt(1 - sin_t ** 2) if sin_t <= 1 else 0.0
+            cos_t = math.sqrt(1 - sin_t**2) if sin_t <= 1 else 0.0
             r_p = (n2 * cos_i - n1 * cos_t) / (n2 * cos_i + n1 * cos_t)
 
             # RCWA TM
@@ -414,14 +418,17 @@ class TestTMFormulation:
 
     def test_tm_te_both_physical_for_binary_grating(self):
         """For a binary grating (lossless or absorbing), both TE and TM
-        must give physically reasonable reflectivities (R_m <= 1)."""
+        must give physically reasonable reflectivities (R_m <= 1).
+        """
         period = 64e-9
         eps_line = (0.94 + 0.03j) ** 2  # Ta-like absorber
         eps_space = 1.0 + 0.0j
 
         profile = binary_grating_profile(
-            period=period, fill_width=32e-9,
-            eps_line=eps_line, eps_space=eps_space,
+            period=period,
+            fill_width=32e-9,
+            eps_line=eps_line,
+            eps_space=eps_space,
             n_samples=1024,
         )
         d = torch.tensor([60e-9], dtype=torch.float64)
@@ -432,9 +439,7 @@ class TestTMFormulation:
             eff = RCWA1D(cfg).diffraction_efficiency(orders)
 
             for m, r in eff.items():
-                assert r <= 1.0 + 1e-10, (
-                    f"{pol} R({m}) = {r:.6f} > 1 (unphysical)"
-                )
+                assert r <= 1.0 + 1e-10, f"{pol} R({m}) = {r:.6f} > 1 (unphysical)"
 
 
 class TestHomogeneousSlabFresnel:
@@ -472,11 +477,12 @@ class TestHomogeneousSlabFresnel:
         self, n_re, n_im, label, wavelength_m, thickness_nm, theta_deg, te
     ):
         import math
+
         from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
 
         period = 200e-9  # large -> no grating coupling
         n_mat = complex(n_re, n_im)  # n+ik convention
-        eps_mat = n_mat ** 2
+        eps_mat = n_mat**2
 
         # RCWA: direct eps profile (bypasses geometry.py)
         profile = torch.full((256,), eps_mat, dtype=torch.complex128)
@@ -484,7 +490,9 @@ class TestHomogeneousSlabFresnel:
         n_i = torch.tensor([1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128)
         n_s = torch.tensor([1.0 + 0.0j, 1.0 + 0.0j], dtype=torch.complex128)
 
-        cfg = RCWAConfig(n_orders=21, theta=theta_deg, polarization="TE" if te else "TM", device="cpu")
+        cfg = RCWAConfig(
+            n_orders=21, theta=theta_deg, polarization="TE" if te else "TM", device="cpu"
+        )
         orders = RCWA1D(cfg).solve(profile, d, period, n_incident=n_i, n_substrate=n_s)
         r0_rcwa = abs(orders[cfg.n_orders // 2]) ** 2
 
@@ -494,7 +502,10 @@ class TestHomogeneousSlabFresnel:
         n_tmm = torch.tensor([n_mat], dtype=torch.complex128)
         d_tmm = torch.tensor([thickness_nm * 1e-9], dtype=torch.float64)
         R_tmm, _ = tmm_reflectivity(
-            n_tmm, d_tmm, wl_t, theta_t,
+            n_tmm,
+            d_tmm,
+            wl_t,
+            theta_t,
             n_incident=torch.tensor(1.0 + 0.0j),
             n_substrate=torch.tensor(1.0 + 0.0j),
             te=te,
@@ -531,41 +542,53 @@ class TestMLReflectionOperator:
 
     def test_planar_stack_matches_tmm(self):
         """RCWA (uniform profile, no grating) + ML operator vs TMM
-        for the full ML stack at multiple angles and both polarizations."""
+        for the full ML stack at multiple angles and both polarizations.
+        """
         import math
+
+        from euvsimulator.materials import CXROTable
         from euvsimulator.optics.multilayer import mo_si_stack
         from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
-        from euvsimulator.materials import CXROTable
 
         table = CXROTable()
-        ml = mo_si_stack(n_bilayers=50, d_mo_nm=2.8, d_si_nm=4.1,
-                          capping_layer='Ru', d_cap_nm=2.5, energy_eV=91.84, table=table)
-        n_si = complex(*table.refractive_index('Si', 91.84))
+        ml = mo_si_stack(
+            n_bilayers=50,
+            d_mo_nm=2.8,
+            d_si_nm=4.1,
+            capping_layer="Ru",
+            d_cap_nm=2.5,
+            energy_eV=91.84,
+            table=table,
+        )
+        n_si = complex(*table.refractive_index("Si", 91.84))
         n_sub_t = torch.tensor([n_si], dtype=torch.complex128)
         wl_t = torch.tensor([13.5e-9], dtype=torch.float64)
 
         period = 200e-9  # large -> no grating coupling
         # Uniform profile: just the top of ML (Ru) permittivity
-        n_ru = complex(*table.refractive_index('Ru', 91.84))
-        eps_ru = n_ru ** 2
+        n_ru = complex(*table.refractive_index("Ru", 91.84))
+        eps_ru = n_ru**2
         profile = torch.full((256,), eps_ru, dtype=torch.complex128)
         d = torch.tensor([0.0], dtype=torch.float64)  # zero thickness
 
         for theta_deg in [0.0, 6.0, 12.0, 30.0]:
             theta_t = torch.tensor([math.radians(theta_deg)], dtype=torch.float64)
-            for pol in ['TE', 'TM']:
+            for pol in ["TE", "TM"]:
                 # RCWA + ML operator
-                cfg = RCWAConfig(n_orders=11, theta=theta_deg, polarization=pol, device='cpu')
+                cfg = RCWAConfig(n_orders=11, theta=theta_deg, polarization=pol, device="cpu")
                 solver = RCWA1D(cfg)
                 orders = solver.solve(profile, d, period, ml_stack=ml)
                 r0_rcwa = orders[cfg.n_orders // 2]
 
                 # TMM reference
                 R_tmm, r_tmm = tmm_reflectivity(
-                    ml.n_layers, ml.thicknesses, wl_t, theta_t,
-                    n_incident=torch.tensor(1.0+0.0j),
+                    ml.n_layers,
+                    ml.thicknesses,
+                    wl_t,
+                    theta_t,
+                    n_incident=torch.tensor(1.0 + 0.0j),
                     n_substrate=n_sub_t,
-                    te=(pol == 'TE'),
+                    te=(pol == "TE"),
                 )
 
                 # Compare complex r (not just intensity)
@@ -573,7 +596,7 @@ class TestMLReflectionOperator:
                 # while TMM reference plane is at the vacuum interface.
                 # The phase differs by the Ru cap propagation phase.
                 # For the intensity comparison, this is irrelevant.
-                R_rcwa = abs(r0_rcwa)**2
+                R_rcwa = abs(r0_rcwa) ** 2
                 abs_diff = abs(R_rcwa - R_tmm.item())
                 rel_diff = abs_diff / max(R_tmm.item(), 1e-30)
                 assert rel_diff < 0.1, (
@@ -584,30 +607,40 @@ class TestMLReflectionOperator:
 
     def test_ml_reflection_phase(self):
         """Verify that the ML operator produces a complex r that matches
-        the TMM within a physically reasonable phase tolerance."""
+        the TMM within a physically reasonable phase tolerance.
+        """
         import math
-        from euvsimulator.optics.multilayer import mo_si_stack
-        from euvsimulator.optics.tmm import reflectivity_at_kx, reflectivity
+
         from euvsimulator.materials import CXROTable
+        from euvsimulator.optics.multilayer import mo_si_stack
+        from euvsimulator.optics.tmm import reflectivity, reflectivity_at_kx
 
         table = CXROTable()
-        ml = mo_si_stack(n_bilayers=50, d_mo_nm=2.8, d_si_nm=4.1,
-                          capping_layer='Ru', d_cap_nm=2.5, energy_eV=91.84, table=table)
-        n_si = complex(*table.refractive_index('Si', 91.84))
+        ml = mo_si_stack(
+            n_bilayers=50,
+            d_mo_nm=2.8,
+            d_si_nm=4.1,
+            capping_layer="Ru",
+            d_cap_nm=2.5,
+            energy_eV=91.84,
+            table=table,
+        )
+        n_si = complex(*table.refractive_index("Si", 91.84))
 
         # TMM at 6 deg, TE (standard EUV reference)
         wl_t = torch.tensor([13.5e-9], dtype=torch.float64)
         theta_t = torch.tensor([math.radians(6.0)], dtype=torch.float64)
         R_tmm, r_tmm = reflectivity(
-            ml.n_layers, ml.thicknesses, wl_t, theta_t,
-            n_incident=torch.tensor(1.0+0.0j),
+            ml.n_layers,
+            ml.thicknesses,
+            wl_t,
+            theta_t,
+            n_incident=torch.tensor(1.0 + 0.0j),
             n_substrate=torch.tensor(n_si),
             te=True,
         )
         # Expected: R ≈ 0.647, r ≈ 0.56 + 0.58j
-        assert 0.60 <= R_tmm.item() <= 0.70, (
-            f"ML reference R = {R_tmm.item():.4f}, expected ~0.65"
-        )
+        assert 0.60 <= R_tmm.item() <= 0.70, f"ML reference R = {R_tmm.item():.4f}, expected ~0.65"
         assert abs(r_tmm.item().real) > 0.3, (
             f"ML reference r.real = {r_tmm.item().real:.4f}, expected ~0.56"
         )
@@ -618,32 +651,45 @@ class TestMLReflectionOperator:
     def test_ml_angle_scan_te(self):
         """Angle scan: RCWA + ML vs TMM for TE polarization."""
         import math
+
+        from euvsimulator.materials import CXROTable
         from euvsimulator.optics.multilayer import mo_si_stack
         from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
-        from euvsimulator.materials import CXROTable
 
         table = CXROTable()
-        ml = mo_si_stack(n_bilayers=50, d_mo_nm=2.8, d_si_nm=4.1,
-                          capping_layer='Ru', d_cap_nm=2.5, energy_eV=91.84, table=table)
-        n_si = complex(*table.refractive_index('Si', 91.84))
+        ml = mo_si_stack(
+            n_bilayers=50,
+            d_mo_nm=2.8,
+            d_si_nm=4.1,
+            capping_layer="Ru",
+            d_cap_nm=2.5,
+            energy_eV=91.84,
+            table=table,
+        )
+        n_si = complex(*table.refractive_index("Si", 91.84))
         n_sub_t = torch.tensor([n_si], dtype=torch.complex128)
         wl_t = torch.tensor([13.5e-9], dtype=torch.float64)
 
         period = 200e-9
-        n_ru = complex(*table.refractive_index('Ru', 91.84))
-        eps_ru = n_ru ** 2
+        n_ru = complex(*table.refractive_index("Ru", 91.84))
+        eps_ru = n_ru**2
         profile = torch.full((256,), eps_ru, dtype=torch.complex128)
         d = torch.tensor([0.0], dtype=torch.float64)
 
         for theta_deg in [0.0, 4.0, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0]:
             theta_t = torch.tensor([math.radians(theta_deg)], dtype=torch.float64)
-            cfg = RCWAConfig(n_orders=11, theta=theta_deg, polarization='TE', device='cpu')
+            cfg = RCWAConfig(n_orders=11, theta=theta_deg, polarization="TE", device="cpu")
             orders = RCWA1D(cfg).solve(profile, d, period, ml_stack=ml)
-            R_rcwa = abs(orders[cfg.n_orders // 2])**2
+            R_rcwa = abs(orders[cfg.n_orders // 2]) ** 2
 
             R_tmm, _ = tmm_reflectivity(
-                ml.n_layers, ml.thicknesses, wl_t, theta_t,
-                n_incident=torch.tensor(1.0+0.0j), n_substrate=n_sub_t, te=True,
+                ml.n_layers,
+                ml.thicknesses,
+                wl_t,
+                theta_t,
+                n_incident=torch.tensor(1.0 + 0.0j),
+                n_substrate=n_sub_t,
+                te=True,
             )
 
             rel_diff = abs(R_rcwa - R_tmm.item()) / max(R_tmm.item(), 1e-30)
@@ -655,9 +701,10 @@ class TestMLReflectionOperator:
     def test_ml_wavelength_scan(self):
         """Wavelength scan: RCWA + ML should reproduce the Bragg peak."""
         import math
+
+        from euvsimulator.materials import CXROTable
         from euvsimulator.optics.multilayer import mo_si_stack
         from euvsimulator.optics.tmm import reflectivity as tmm_reflectivity
-        from euvsimulator.materials import CXROTable
 
         table = CXROTable()
         period = 200e-9
@@ -665,25 +712,36 @@ class TestMLReflectionOperator:
 
         for wl_nm in [13.0, 13.2, 13.4, 13.5, 13.6, 13.8, 14.0]:
             energy_eV = 1239.84193 / wl_nm
-            ml = mo_si_stack(n_bilayers=50, d_mo_nm=2.8, d_si_nm=4.1,
-                              capping_layer='Ru', d_cap_nm=2.5, energy_eV=energy_eV, table=table)
-            n_ru = complex(*table.refractive_index('Ru', energy_eV))
-            eps_ru = n_ru ** 2
+            ml = mo_si_stack(
+                n_bilayers=50,
+                d_mo_nm=2.8,
+                d_si_nm=4.1,
+                capping_layer="Ru",
+                d_cap_nm=2.5,
+                energy_eV=energy_eV,
+                table=table,
+            )
+            n_ru = complex(*table.refractive_index("Ru", energy_eV))
+            eps_ru = n_ru**2
             profile = torch.full((256,), eps_ru, dtype=torch.complex128)
 
             wl_m = wl_nm * 1e-9
-            cfg = RCWAConfig(n_orders=11, theta=6.0, polarization='TE', device='cpu',
-                              wavelength=wl_m)
+            cfg = RCWAConfig(
+                n_orders=11, theta=6.0, polarization="TE", device="cpu", wavelength=wl_m
+            )
             orders = RCWA1D(cfg).solve(profile, d, period, ml_stack=ml)
-            R_rcwa = abs(orders[cfg.n_orders // 2])**2
+            R_rcwa = abs(orders[cfg.n_orders // 2]) ** 2
 
             # TMM reference at this wavelength
-            n_si = complex(*table.refractive_index('Si', energy_eV))
+            n_si = complex(*table.refractive_index("Si", energy_eV))
             wl_t = torch.tensor([wl_m], dtype=torch.float64)
             theta_t = torch.tensor([math.radians(6.0)], dtype=torch.float64)
             R_tmm, _ = tmm_reflectivity(
-                ml.n_layers, ml.thicknesses, wl_t, theta_t,
-                n_incident=torch.tensor(1.0+0.0j),
+                ml.n_layers,
+                ml.thicknesses,
+                wl_t,
+                theta_t,
+                n_incident=torch.tensor(1.0 + 0.0j),
                 n_substrate=torch.tensor(n_si, dtype=torch.complex128),
                 te=True,
             )

@@ -163,7 +163,12 @@ def aerial_from_orders(
 
     # Pre-compute the TCC matrix via exact 2D source-pupil overlap (P1-1 fix)
     tcc_matrix = _compute_tcc_matrix(
-        order_indices, sigma, na, wavelength_m, period_m, device=device,
+        order_indices,
+        sigma,
+        na,
+        wavelength_m,
+        period_m,
+        device=device,
         illumination_shape=illumination_shape,  # P1-3: pass shape to TCC
     )
 
@@ -579,8 +584,7 @@ def _compute_tcc_matrix(
     else:
         supported = ["conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"]
         raise ValueError(
-            f"Unknown illumination_shape {illumination_shape!r}. "
-            f"Supported shapes: {supported}"
+            f"Unknown illumination_shape {illumination_shape!r}. Supported shapes: {supported}"
         )
 
     S_sum = S.sum()

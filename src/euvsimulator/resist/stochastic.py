@@ -331,13 +331,7 @@ def photon_deposition_shot_noise(
     # 1. Mean photon count per voxel
     dy = dy_nm if dy_nm is not None else dx_nm
     voxel_area_cm2 = dx_nm * dy * 1e-14  # (nm * nm) * 1e-14 = cm²
-    n_bar = (
-        dose
-        * voxel_area_cm2
-        * dose_to_energy_factor
-        / photon_energy_eV
-        * absorption
-    )
+    n_bar = dose * voxel_area_cm2 * dose_to_energy_factor / photon_energy_eV * absorption
     n_bar = torch.clamp(n_bar, min=0.0)  # physical: no negative counts
 
     # 2. Discrete Poisson photon events
@@ -470,7 +464,7 @@ def extract_edges(
             rows = torch.nonzero(valid_left).flatten()
             i = left_idx[rows]
             a = I[rows, i - 1]  # developed neighbour
-            b = I[rows, i]      # undeveloped pixel
+            b = I[rows, i]  # undeveloped pixel
             denom = b - a
             frac = torch.where(
                 denom.abs() > 1e-12,
@@ -487,7 +481,7 @@ def extract_edges(
         if valid_right.any():
             rows = torch.nonzero(valid_right).flatten()
             i = right_idx[rows]
-            a = I[rows, i]      # undeveloped pixel
+            a = I[rows, i]  # undeveloped pixel
             b = I[rows, i + 1]  # developed neighbour
             denom = b - a
             frac = torch.where(
@@ -794,7 +788,9 @@ def ler_estimate(
             break
     l_int = 0.5 + float(rho_pooled[1:k_trunc].sum()) if k_trunc > 1 else 0.5
     neff = n_rows / (
-        1.0 + 2.0 * sum((1.0 - k / n_rows) * float(rho_pooled[k]) for k in range(1, min(k_trunc, n_rows)))
+        1.0
+        + 2.0
+        * sum((1.0 - k / n_rows) * float(rho_pooled[k]) for k in range(1, min(k_trunc, n_rows)))
     )
 
     vals = torch.tensor([v for v in ler_per_real if not math.isnan(v)])

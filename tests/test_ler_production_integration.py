@@ -141,14 +141,19 @@ def _make_acid_large(dose_map, seed, n_real=1):
     rng = torch.Generator().manual_seed(seed)
     for _ in range(n_real):
         d_eff = photon_deposition_shot_noise(
-            dose_map, 5.0, dx_nm=DX, photon_energy_eV=E_PH,
-            dose_to_energy_factor=F, rng=rng,
+            dose_map,
+            5.0,
+            dx_nm=DX,
+            photon_energy_eV=E_PH,
+            dose_to_energy_factor=F,
+            rng=rng,
         )
         out.append(dose_to_acid(d_eff, C=0.05, Q=1.0, apply_blur=False))
     return out
 
 
 # ── 1. Legacy extraction unchanged ──────────────────────────────
+
 
 def test_legacy_extract_ler_unchanged():
     """extract_ler still returns the legacy RMS observable."""
@@ -164,6 +169,7 @@ def test_legacy_extract_ler_unchanged():
 
 # ── 2. Legacy production mode reproduces previous behavior ──────
 
+
 def test_legacy_mode_reproduces_previous_production():
     """estimator='legacy' must reproduce the exact previous production LER."""
     r1 = run_simulation(_car_cfg(stochastic_ler_estimator="legacy", stochastic_ler_grid_y=2048))
@@ -177,6 +183,7 @@ def test_legacy_mode_reproduces_previous_production():
 
 
 # ── 3/4. Default large-N mode and field size ────────────────────
+
 
 def test_default_large_n_mode():
     """Default uses estimator='large_n' and stochastic_ler_grid_y=4096."""
@@ -203,6 +210,7 @@ def test_field_size_4096():
 
 # ── 5/6. Configurable field sizes ───────────────────────────────
 
+
 def test_field_size_2048():
     r = run_simulation(_car_cfg(stochastic_ler_grid_y=2048))
     assert r.ler_metadata["n_rows"] == 2048
@@ -215,6 +223,7 @@ def test_field_size_6144():
 
 # ── 7. No artificial upper limit ────────────────────────────────
 
+
 def test_no_artificial_upper_limit():
     """grid_y=0 and invalid estimator fail transparently; no clamping."""
     with pytest.raises(ValueError):
@@ -225,10 +234,12 @@ def test_no_artificial_upper_limit():
 
 # ── 7b. Arbitrary N (STEP 5.2C: no 256-multiple requirement) ───
 
+
 @pytest.mark.parametrize("n", [256, 300, 1024, 2048, 3000, 4096, 6144, 61440])
 def test_arbitrary_n_rows(n):
     """Any positive grid_y must produce exactly n_rows == N (no clamping,
-    no padding, no fallback to 256)."""
+    no padding, no fallback to 256).
+    """
     r = run_simulation(_car_cfg(stochastic_ler_grid_y=n))
     m = r.ler_metadata
     assert m["n_rows"] == n
@@ -237,6 +248,7 @@ def test_arbitrary_n_rows(n):
 
 
 # ── 7c. Aerial y-invariance guard (STEP 5.2C) ───────────────────
+
 
 def test_aerial_y_invariance():
     """The arbitrary-N Y-extension is only justified while the aerial
@@ -255,6 +267,7 @@ def test_aerial_y_invariance():
 
 # ── 8/9. Deterministic block and blur equivalence ───────────────
 
+
 def test_deterministic_block_equivalence():
     aerial = _aerial()
     big = torch.tile(aerial, (8, 1))
@@ -265,11 +278,12 @@ def test_deterministic_block_equivalence():
     eb = gaussian_se_blur(nb, sigma=5.0, dx=DX)
     eb_big = gaussian_se_blur(nb_big, sigma=5.0, dx=DX)
     for i in range(8):
-        block = eb_big[i * 256:(i + 1) * 256, :]
+        block = eb_big[i * 256 : (i + 1) * 256, :]
         assert float((block - eb).abs().max()) == 0.0
 
 
 # ── 10. Stochastic non-periodicity ──────────────────────────────
+
 
 def test_stochastic_non_periodicity():
     aerial = _aerial() * 40.0
@@ -287,6 +301,7 @@ def test_stochastic_non_periodicity():
 
 
 # ── 11/12. Seed determinism and independence ────────────────────
+
 
 def test_same_seed_determinism():
     r1 = run_simulation(_car_cfg())
@@ -307,21 +322,19 @@ def test_different_seed_independence():
     dose_map = torch.tile(aerial.float(), (8, 1))
     rng1 = torch.Generator().manual_seed(90000)
     rng2 = torch.Generator().manual_seed(90001)
-    e1 = torch.poisson(
-        dose_map.double() * DX * DX * 1e-14 * F / E_PH, generator=rng1
-    )
-    e2 = torch.poisson(
-        dose_map.double() * DX * DX * 1e-14 * F / E_PH, generator=rng2
-    )
+    e1 = torch.poisson(dose_map.double() * DX * DX * 1e-14 * F / E_PH, generator=rng1)
+    e2 = torch.poisson(dose_map.double() * DX * DX * 1e-14 * F / E_PH, generator=rng2)
     frac = float((e1 != e2).float().mean())
     assert frac > 0.05  # statistically different realizations
 
 
 # ── 12b. Stochastic integrity at arbitrary N=3000 (STEP 5.2C) ──
 
+
 def test_stochastic_integrity_3000():
     """N=3000 (non-256-multiple): same-seed bitwise, different-seed
-    independent, no artificial 256-periodicity, no repeated noise blocks."""
+    independent, no artificial 256-periodicity, no repeated noise blocks.
+    """
     # same seed -> bitwise identical production run
     r1 = run_simulation(_car_cfg(stochastic_ler_grid_y=3000))
     r2 = run_simulation(_car_cfg(stochastic_ler_grid_y=3000))
@@ -361,6 +374,7 @@ def test_stochastic_integrity_3000():
 
 # ── 13. N_eff >= 30 ─────────────────────────────────────────────
 
+
 def test_neff_ge_30():
     # 2026-09-03 ("mach den stochastischen Pfad auch"): the plain default
     # (grid_y=4096) no longer reaches n_eff>=30 on its own -- the
@@ -380,6 +394,7 @@ def test_neff_ge_30():
 
 
 # ── 14. 2048→4096 convergence ───────────────────────────────────
+
 
 def test_convergence_2048_to_4096():
     aerial = _aerial() * 40.0
@@ -403,10 +418,12 @@ def test_convergence_2048_to_4096():
 
 # ── 15. Subsampling control ─────────────────────────────────────
 
+
 def test_subsampling_control():
     """Subsampled (spacing > L_int) rows must yield the same mean LER
     as the full sample, averaged over independent seeds (a single-field
-    comparison is dominated by estimation noise at N_eff~2)."""
+    comparison is dominated by estimation noise at N_eff~2).
+    """
     aerial = _aerial() * 40.0
     seeds = range(90000, 90010)
     full_vals, sub_vals = [], []
@@ -418,7 +435,9 @@ def test_subsampling_control():
             ler_estimate(dev, threshold=THRESH, dx=DX, intensity=acid, edge="both").ler_nm
         )
         sub_vals.append(
-            ler_estimate(dev[::64], threshold=THRESH, dx=DX, intensity=acid[::64], edge="both").ler_nm
+            ler_estimate(
+                dev[::64], threshold=THRESH, dx=DX, intensity=acid[::64], edge="both"
+            ).ler_nm
         )
     full_vals, sub_vals = np.array(full_vals), np.array(sub_vals)
     rel = abs(sub_vals.mean() - full_vals.mean()) / full_vals.mean() * 100
@@ -429,18 +448,24 @@ def test_subsampling_control():
 
 # ── 16. Correlation control ─────────────────────────────────────
 
+
 def test_correlation_control():
     aerial = _aerial() * 40.0
     dose_map = torch.tile(aerial.float(), (16, 1))
     acid = _make_acid_large(dose_map, 90000)[0]
     dev = (acid > THRESH).float()
-    ln = ler_estimate(dev, threshold=THRESH, dx=DX, intensity=acid, edge="both", estimator="large_n")
-    cc = ler_estimate(dev, threshold=THRESH, dx=DX, intensity=acid, edge="both", estimator="corr_corrected")
+    ln = ler_estimate(
+        dev, threshold=THRESH, dx=DX, intensity=acid, edge="both", estimator="large_n"
+    )
+    cc = ler_estimate(
+        dev, threshold=THRESH, dx=DX, intensity=acid, edge="both", estimator="corr_corrected"
+    )
     rel = abs(cc.ler_nm - ln.ler_nm) / ln.ler_nm * 100
     assert rel <= 3.0
 
 
 # ── 17. Same-N BC control ───────────────────────────────────────
+
 
 def test_same_n_bc_control():
     """BC test: same N, same seeds, same behavior regardless of field size."""
@@ -459,8 +484,9 @@ def test_same_n_bc_control():
         acid_large = _make_acid_large(dose_map, s)[0]
         dev_large = (acid_large > THRESH).float()
         v_large.append(
-            ler_estimate(dev_large[:256], threshold=THRESH, dx=DX,
-                         intensity=acid_large[:256], edge="both").ler_nm
+            ler_estimate(
+                dev_large[:256], threshold=THRESH, dx=DX, intensity=acid_large[:256], edge="both"
+            ).ler_nm
         )
     v_ref, v_large = np.array(v_ref), np.array(v_large)
     d = v_large - v_ref
@@ -472,13 +498,15 @@ def test_same_n_bc_control():
 
 # ── 18. Valid shift test (0/8 nm, geometrically valid) ──────────
 
+
 def test_valid_shift_08():
     """Shift invariance for the geometrically valid 0/8 nm range.
 
     STEP 3.10 established (N=500): global Δ=+0.38 % (t=1.09) — small,
     non-significant.  A 10-seed t-test is noise-dominated (per-seed
     differences are ~0.001 nm); 30 seeds bring t close to the
-    established value."""
+    established value.
+    """
     aerial = _aerial() * 40.0
     aer8 = torch.roll(aerial, int(8 / DX), dims=1)
     seeds = range(90000, 90030)
@@ -500,6 +528,7 @@ def test_valid_shift_08():
 
 # ── 19. Edge semantics ──────────────────────────────────────────
 
+
 def test_edge_both_equivalence():
     aerial = _aerial() * 40.0
     acid = _make_acid_large(torch.tile(aerial.float(), (8, 1)), 90000)[0]
@@ -511,8 +540,17 @@ def test_edge_both_equivalence():
 
 # ── 20. Deterministic observables unchanged ─────────────────────
 
+
 def test_deterministic_observables_unchanged():
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE, peb_sigma_diff=TEST_SIGMA))
+    r_no = run_simulation(
+        SimulationConfig(
+            resist_model="full_chem",
+            enable_stochastic=False,
+            se_blur_nm=5.0,
+            dose_mj_cm2=TEST_DOSE,
+            peb_sigma_diff=TEST_SIGMA,
+        )
+    )
     r_st = run_simulation(_car_cfg())
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
@@ -520,13 +558,22 @@ def test_deterministic_observables_unchanged():
 
 def test_deterministic_observables_unchanged_3000():
     """CD/NILS invariance also holds for arbitrary N=3000."""
-    r_no = run_simulation(SimulationConfig(resist_model="full_chem", enable_stochastic=False, se_blur_nm=5.0, dose_mj_cm2=TEST_DOSE, peb_sigma_diff=TEST_SIGMA))
+    r_no = run_simulation(
+        SimulationConfig(
+            resist_model="full_chem",
+            enable_stochastic=False,
+            se_blur_nm=5.0,
+            dose_mj_cm2=TEST_DOSE,
+            peb_sigma_diff=TEST_SIGMA,
+        )
+    )
     r_st = run_simulation(_car_cfg(stochastic_ler_grid_y=3000))
     assert r_no.cd_nm == r_st.cd_nm
     assert r_no.nils_value == r_st.nils_value
 
 
 # ── 21. Dose scaling consistent with legacy ─────────────────────
+
 
 def test_dose_scaling_consistent():
     aerial = _aerial()
@@ -550,7 +597,9 @@ def test_dose_scaling_consistent():
             for s in seeds:
                 acid = _make_acid_large(dm, s)[0]
                 dev = (acid > THRESH).float()
-                lers.append(ler_estimate(dev, threshold=THRESH, dx=DX, intensity=acid, edge="both").ler_nm)
+                lers.append(
+                    ler_estimate(dev, threshold=THRESH, dx=DX, intensity=acid, edge="both").ler_nm
+                )
             logd.append(math.log(dose))
             logl.append(math.log(np.mean(lers)))
         return np.polyfit(logd, logl, 1)[0]
@@ -566,18 +615,33 @@ def test_dose_scaling_consistent():
 
 # ── 22. Metadata ────────────────────────────────────────────────
 
+
 def test_metadata_populated():
     r = run_simulation(_car_cfg())
     m = r.ler_metadata
     assert m is not None
-    for key in ("ler_nm", "n_rows", "n_eff", "l_int_px", "l_int_nm",
-                "uncertainty_nm", "ci95_low_nm", "ci95_high_nm", "seed_count",
-                "estimator", "rho_truncation", "disclaimer"):
+    for key in (
+        "ler_nm",
+        "n_rows",
+        "n_eff",
+        "l_int_px",
+        "l_int_nm",
+        "uncertainty_nm",
+        "ci95_low_nm",
+        "ci95_high_nm",
+        "seed_count",
+        "estimator",
+        "rho_truncation",
+        "disclaimer",
+    ):
         assert key in m, f"missing metadata key {key}"
     assert m["n_rows"] == 4096
     assert m["n_eff"] > 0.0
     assert m["l_int_nm"] > 0.0
     assert m["seed_count"] == 1
     assert m["estimator"] == "large_n"
-    assert "experimentally validated" not in m["disclaimer"].lower() or "kein experimentell validierter" in m["disclaimer"]
+    assert (
+        "experimentally validated" not in m["disclaimer"].lower()
+        or "kein experimentell validierter" in m["disclaimer"]
+    )
     assert len(m["disclaimer"]) > 10

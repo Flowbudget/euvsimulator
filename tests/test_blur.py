@@ -45,7 +45,8 @@ def test_blur_conserves_mass_and_is_nonnegative(sigma):
 
 def test_single_row_field_blurs_along_x():
     """A (1, W) field must be blurred along x exactly like one row of a
-    (H, W) field; previously the kernel was clamped to min(H, W) = 1."""
+    (H, W) field; previously the kernel was clamped to min(H, W) = 1.
+    """
     W, dx, sigma = 201, 0.25, 4.0
     f1 = torch.zeros(1, W)
     f1[0, W // 2] = 1.0
@@ -61,7 +62,7 @@ def test_single_row_field_blurs_along_x():
 def test_fft_and_direct_paths_agree():
     torch.manual_seed(1)
     f = torch.rand(96, 96)
-    direct = gaussian_se_blur(f, sigma=3.0, dx=1.0)             # kernel 19 px -> direct
+    direct = gaussian_se_blur(f, sigma=3.0, dx=1.0)  # kernel 19 px -> direct
     fft = gaussian_se_blur(f, sigma=3.0, dx=1.0, kernel_size=65)  # forced FFT path, same sigma
     # A 65-tap kernel contains the 19-tap one plus negligible 3σ+ tails.
     assert float((direct - fft).abs().max()) < 1e-4 * float(f.max())

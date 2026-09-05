@@ -55,6 +55,7 @@ C.A. Mack, "New model for resist development", Proc. SPIE 5383,
 
 from __future__ import annotations
 
+import math
 from typing import Tuple
 
 import torch
@@ -252,9 +253,7 @@ def stochastic_development(
     if strength <= 0:
         raise ValueError(f"development strength must be > 0, got {strength}")
     if correlation_nm < 0:
-        raise ValueError(
-            f"development correlation_nm must be >= 0, got {correlation_nm}"
-        )
+        raise ValueError(f"development correlation_nm must be >= 0, got {correlation_nm}")
 
     drive = torch.clamp((latent - threshold) / max(threshold, 1e-12), min=0.0)
     rate = strength * drive
@@ -266,9 +265,7 @@ def stochastic_development(
     if correlation_nm > 0:
         from euvsimulator.resist.exposure import gaussian_se_blur
 
-        e_dev = gaussian_se_blur(
-            n_events.to(latent.dtype), sigma=correlation_nm, dx=dx
-        )
+        e_dev = gaussian_se_blur(n_events.to(latent.dtype), sigma=correlation_nm, dx=dx)
     else:
         e_dev = n_events.to(latent.dtype)
 
@@ -398,7 +395,9 @@ def developed_depth_from_arrival(
     # column is "cleared through" only if every layer is reached.
     not_reached = (~reached).to(torch.int64)
     first_not = torch.where(
-        not_reached.any(dim=0), torch.argmax(not_reached, dim=0), torch.full((H, W), N, dtype=torch.int64, device=T.device)
+        not_reached.any(dim=0),
+        torch.argmax(not_reached, dim=0),
+        torch.full((H, W), N, dtype=torch.int64, device=T.device),
     )
     n_clear = first_not  # number of consecutive cleared layers from the top
     depth = n_clear.to(T.dtype) * dz
@@ -448,11 +447,18 @@ def eikonal_development(
         depths, arrivals = [], []
         for y0 in range(0, H, chunk_rows):
             out = eikonal_development(
-                inhibitor_3d[:, y0 : y0 + chunk_rows], mack, dx=dx, dz=dz, t_develop=t_develop,
-                n_iter=n_iter, return_arrival=return_arrival, chunk_rows=chunk_rows,
+                inhibitor_3d[:, y0 : y0 + chunk_rows],
+                mack,
+                dx=dx,
+                dz=dz,
+                t_develop=t_develop,
+                n_iter=n_iter,
+                return_arrival=return_arrival,
+                chunk_rows=chunk_rows,
             )
             if return_arrival:
-                depths.append(out[0]); arrivals.append(out[1])
+                depths.append(out[0])
+                arrivals.append(out[1])
             else:
                 depths.append(out)
         depth = torch.cat(depths, dim=0)
@@ -508,12 +514,20 @@ def edge_positions_from_arrival(
             i = j
         else:
             i += 1
-    i0 = (best_i0 + start) % W                  # first uncleared pixel
-    i1 = (best_i0 + best_len - 1 + start) % W   # last uncleared pixel
+    i0 = (best_i0 + start) % W  # first uncleared pixel
+    i1 = (best_i0 + best_len - 1 + start) % W  # last uncleared pixel
     Ta, Tb = float(T_row[(i0 - 1) % W]), float(T_row[i0])
     Ta2, Tb2 = float(T_row[(i1 + 1) % W]), float(T_row[i1])
-    frac_l = (t_develop - Ta) / (Tb - Ta) if Tb > Ta else 1.0
-    frac_r = (t_develop - Ta2) / (Tb2 - Ta2) if Tb2 > Ta2 else 1.0
+
+    def _frac(t_clear: float, t_line: float) -> float:
+        # fraction of the pixel the front entered; an unreachable pixel
+        # (T = inf, only possible with R = 0) puts the edge on the pixel face
+        if not math.isfinite(t_line):
+            return 0.5
+        return (t_develop - t_clear) / (t_line - t_clear) if t_line > t_clear else 1.0
+
+    frac_l = _frac(Ta, Tb)
+    frac_r = _frac(Ta2, Tb2)
     x_left = ((i0 - 1) + frac_l) * dx
     x_right = ((i1 + 1) - frac_r) * dx
     if x_right < x_left:  # run wraps around the periodic boundary

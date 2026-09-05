@@ -50,18 +50,25 @@ FIG5_TOL_REL = 0.30
 def _chain_surface(dose_mj_cm2: float, cfg: SimulationConfig) -> tuple[float, float, float]:
     """Flood exposure -> PEB (no diffusion needed for a uniform field) -> Mack rate.
 
-    Returns (acid, M after PEB, dissolution rate at the film surface)."""
+    Returns (acid, M after PEB, dissolution rate at the film surface).
+    """
     dose = torch.full((2, 2), dose_mj_cm2, dtype=torch.float64)
     acid, inhib = dill_abc_exposure(
-        dose, A=cfg.dill_A, B=cfg.dill_B, C=cfg.dill_C,
-        thickness=cfg.resist_thickness_nm * 1e-3, n_layers=cfg.n_develop_layers,
+        dose,
+        A=cfg.dill_A,
+        B=cfg.dill_B,
+        C=cfg.dill_C,
+        thickness=cfg.resist_thickness_nm * 1e-3,
+        n_layers=cfg.n_develop_layers,
     )
     # surface layer (index 0) -- no absorption gradient yet. The CAR starts the
     # PEB fully protected (M0 = 1, Mack 1997 Eq. 5.33/5.34); the exposure
     # step's "inhibitor" is the remaining PAG fraction and is NOT M0 -- the
     # pipeline discards it the same way (pipeline.py, _cd_via_full_chem).
     a0 = acid[0]
-    _, M = reaction_diffusion_analytical(a0, torch.ones_like(a0), k=cfg.peb_k, t_bake=cfg.peb_t_bake, sigma_diff=0.0)
+    _, M = reaction_diffusion_analytical(
+        a0, torch.ones_like(a0), k=cfg.peb_k, t_bake=cfg.peb_t_bake, sigma_diff=0.0
+    )
     mack = MackModel(R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, M_th=cfg.mack_M_th, n=cfg.mack_n)
     R = mack.rate(M)
     return float(a0.mean()), float(M.mean()), float(R.mean())
@@ -89,12 +96,16 @@ def _threshold_dose(cfg: SimulationConfig) -> float:
 def test_fig3_protection_ratio_after_peb():
     cfg = SimulationConfig()
     _, M, _ = _chain_surface(FIG3_DOSE_MJ_CM2, cfg)
-    assert abs(M - FIG3_P_60S_110C) < FIG3_TOL, f"P(60 s) chain = {M:.3f}, Fig. 3 ≈ {FIG3_P_60S_110C}"
+    assert abs(M - FIG3_P_60S_110C) < FIG3_TOL, (
+        f"P(60 s) chain = {M:.3f}, Fig. 3 ≈ {FIG3_P_60S_110C}"
+    )
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="chain dissolution threshold ≈ 2.7 mJ/cm² vs Fig. 5 ≈ 0.8 mJ/cm² (same factor as Fig. 3)",
+    reason=(
+        "chain dissolution threshold ≈ 2.7 mJ/cm² vs Fig. 5 ≈ 0.8 mJ/cm² (same factor as Fig. 3)"
+    ),
 )
 def test_fig5_dissolution_threshold():
     cfg = SimulationConfig()
@@ -106,7 +117,8 @@ def test_fig5_dissolution_threshold():
 
 def test_chain_numbers_are_pinned():
     """Pins what the default chain currently does, so that the factor documented
-    in pipeline.py (≈ 3.4) cannot drift silently."""
+    in pipeline.py (≈ 3.4) cannot drift silently.
+    """
     cfg = SimulationConfig()
     acid, M, _ = _chain_surface(FIG3_DOSE_MJ_CM2, cfg)
     assert acid == pytest.approx(1.0 - math.exp(-cfg.dill_C * FIG3_DOSE_MJ_CM2), rel=1e-6)

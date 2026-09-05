@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 import torch
 
+from euvsimulator.aerial.abbe import _compute_tcc_matrix, aerial_from_orders
 from euvsimulator.aerial.hopkins import (
     compare_hopkins_abbe,
     compute_tcc,
     hopkins_aerial,
     tcc_soc_decomposition,
 )
-from euvsimulator.aerial.abbe import aerial_from_orders, _compute_tcc_matrix
 from euvsimulator.aerial.pupil import circular_pupil, pupil_grid
 from euvsimulator.aerial.source import conventional, dipole_x
 
@@ -462,7 +462,12 @@ class TestAerialFromOrdersPhysics:
                 dm = abs(mi - mj)
                 x_t = math.pi * sigma * params["na"] * dm * params["wavelength_m"] / period_m
                 tcc = 1.0 if abs(x_t) < 1e-15 else 2.0 * _j1_ref(x_t) / x_t
-                I_true += ri * rj.conj() * tcc * torch.exp(1j * 2 * math.pi * (mi - mj) * x_pos / period_m)
+                I_true += (
+                    ri
+                    * rj.conj()
+                    * tcc
+                    * torch.exp(1j * 2 * math.pi * (mi - mj) * x_pos / period_m)
+                )
         I_true = I_true.real
 
         diff_lin = (a[0, :] - I_true).abs().max().item()
@@ -526,24 +531,38 @@ class TestDefocusPhase:
 
     def test_focus_hermitian_effective_H(self, orders, order_idx, params):
         """H_ij = a_i·a_j*·TCC_ij·e^{i(φ_i-φ_j)} is Hermitian for any focus."""
-        from euvsimulator.aerial.abbe import _compute_tcc_matrix
         import math
 
-        tcc = _compute_tcc_matrix(order_idx, **{k: params[k] for k in ("sigma", "na", "wavelength_m", "period_m")})
+        from euvsimulator.aerial.abbe import _compute_tcc_matrix
+
+        tcc = _compute_tcc_matrix(
+            order_idx, **{k: params[k] for k in ("sigma", "na", "wavelength_m", "period_m")}
+        )
         for focus_nm in [0.0, 10.0, 50.0, -50.0, 100.0]:
             focus_m = focus_nm * 1e-9
             M = len(order_idx)
-            phi = torch.exp(1j * torch.tensor(
-                [-math.pi * focus_m * (int(order_idx[i]) ** 2) * params["wavelength_m"] / params["period_m"] ** 2
-                 for i in range(M)],
-                dtype=torch.complex128,
-            ))
+            phi = torch.exp(
+                1j
+                * torch.tensor(
+                    [
+                        -math.pi
+                        * focus_m
+                        * (int(order_idx[i]) ** 2)
+                        * params["wavelength_m"]
+                        / params["period_m"] ** 2
+                        for i in range(M)
+                    ],
+                    dtype=torch.complex128,
+                )
+            )
             H = torch.zeros((M, M), dtype=torch.complex128)
             for i in range(M):
                 for j in range(M):
                     H[i, j] = orders[i] * orders[j].conj() * tcc[i, j] * phi[i] * phi[j].conj()
             violation = (H - H.conj().T).abs().max().item()
-            assert violation < 1e-12, f"focus={focus_nm}nm: H not Hermitian, max|H - Hᴴ| = {violation:.2e}"
+            assert violation < 1e-12, (
+                f"focus={focus_nm}nm: H not Hermitian, max|H - Hᴴ| = {violation:.2e}"
+            )
 
     def test_focus_changes_aerial(self, order_idx, params):
         """Defocus must change the aerial image for non-trivial orders."""
@@ -589,7 +608,10 @@ class TestDefocusPhase:
         idx = torch.tensor([0, 1], dtype=torch.int64)
 
         from euvsimulator.aerial.abbe import _compute_tcc_matrix
-        tcc = _compute_tcc_matrix(idx, **{k: params[k] for k in ("sigma", "na", "wavelength_m", "period_m")})
+
+        tcc = _compute_tcc_matrix(
+            idx, **{k: params[k] for k in ("sigma", "na", "wavelength_m", "period_m")}
+        )
 
         x = torch.linspace(-params["period_m"] / 2, params["period_m"] / 2, params["grid"])
         focus_nm = 50.0
@@ -600,7 +622,14 @@ class TestDefocusPhase:
         I_analytic = (
             abs(a0) ** 2 * tcc[0, 0].item()
             + abs(a1) ** 2 * tcc[1, 1].item()
-            + 2.0 * (a0 * a1.conjugate() * tcc[0, 1] * torch.exp(torch.tensor(1j * phi_diff, dtype=torch.complex128)) * torch.exp(1j * 2 * math.pi * (-1) * x / params["period_m"])).real
+            + 2.0
+            * (
+                a0
+                * a1.conjugate()
+                * tcc[0, 1]
+                * torch.exp(torch.tensor(1j * phi_diff, dtype=torch.complex128))
+                * torch.exp(1j * 2 * math.pi * (-1) * x / params["period_m"])
+            ).real
         )
 
         a_sim = aerial_from_orders(orders, idx, **params, focus_nm=focus_nm)
@@ -611,7 +640,7 @@ class TestDefocusPhase:
 
     def test_focus_converges_to_zero(self, orders, order_idx, params):
         """As focus → 0, the aerial image must converge to the focus=0 result.
-        
+
         The defocus phase φ_m = -π·focus·m²·λ/Λ² scales linearly with focus.
         For focus → 0, φ_m → 0 and the aerial image approaches the in-focus case.
         """
@@ -676,7 +705,7 @@ class TestIlluminationShapes:
         shapes = ["conventional", "annular", "dipole", "quasar"]
         tccs = {s: _compute_tcc_matrix(order_idx, **params, illumination_shape=s) for s in shapes}
         for i, s1 in enumerate(shapes):
-            for s2 in shapes[i + 1:]:
+            for s2 in shapes[i + 1 :]:
                 diff = (tccs[s1] - tccs[s2]).abs().max().item()
                 assert diff > 1e-6, f"{s1} vs {s2}: not different ({diff:.2e})"
 
@@ -697,10 +726,16 @@ class TestIlluminationShapes:
         idx = torch.tensor([-1, 0, 1], dtype=torch.int64)
         aerials = {}
         for shape in ("conventional", "annular", "dipole", "quasar"):
-            a = aerial_from_orders(orders, idx, period_m=params["period_m"],
-                                   na=params["na"], wavelength_m=params["wavelength_m"],
-                                   sigma=params["sigma"], illumination_shape=shape,
-                                   grid=128)
+            a = aerial_from_orders(
+                orders,
+                idx,
+                period_m=params["period_m"],
+                na=params["na"],
+                wavelength_m=params["wavelength_m"],
+                sigma=params["sigma"],
+                illumination_shape=shape,
+                grid=128,
+            )
             aerials[shape] = a
         # All pairs should differ
         for s1 in aerials:
@@ -736,15 +771,29 @@ class TestRcwaThinMaskRatio:
         from euvsimulator.pipeline import SimulationConfig, run_simulation
 
         cfg_tm = SimulationConfig(
-            period_nm=64, line_width_nm=32, dose_mj_cm2=20,
-            na=0.33, sigma=0.8, grid=256, device='cpu',
-            use_rcwa=False, se_blur_nm=0.0, resist_model='aerial_threshold',
+            period_nm=64,
+            line_width_nm=32,
+            dose_mj_cm2=20,
+            na=0.33,
+            sigma=0.8,
+            grid=256,
+            device="cpu",
+            use_rcwa=False,
+            se_blur_nm=0.0,
+            resist_model="aerial_threshold",
         )
         cfg_rcwa = SimulationConfig(
-            period_nm=64, line_width_nm=32, dose_mj_cm2=20,
-            na=0.33, sigma=0.8, grid=256, device='cpu',
-            use_rcwa=True, n_rcwa_orders=21,
-            se_blur_nm=0.0, resist_model='aerial_threshold',
+            period_nm=64,
+            line_width_nm=32,
+            dose_mj_cm2=20,
+            na=0.33,
+            sigma=0.8,
+            grid=256,
+            device="cpu",
+            use_rcwa=True,
+            n_rcwa_orders=21,
+            se_blur_nm=0.0,
+            resist_model="aerial_threshold",
         )
 
         r_tm = run_simulation(cfg_tm)

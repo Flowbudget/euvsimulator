@@ -18,15 +18,24 @@ from euvsimulator.resist.peb import _reaction_limited_quench, reaction_diffusion
 def test_relative_rate_is_kq_times_g0():
     """For an acid excess d = h0 - q0 the minor species (quencher) decays
     with exponent d·(k_Q·G0)·t; check the closed form against that with
-    G0 = 0.2, k_Q = 15 -> 3 s^-1, over a bake short enough not to saturate."""
+    G0 = 0.2, k_Q = 15 -> 3 s^-1, over a bake short enough not to saturate.
+    """
     h0 = torch.full((8, 8), 0.60)
     q0 = torch.full((8, 8), 0.25)
     kq, g0, t = 15.0, 0.2, 0.5  # nm^3/s, nm^-3, s
     # Route through the public function with no diffusion (D=0) so only the
     # kinetics act; k=0 keeps the inhibitor untouched.
     _, q_final, _ = reaction_diffusion_with_quenching(
-        h0, q0, torch.ones_like(h0), D=0.0, k=0.0, quench_rate=kq, t_bake=t,
-        sigma_diff=None, dx=1.0, pag_density=g0,
+        h0,
+        q0,
+        torch.ones_like(h0),
+        D=0.0,
+        k=0.0,
+        quench_rate=kq,
+        t_bake=t,
+        sigma_diff=None,
+        dx=1.0,
+        pag_density=g0,
     )
     # Closed form of dq/dt = -r*h*q with h - q = d conserved:
     d = 0.60 - 0.25
@@ -47,9 +56,10 @@ def test_pag_density_is_required():
 
 
 def test_closed_form_conserves_difference():
-    """h - q is conserved by the bimolecular reaction for both signs; with
+    """H - q is conserved by the bimolecular reaction for both signs; with
     an excess of either species the minor one is consumed exponentially,
-    while for h0 == q0 second-order kinetics decay only as 1/(1 + h0·r·t)."""
+    while for h0 == q0 second-order kinetics decay only as 1/(1 + h0·r·t).
+    """
     h0 = torch.tensor([0.6, 0.2, 0.3])
     q0 = torch.tensor([0.25, 0.4, 0.3])
     r, t = 3.0, 60.0

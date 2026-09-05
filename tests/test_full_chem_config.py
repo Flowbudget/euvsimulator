@@ -59,9 +59,7 @@ def test_full_chem_chemistry_affected_by_params():
 
     orders_complex = torch.tensor(amps, dtype=torch.complex128)
     order_indices = torch.tensor(oi)
-    ae = aerial_from_orders(
-        orders_complex, order_indices, period_m, na, wl_m, sigma, grid=G
-    )
+    ae = aerial_from_orders(orders_complex, order_indices, period_m, na, wl_m, sigma, grid=G)
     ae_dose = ae * 40.0  # Use higher dose to ensure acid is well above threshold
     dx_nm = 64.0 / G
 
@@ -221,8 +219,9 @@ def test_dill_q_no_longer_exists():
 
 
 def test_acid_yield_saturates_at_one():
-    """acid = 1 − exp(−C·E) -> 1 for E -> ∞ (Mack 2013 Eq. 10); a
-    prefactor < 1 would show up as a lower plateau."""
+    """Acid = 1 − exp(−C·E) -> 1 for E -> ∞ (Mack 2013 Eq. 10); a
+    prefactor < 1 would show up as a lower plateau.
+    """
     from euvsimulator.resist.exposure import dill_abc_exposure
 
     dose = torch.full((2, 2), 1e6, dtype=torch.float64)
@@ -231,27 +230,20 @@ def test_acid_yield_saturates_at_one():
     assert float(inhib.max()) == pytest.approx(0.0, abs=1e-9)
 
 
-if __name__ == "__main__":
-    test_full_chem_params_passed_through()
-    print("test_full_chem_params_passed_through PASSED")
-    test_full_chem_chemistry_affected_by_params()
-    print("test_full_chem_chemistry_affected_by_params PASSED")
-    test_both_paths_identical_cd()
-    print("test_both_paths_identical_cd PASSED")
-    test_validation_rejects_invalid_params()
-    print("test_validation_rejects_invalid_params PASSED")
-    print("ALL TESTS PASSED")
-
-
 def test_full_chem_nils_is_measured_at_the_printed_edge():
     """NILS of the chemistry chain refers to the edge the resist prints, not
     to the aerial_threshold model's reference-dose level (which returned 0
-    whenever that level missed the image, e.g. at 4 mJ/cm²)."""
-    r = run_simulation(SimulationConfig(resist_model="full_chem", dose_mj_cm2=4.0,
-                                        se_blur_nm=5.0, peb_sigma_diff=7.0, grid=128))
+    whenever that level missed the image, e.g. at 4 mJ/cm²).
+    """
+    r = run_simulation(
+        SimulationConfig(
+            resist_model="full_chem", dose_mj_cm2=4.0, se_blur_nm=5.0, peb_sigma_diff=7.0, grid=128
+        )
+    )
     assert r.cd_nm > 0
     assert 0.5 < r.nils_value < 10.0
-    cleared = run_simulation(SimulationConfig(resist_model="full_chem", dose_mj_cm2=20.0,
-                                              se_blur_nm=5.0, grid=128))
+    cleared = run_simulation(
+        SimulationConfig(resist_model="full_chem", dose_mj_cm2=20.0, se_blur_nm=5.0, grid=128)
+    )
     assert cleared.cd_nm == 0.0
     assert cleared.nils_value != cleared.nils_value  # NaN: no printed edge

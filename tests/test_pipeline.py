@@ -37,8 +37,9 @@ class TestPipeline:
         test_ler_production_integration._car_cfg); at the config default of
         20 mJ/cm² the resist is fully cleared and NILS is NaN by design.
         """
-        result = run_simulation(grid=128, se_blur_nm=10.0, resist_model="full_chem",
-                                dose_mj_cm2=4.0, peb_sigma_diff=7.0)
+        result = run_simulation(
+            grid=128, se_blur_nm=10.0, resist_model="full_chem", dose_mj_cm2=4.0, peb_sigma_diff=7.0
+        )
         assert result.cd_nm > 0
         # For 64nm pitch, 32nm line, NA=0.33, sigma=0.8 with SE blur
         # NILS should be in realistic range (literature: ~2-3 for k1≈0.78)
@@ -75,7 +76,8 @@ class TestConfigThreshold:
         chemistry and, since 2026-09-04, NILS is measured at the printed edge
         (a previous version of this test asserted the opposite -- that NILS
         followed the aerial_threshold model's reference level, which had no
-        meaning for the chemistry chain)."""
+        meaning for the chemistry chain).
+        """
         kw = dict(resist_model="full_chem", dose_mj_cm2=4.0, peb_sigma_diff=7.0, grid=128)
         r_default = run_simulation(SimulationConfig(**kw))
         r_norm = run_simulation(SimulationConfig(resist_threshold_norm=0.3, **kw))
@@ -138,12 +140,20 @@ class TestConfigIlluminationShape:
         """Case variations of valid shapes are accepted (code calls .lower())."""
         for shape in ("Conventional", "DIPOLE", "Annular", "Quasar"):
             # Use _compute_tcc_matrix directly (fast path)
-            from euvsimulator.aerial.abbe import _compute_tcc_matrix
             import torch
+
+            from euvsimulator.aerial.abbe import _compute_tcc_matrix
+
             orders = torch.tensor([-1, 0, 1], dtype=torch.int64)
-            tcc = _compute_tcc_matrix(orders, sigma=0.8, na=0.33,
-                                      wavelength_m=13.5e-9, period_m=64e-9,
-                                      grid=64, illumination_shape=shape)
+            tcc = _compute_tcc_matrix(
+                orders,
+                sigma=0.8,
+                na=0.33,
+                wavelength_m=13.5e-9,
+                period_m=64e-9,
+                grid=64,
+                illumination_shape=shape,
+            )
             assert tcc is not None
 
     def test_unknown_shape_raises(self):
@@ -171,20 +181,17 @@ class TestConfigOrderCutoff:
 
     def test_sigma0_period40_unchanged(self):
         """sigma=0 must use on-axis cutoff (no source shift)."""
-        r = run_simulation(SimulationConfig(
-            period_nm=40, line_width_nm=20, sigma=0.0, grid=256))
+        r = run_simulation(SimulationConfig(period_nm=40, line_width_nm=20, sigma=0.0, grid=256))
         assert r.cd_nm == 0.0, f"sigma=0 period=40 should give CD=0, got {r.cd_nm}"
 
     def test_sigma08_period40_now_has_cd(self):
         """sigma=0.8, period=40 must produce CD>0 (source shift enables order 1)."""
-        r = run_simulation(SimulationConfig(
-            period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
+        r = run_simulation(SimulationConfig(period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
         assert r.cd_nm > 0.0, f"sigma=0.8 period=40 should have CD>0, got {r.cd_nm}"
 
     def test_sigma08_period32_cd_positive(self):
         """Very small period benefits from source shift at sigma>0."""
-        r = run_simulation(SimulationConfig(
-            period_nm=32, line_width_nm=16, sigma=0.8, grid=256))
+        r = run_simulation(SimulationConfig(period_nm=32, line_width_nm=16, sigma=0.8, grid=256))
         assert r.cd_nm > 0.0, f"sigma=0.8 period=32 should have CD>0, got {r.cd_nm}"
 
     def test_benchmark_unchanged(self):
@@ -232,20 +239,16 @@ class TestConfigSubPixelCD:
             r = run_simulation(SimulationConfig(grid=grid))
             cd_vals.append(r.cd_nm)
         # CD should be increasing toward asymptote ~27.66
-        assert cd_vals[0] < cd_vals[-1], (
-            f"CD not trending up: {cd_vals}"
-        )
+        assert cd_vals[0] < cd_vals[-1], f"CD not trending up: {cd_vals}"
 
     def test_subpixel_cd_small_period(self):
         """period=40, sigma=0.8: CD must be >0 (P2 order-cutoff fix still active)."""
-        r = run_simulation(SimulationConfig(
-            period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
+        r = run_simulation(SimulationConfig(period_nm=40, line_width_nm=20, sigma=0.8, grid=256))
         assert r.cd_nm > 10.0, f"CD should be >10 nm, got {r.cd_nm}"
 
     def test_subpixel_cd_asymmetric(self):
         """period=64, duty=0.3 produces consistent sub-pixel CD ~19.05 nm."""
-        r = run_simulation(SimulationConfig(
-            period_nm=64, line_width_nm=19.2, grid=256))
+        r = run_simulation(SimulationConfig(period_nm=64, line_width_nm=19.2, grid=256))
         # CD should be ~19.05 nm (sub-pixel) and not quantized
         assert 18.5 < r.cd_nm < 19.5, f"CD out of range: {r.cd_nm}"
 
@@ -260,40 +263,60 @@ class TestOrderBoundaryInvariant:
 
     @staticmethod
     def _check_shape_order_boundary(shape, sigma, period_nm, eps=1e-6):
-        from euvsimulator.aerial.abbe import _compute_tcc_matrix
         import math
-        lam = 13.5e-9; NA = 0.33; period_m = period_nm * 1e-9
+
+        from euvsimulator.aerial.abbe import _compute_tcc_matrix
+
+        lam = 13.5e-9
+        NA = 0.33
+        period_m = period_nm * 1e-9
         max_order = int(math.floor(NA * period_m / lam))
         if sigma > 0:
             max_order = int(math.ceil((1.0 + sigma) * NA * period_m / lam))
         probe = max_order + 10
         orders = torch.tensor(list(range(-probe, probe + 1)), dtype=torch.int64)
-        tcc = _compute_tcc_matrix(orders, sigma=sigma, na=NA, wavelength_m=lam,
-                                   period_m=period_m, grid=256, illumination_shape=shape)
+        tcc = _compute_tcc_matrix(
+            orders,
+            sigma=sigma,
+            na=NA,
+            wavelength_m=lam,
+            period_m=period_m,
+            grid=256,
+            illumination_shape=shape,
+        )
         diag = tcc.diag().real
-        violations = [(int(m), float(diag[idx])) for idx, m in enumerate(orders)
-                      if abs(int(m)) > max_order and float(diag[idx]) > eps]
+        violations = [
+            (int(m), float(diag[idx]))
+            for idx, m in enumerate(orders)
+            if abs(int(m)) > max_order and float(diag[idx]) > eps
+        ]
         return max_order, violations
 
     def test_order_boundary_conventional(self):
         mo, v = self._check_shape_order_boundary("conventional", 0.8, 40)
         assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+
     def test_order_boundary_annular(self):
         mo, v = self._check_shape_order_boundary("annular", 0.8, 40)
         assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+
     def test_order_boundary_dipole_x(self):
         mo, v = self._check_shape_order_boundary("dipole_x", 0.8, 40)
         assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+
     def test_order_boundary_dipole_y(self):
         mo, v = self._check_shape_order_boundary("dipole_y", 0.8, 40)
         assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+
     def test_order_boundary_quasar(self):
         mo, v = self._check_shape_order_boundary("quasar", 0.8, 40)
         assert len(v) == 0, f"Orders > {mo} have non-zero TCC: {v}"
+
     def test_order_boundary_sigma_high(self):
         for s in ["conventional", "annular", "dipole_x", "dipole_y", "quasar"]:
             mo, v = self._check_shape_order_boundary(s, 1.0, 32)
             assert len(v) == 0, f"{s}: Orders > {mo} have non-zero TCC: {v}"
+
     def test_order_boundary_large_period(self):
         for s in ["conventional", "annular", "dipole_x", "dipole_y", "quasar"]:
             mo, v = self._check_shape_order_boundary(s, 0.8, 128)
@@ -327,26 +350,32 @@ class TestPolarizationAveraging:
 
     def test_intensity_avg_vs_field_avg_differ(self):
         """Prove analytically that intensity and field averaging give different
-        results for TE orders ≠ TM orders on a real EUV mask."""
+        results for TE orders ≠ TM orders on a real EUV mask.
+        """
         import torch
+
+        from euvsimulator.aerial.abbe import aerial_from_orders
         from euvsimulator.mask3d.geometry import (
             build_permittivity_profile,
             standard_euv_mask,
         )
         from euvsimulator.mask3d.rcwa_torch import RCWA1D, RCWAConfig
-        from euvsimulator.aerial.abbe import aerial_from_orders
         from euvsimulator.pipeline import SimulationConfig
 
         cfg = SimulationConfig(
-            period_nm=48, line_width_nm=24, dose_mj_cm2=20,
-            grid=64, use_rcwa=True,
+            period_nm=48,
+            line_width_nm=24,
+            dose_mj_cm2=20,
+            grid=64,
+            use_rcwa=True,
         )
         period_m = cfg.period_nm * 1e-9
         wavelength_m = cfg.wavelength_nm * 1e-9
         mask = standard_euv_mask(
             absorber=cfg.absorber_material,
             absorber_thickness_nm=cfg.absorber_height_nm,
-            capping="Ru", capping_thickness_nm=2.5,
+            capping="Ru",
+            capping_thickness_nm=2.5,
             n_bilayers=cfg.ml_n_bilayers,
             period_nm=cfg.period_nm,
             line_width_nm=cfg.line_width_nm,
@@ -354,22 +383,36 @@ class TestPolarizationAveraging:
         )
         eps_profile, thicknesses, eps_sub = build_permittivity_profile(mask, n_samples=1024)
 
-        solver = RCWA1D(RCWAConfig(wavelength=wavelength_m, n_orders=cfg.n_rcwa_orders, theta=6.0, polarization="TE"))
+        solver = RCWA1D(
+            RCWAConfig(
+                wavelength=wavelength_m, n_orders=cfg.n_rcwa_orders, theta=6.0, polarization="TE"
+            )
+        )
         orders_te = solver.solve(eps_profile, thicknesses, period_m)
-        solver_tm = RCWA1D(RCWAConfig(wavelength=wavelength_m, n_orders=cfg.n_rcwa_orders, theta=6.0, polarization="TM"))
+        solver_tm = RCWA1D(
+            RCWAConfig(
+                wavelength=wavelength_m, n_orders=cfg.n_rcwa_orders, theta=6.0, polarization="TM"
+            )
+        )
         orders_tm = solver_tm.solve(eps_profile, thicknesses, period_m)
 
         order_indices = solver.m.tolist()
         order_t = torch.tensor(order_indices, dtype=torch.int64)
 
         # Intensity average (physically correct)
-        aerial_te = aerial_from_orders(orders_te, order_t, period_m, cfg.na, wavelength_m, cfg.sigma, grid=cfg.grid)
-        aerial_tm = aerial_from_orders(orders_tm, order_t, period_m, cfg.na, wavelength_m, cfg.sigma, grid=cfg.grid)
+        aerial_te = aerial_from_orders(
+            orders_te, order_t, period_m, cfg.na, wavelength_m, cfg.sigma, grid=cfg.grid
+        )
+        aerial_tm = aerial_from_orders(
+            orders_tm, order_t, period_m, cfg.na, wavelength_m, cfg.sigma, grid=cfg.grid
+        )
         aerial_intensity = (aerial_te + aerial_tm) / 2.0
 
         # Field average (the old bug)
         orders_field = (orders_te + orders_tm) / 2.0
-        aerial_field = aerial_from_orders(orders_field, order_t, period_m, cfg.na, wavelength_m, cfg.sigma, grid=cfg.grid)
+        aerial_field = aerial_from_orders(
+            orders_field, order_t, period_m, cfg.na, wavelength_m, cfg.sigma, grid=cfg.grid
+        )
 
         max_diff = (aerial_field - aerial_intensity).abs().max().item()
         assert max_diff > 1e-14, (
@@ -386,6 +429,4 @@ class TestPolarizationAveraging:
         # the TM solver was corrected (2026-09-04, Fortsetzung 13).
         orders_diff = orders_te - orders_tm
         bound = (orders_diff.abs().sum() ** 2 / 4).item()
-        assert max_diff <= bound, (
-            f"Difference {max_diff:.2e} exceeds bound {bound:.2e}"
-        )
+        assert max_diff <= bound, f"Difference {max_diff:.2e} exceeds bound {bound:.2e}"

@@ -41,7 +41,8 @@ def test_two_layer_rate_is_exact():
 def test_point_source_circular_front_first_order():
     """Only one surface column is open: the front expands as a circle
     T = sqrt(x^2 + z^2)/R. Godunov upwind is first order: mean relative error
-    of order dx/r; the Manhattan metric (a wrong scheme) would give up to 41 %."""
+    of order dx/r; the Manhattan metric (a wrong scheme) would give up to 41 %.
+    """
     R = torch.full((N, H, W), 10.0)
     R[0] = 1e-12
     R[0, :, W // 2] = 10.0
@@ -84,10 +85,11 @@ def test_undercut_is_represented():
     """A slow cap layer over a fast layer: the column model needs the cap
     time everywhere, the Eikonal front enters through one opening and runs
     underneath -- columns away from the opening get developed below the cap
-    while the column model has them untouched."""
+    while the column model has them untouched.
+    """
     R = torch.full((N, H, W), 1e-3)
     R[0, :, W // 2] = 1e3  # one opening in the slow cap
-    R[1:] = 1e3            # fast layer underneath
+    R[1:] = 1e3  # fast layer underneath
     T = eikonal_arrival_time(R, DX, DZ, n_iter=10)
     far = W // 2 + 20
     t_far_eik = float(T[5, 0, far])
@@ -113,11 +115,16 @@ def test_developed_depth_interpolates_and_overshoots_like_column_model():
 
 def test_row_chunking_is_bitwise_identical():
     """Rows are independent (x, z) problems; chunking over y (memory bound
-    for the 61440-row LER fields, 2026-09-05) must not change a single bit."""
+    for the 61440-row LER fields, 2026-09-05) must not change a single bit.
+    """
     torch.manual_seed(0)
     inhib = 1.0 - torch.rand(5, 37, 16, dtype=torch.float64) * 0.5
     mack = MackModel(R_max=68.6, R_min=0.1, M_th=0.39, n=18.2)
-    a, Ta = eikonal_development(inhib, mack, dx=0.25, dz=2.5, t_develop=30.0, return_arrival=True, chunk_rows=10**9)
-    b, Tb = eikonal_development(inhib, mack, dx=0.25, dz=2.5, t_develop=30.0, return_arrival=True, chunk_rows=10)
+    a, Ta = eikonal_development(
+        inhib, mack, dx=0.25, dz=2.5, t_develop=30.0, return_arrival=True, chunk_rows=10**9
+    )
+    b, Tb = eikonal_development(
+        inhib, mack, dx=0.25, dz=2.5, t_develop=30.0, return_arrival=True, chunk_rows=10
+    )
     assert torch.equal(a, b) and torch.equal(Ta, Tb)
     assert Ta.shape == inhib.shape

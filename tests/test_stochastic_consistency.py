@@ -44,15 +44,24 @@ SIGMA_PEB = 7.0
 
 
 def _cfg(**kw):
-    base = dict(resist_model="full_chem", period_nm=PITCH, line_width_nm=LW, se_blur_nm=5.0,
-                grid=256, peb_sigma_diff=SIGMA_PEB)
+    base = dict(
+        resist_model="full_chem",
+        period_nm=PITCH,
+        line_width_nm=LW,
+        se_blur_nm=5.0,
+        grid=256,
+        peb_sigma_diff=SIGMA_PEB,
+    )
     base.update(kw)
     return SimulationConfig(**base)
 
 
 def _dose_to_size(q_density, lo=1.0, hi=80.0, iters=16):
     """Deterministic dose at which CD == LW (bisection; CD falls with dose)."""
-    f = lambda d: run_simulation(_cfg(dose_mj_cm2=d, quencher_density_per_nm3=q_density)).cd_nm
+
+    def f(d):
+        return run_simulation(_cfg(dose_mj_cm2=d, quencher_density_per_nm3=q_density)).cd_nm
+
     assert f(lo) >= LW >= f(hi), "no dose window for this chemistry"
     for _ in range(iters):
         mid = 0.5 * (lo + hi)
@@ -64,10 +73,18 @@ def _dose_to_size(q_density, lo=1.0, hi=80.0, iters=16):
 
 
 def _stoch(rho, q_ratio, dose, seed=42, rows=1024):
-    return run_simulation(_cfg(dose_mj_cm2=dose, enable_stochastic=True, stochastic_seed=seed,
-                               stochastic_n_realisations=1, stochastic_ler_grid_y=rows,
-                               exposure_stochasticity=True, pag_density_per_nm3=rho,
-                               quencher_density_per_nm3=rho * q_ratio))
+    return run_simulation(
+        _cfg(
+            dose_mj_cm2=dose,
+            enable_stochastic=True,
+            stochastic_seed=seed,
+            stochastic_n_realisations=1,
+            stochastic_ler_grid_y=rows,
+            exposure_stochasticity=True,
+            pag_density_per_nm3=rho,
+            quencher_density_per_nm3=rho * q_ratio,
+        )
+    )
 
 
 @pytest.fixture
@@ -83,7 +100,8 @@ def photon_noise_off(monkeypatch):
 @pytest.mark.parametrize("q_ratio", [0.0, 0.25])
 def test_large_number_limit_recovers_deterministic_cd(photon_noise_off, q_ratio):
     """At the dose-to-size of each chemistry (without / with Mack-2011
-    quencher loading), found by bisection so the test follows the model."""
+    quencher loading), found by bisection so the test follows the model.
+    """
     dose = _dose_to_size(0.2 * q_ratio)
     det = run_simulation(_cfg(dose_mj_cm2=dose, quencher_density_per_nm3=0.2 * q_ratio)).cd_nm
     assert det > 0.0
@@ -106,7 +124,8 @@ def test_molecular_noise_scales_as_inverse_sqrt_density(photon_noise_off):
     0.088 / 0.017 nm for ρ = 0.2 … 2000 nm⁻³, i.e. ×150 over four decades
     (√10⁴ = 100). An earlier version asserted "no roughness" below 0.1 px at
     ρ = 2000 and passed by 0.0002 nm -- the residual is physics, not
-    interpolation noise, so the invariant is the scaling, not a floor."""
+    interpolation noise, so the invariant is the scaling, not a floor.
+    """
     dose = _dose_to_size(0.0)
     lwr = {rho: _stoch(rho, 0.0, dose).lwr_nm for rho in (0.2, 20.0, 2000.0)}
     assert lwr[0.2] > lwr[20.0] > lwr[2000.0] > 0.0, lwr
@@ -121,25 +140,44 @@ def test_molecular_noise_vanishes_to_photon_floor():
     against a ~10 nm photon LWR at this operating point). The sparse chain
     adds only ~2.5 nm in quadrature (+3 %), below the estimator's own
     scatter at n_eff ≈ 9, so no ordering is asserted with photon noise on --
-    the molecular part is tested with the photon sampler off above."""
+    the molecular part is tested with the photon sampler off above.
+    """
     dose = _dose_to_size(0.0)
-    photon_only = run_simulation(_cfg(dose_mj_cm2=dose, enable_stochastic=True, stochastic_seed=42,
-                                      stochastic_n_realisations=1, stochastic_ler_grid_y=1024,
-                                      exposure_stochasticity=False)).lwr_nm
+    photon_only = run_simulation(
+        _cfg(
+            dose_mj_cm2=dose,
+            enable_stochastic=True,
+            stochastic_seed=42,
+            stochastic_n_realisations=1,
+            stochastic_ler_grid_y=1024,
+            exposure_stochasticity=False,
+        )
+    ).lwr_nm
     dense = _stoch(2000.0, 0.0, dose).lwr_nm
     assert dense == pytest.approx(photon_only, rel=0.10)
 
 
 def test_quencher_free_default_is_no_op_for_the_peb_step():
     """With quencher_density = 0 the shared PEB step reduces to the plain
-    diffusion + deprotection of reaction_diffusion_analytical."""
-    from euvsimulator.resist.peb import reaction_diffusion_analytical, reaction_diffusion_with_quenching
+    diffusion + deprotection of reaction_diffusion_analytical.
+    """
+    from euvsimulator.resist.peb import (
+        reaction_diffusion_analytical,
+        reaction_diffusion_with_quenching,
+    )
 
     acid = torch.rand(3, 32, 32, dtype=torch.float64) * 0.5
     inhib = torch.ones_like(acid)
     _, m_ref = reaction_diffusion_analytical(acid, inhib, D=3.3, k=0.0723, t_bake=60.0, dx=0.25)
     _, _, m_new = reaction_diffusion_with_quenching(
-        acid, torch.zeros_like(acid), inhib, D=3.3, k=0.0723, quench_rate=15.0, t_bake=60.0,
-        dx=0.25, pag_density=0.2,
+        acid,
+        torch.zeros_like(acid),
+        inhib,
+        D=3.3,
+        k=0.0723,
+        quench_rate=15.0,
+        t_bake=60.0,
+        dx=0.25,
+        pag_density=0.2,
     )
     assert torch.allclose(m_ref, m_new, atol=1e-12)

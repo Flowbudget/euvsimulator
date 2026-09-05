@@ -64,8 +64,12 @@ class TestPoissonMoments:
         var_acc = 0.0
         for i in range(n_rep):
             d_eff = photon_deposition_shot_noise(
-                dose, 0.0, dx_nm=dx_nm, photon_energy_eV=E_PH,
-                dose_to_energy_factor=F, seed=i,
+                dose,
+                0.0,
+                dx_nm=dx_nm,
+                photon_energy_eV=E_PH,
+                dose_to_energy_factor=F,
+                seed=i,
             )
             mean_rel, var_rel = photon_moments_from_d_eff(d_eff, dose, n_bar)
             e_acc += mean_rel
@@ -93,15 +97,19 @@ class TestUnbiasedness:
         acc = torch.zeros_like(dose)
         for i in range(n_rep):
             acc += photon_deposition_shot_noise(
-                dose, se_blur_nm, dx_nm=0.25, photon_energy_eV=E_PH,
-                dose_to_energy_factor=F, seed=i,
+                dose,
+                se_blur_nm,
+                dx_nm=0.25,
+                photon_energy_eV=E_PH,
+                dose_to_energy_factor=F,
+                seed=i,
             )
         mean = acc / n_rep
         # Global mean over all pixels & realisations: statistically solid
         # even for se_blur=0 (where per-pixel variance is huge at dx=0.25).
         global_mean = mean.mean().item()
         assert abs(global_mean - 20.0) / 20.0 < 0.01, (
-            f"E[D_eff] global bias {(global_mean-20.0)/20.0:.4f} > 0.01 "
+            f"E[D_eff] global bias {(global_mean - 20.0) / 20.0:.4f} > 0.01 "
             f"for se_blur={se_blur_nm}"
         )
 
@@ -122,8 +130,12 @@ class TestUnbiasedness:
         acc = torch.zeros_like(dose)
         for i in range(n_rep):
             acc += photon_deposition_shot_noise(
-                dose, 5.0, dx_nm=0.25, photon_energy_eV=E_PH,
-                dose_to_energy_factor=F, seed=i,
+                dose,
+                5.0,
+                dx_nm=0.25,
+                photon_energy_eV=E_PH,
+                dose_to_energy_factor=F,
+                seed=i,
             )
         mean = acc / n_rep
         blur_dose = gaussian_se_blur(dose, sigma=5.0, dx=0.25)
@@ -182,8 +194,12 @@ class TestZeroBlur:
         dx_nm = 1.0
         n_bar = 20.0 * (dx_nm * dx_nm * 1e-14) * F / E_PH
         d_eff = photon_deposition_shot_noise(
-            dose, 0.0, dx_nm=dx_nm, photon_energy_eV=E_PH,
-            dose_to_energy_factor=F, seed=3,
+            dose,
+            0.0,
+            dx_nm=dx_nm,
+            photon_energy_eV=E_PH,
+            dose_to_energy_factor=F,
+            seed=3,
         )
         # N = D_eff/dose * N_bar must be integer (Poisson draw)
         n_recovered = (d_eff / dose * n_bar).round()
@@ -257,17 +273,11 @@ class TestSpatialCorrelation:
         """Lag-1 autocorrelation of the noise must grow with se_blur."""
         dose = uniform_dose((128, 128), 20.0)
         dx_nm = 0.25
-        rel0 = (
-            photon_deposition_shot_noise(dose, 0.0, dx_nm=dx_nm, seed=1) / dose
-        )
-        rel5 = (
-            photon_deposition_shot_noise(dose, 5.0, dx_nm=dx_nm, seed=1) / dose
-        )
+        rel0 = photon_deposition_shot_noise(dose, 0.0, dx_nm=dx_nm, seed=1) / dose
+        rel5 = photon_deposition_shot_noise(dose, 5.0, dx_nm=dx_nm, seed=1) / dose
         corr0 = lag1_autocorr_1d(rel0[64, :])
         corr5 = lag1_autocorr_1d(rel5[64, :])
-        assert corr5 > corr0 + 0.5, (
-            f"lag1: blur=0 -> {corr0:.4f}, blur=5 -> {corr5:.4f}"
-        )
+        assert corr5 > corr0 + 0.5, f"lag1: blur=0 -> {corr0:.4f}, blur=5 -> {corr5:.4f}"
         assert corr5 > 0.5, f"blurred noise not correlated: {corr5:.4f}"
 
     def test_blur_zero_is_white(self):
@@ -302,8 +312,12 @@ class TestGridInvariance:
             rel_sq_acc = 0.0
             for i in range(n_rep):
                 d_eff = photon_deposition_shot_noise(
-                    dose, se_blur_nm, dx_nm=dx_nm, photon_energy_eV=E_PH,
-                    dose_to_energy_factor=F, seed=i,
+                    dose,
+                    se_blur_nm,
+                    dx_nm=dx_nm,
+                    photon_energy_eV=E_PH,
+                    dose_to_energy_factor=F,
+                    seed=i,
                 )
                 rel = d_eff / dose
                 rel_sq_acc += (rel - rel.mean()).pow(2).mean().item()
@@ -315,8 +329,7 @@ class TestGridInvariance:
         mean_v = sum(vals) / len(vals)
         for (grid, dx), v in results.items():
             assert abs(v - mean_v) / mean_v < 0.20, (
-                f"grid={grid}, dx={dx}: rel_std={v:.4f} deviates from "
-                f"mean {mean_v:.4f} by >20%"
+                f"grid={grid}, dx={dx}: rel_std={v:.4f} deviates from mean {mean_v:.4f} by >20%"
             )
 
 

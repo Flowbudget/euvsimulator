@@ -136,6 +136,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `resist_threshold`, `mask_sidewall_roughness_nm`: accepted but never read.
 
 ### Changed
+- Lint clean (`ruff check` + `ruff format --check`, the CI lint job): 35 files reformatted,
+  over-long parameter comments in `SimulationConfig` and CLI help strings rewrapped (text
+  unchanged), a dead `__main__` block referencing a removed test deleted. The CI lint job had
+  been failing since 2026-09-02 (unnoticed: GitHub Actions has not run since 2026-08-31,
+  spending limit).
+- `_noisy_depth_map`: rows are distributed evenly over floor(H / tile_rows) tiles so that every
+  tile is at least one halo long (a short remainder tile would have misaligned the interior
+  slice); `edge_positions_from_arrival` puts the edge on the pixel face if the neighbouring
+  arrival time is infinite (R = 0).
 - Repository layout: 110+ historical audit/session reports moved out of the repository root
   (recoverable from git history; index in `docs/history/README.md`); third-party reference
   PDFs/HTML removed from version control; `testberechnungen.md` moved to `docs/`.

@@ -40,16 +40,28 @@ def test_periodic_wraparound_and_degenerate_rows():
     assert x_r - x_l == pytest.approx(4.0)
     # no line / no space
     assert all(math.isnan(v) for v in edge_positions_from_arrival(torch.full((8,), 5.0), t_dev, dx))
-    assert all(math.isnan(v) for v in edge_positions_from_arrival(torch.full((8,), 50.0), t_dev, dx))
+    assert all(
+        math.isnan(v) for v in edge_positions_from_arrival(torch.full((8,), 50.0), t_dev, dx)
+    )
 
 
 def test_pipeline_cd_is_smooth_and_monotone_in_dose_on_a_coarse_grid():
     """Grid 64 (dx = 1 nm): the pixel count changed in 2-nm jumps; the
-    sub-pixel CD must fall monotonically with dose in sub-nm steps."""
+    sub-pixel CD must fall monotonically with dose in sub-nm steps.
+    """
     cds = []
     for dose in (4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6):
-        r = run_simulation(SimulationConfig(resist_model="full_chem", period_nm=64.0, line_width_nm=32.0,
-                                            grid=64, dose_mj_cm2=dose, peb_sigma_diff=7.0, se_blur_nm=5.0))
+        r = run_simulation(
+            SimulationConfig(
+                resist_model="full_chem",
+                period_nm=64.0,
+                line_width_nm=32.0,
+                grid=64,
+                dose_mj_cm2=dose,
+                peb_sigma_diff=7.0,
+                se_blur_nm=5.0,
+            )
+        )
         cds.append(r.cd_nm)
     steps = [a - b for a, b in zip(cds[:-1], cds[1:])]
     assert all(s > 0.0 for s in steps), cds
@@ -59,19 +71,39 @@ def test_pipeline_cd_is_smooth_and_monotone_in_dose_on_a_coarse_grid():
 
 def test_coarse_grid_agrees_with_fine_grid():
     """Same physics on grid 64 and 256 must give the same line width to
-    within the coarse grid's remaining discretisation error."""
+    within the coarse grid's remaining discretisation error.
+    """
+
     def cd(grid):
-        return run_simulation(SimulationConfig(resist_model="full_chem", period_nm=64.0, line_width_nm=32.0,
-                                               grid=grid, dose_mj_cm2=4.5, peb_sigma_diff=7.0, se_blur_nm=5.0)).cd_nm
+        return run_simulation(
+            SimulationConfig(
+                resist_model="full_chem",
+                period_nm=64.0,
+                line_width_nm=32.0,
+                grid=grid,
+                dose_mj_cm2=4.5,
+                peb_sigma_diff=7.0,
+                se_blur_nm=5.0,
+            )
+        ).cd_nm
+
     assert abs(cd(64) - cd(256)) < 0.5
 
 
 def test_column_model_still_runs_and_is_wider_than_eikonal():
     """The column model has no lateral dissolution: its line is at least as
     wide as the Eikonal line at the same dose, and (documented) its CD stays
-    a multiple of dx because it has no lateral information to interpolate."""
-    kw = dict(resist_model="full_chem", period_nm=64.0, line_width_nm=32.0, grid=64,
-              dose_mj_cm2=4.5, peb_sigma_diff=7.0, se_blur_nm=5.0)
+    a multiple of dx because it has no lateral information to interpolate.
+    """
+    kw = dict(
+        resist_model="full_chem",
+        period_nm=64.0,
+        line_width_nm=32.0,
+        grid=64,
+        dose_mj_cm2=4.5,
+        peb_sigma_diff=7.0,
+        se_blur_nm=5.0,
+    )
     col = run_simulation(SimulationConfig(development_model="column", **kw)).cd_nm
     eik = run_simulation(SimulationConfig(development_model="eikonal", **kw)).cd_nm
     assert col > 0.0 and eik > 0.0

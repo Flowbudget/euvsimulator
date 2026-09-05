@@ -22,7 +22,8 @@ from euvsimulator.resist.stochastic import photon_deposition_shot_noise
 
 def _relative_noise(absorption, n_inc=200.0, n=200_000, seed=3):
     """Relative RMS of D_eff/dose for a uniform field with n_inc incident
-    photons per voxel and the given absorbed fraction (no SE blur)."""
+    photons per voxel and the given absorbed fraction (no SE blur).
+    """
     dose = torch.full((n,), 1.0, dtype=torch.float64)
     dx = math.sqrt(n_inc * 91.84 / (6.241509074e15 * 1e-14))  # nm, so that N_inc = n_inc
     rng = torch.Generator().manual_seed(seed)
@@ -43,7 +44,8 @@ def test_relative_noise_scales_with_absorbed_fraction():
 def test_pipeline_passes_absorbed_fraction(monkeypatch):
     """The full_chem stochastic path must hand 1 − exp(−(A+B)·t) to the
     photon sampler -- the same Beer-Lambert coefficient the depth-resolved
-    exposure uses -- not the sampler's default of 1.0."""
+    exposure uses -- not the sampler's default of 1.0.
+    """
     import euvsimulator.pipeline as P
 
     seen = []
@@ -55,9 +57,15 @@ def test_pipeline_passes_absorbed_fraction(monkeypatch):
 
     monkeypatch.setattr(P, "photon_deposition_shot_noise", spy)
     cfg = SimulationConfig(
-        resist_model="full_chem", enable_stochastic=True, stochastic_seed=1,
-        stochastic_n_realisations=1, stochastic_ler_grid_y=256, grid=64,
-        dill_A=0.2, dill_B=1.5, resist_thickness_nm=40.0,
+        resist_model="full_chem",
+        enable_stochastic=True,
+        stochastic_seed=1,
+        stochastic_n_realisations=1,
+        stochastic_ler_grid_y=256,
+        grid=64,
+        dill_A=0.2,
+        dill_B=1.5,
+        resist_thickness_nm=40.0,
     )
     run_simulation(cfg)
     expected = 1.0 - math.exp(-(0.2 + 1.5) * 0.040)
@@ -67,7 +75,8 @@ def test_pipeline_passes_absorbed_fraction(monkeypatch):
 
 def test_absorbed_fraction_uses_same_coefficient_as_depth_profile():
     """Consistency: the fraction absorbed over the film equals what the
-    depth-resolved Beer-Lambert dose profile loses between top and bottom."""
+    depth-resolved Beer-Lambert dose profile loses between top and bottom.
+    """
     from euvsimulator.resist.exposure import dill_abc_exposure
 
     A, B, t_um = 0.1, 1.06, 0.05

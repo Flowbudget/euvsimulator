@@ -42,15 +42,15 @@ def exact_tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm, grid=256):
     fi = mi * wavelength_m / (period_m * na)
     fj = mj * wavelength_m / (period_m * na)
 
-    Pi = ((FX + fi)**2 + FY**2 <= 1.0).astype(float)
-    Pj = ((FX + fj)**2 + FY**2 <= 1.0).astype(float)
+    Pi = ((FX + fi) ** 2 + FY**2 <= 1.0).astype(float)
+    Pj = ((FX + fj) ** 2 + FY**2 <= 1.0).astype(float)
 
     return float((S * Pi * Pj).sum() / S_sum)
 
 
 def tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm):
     """TCC reference — uses exact source-pupil overlap (P1-1, 2026-09-01).
-    
+
     Replaced Bessel J1 approximation with exact 2D overlap integral.
     """
     return exact_tcc_ref(mi, mj, sigma, na, wavelength_nm, period_nm)
@@ -248,6 +248,7 @@ def test_nils_blur_10nm():
     )
     # Apply SE blur in the resist exposure step (as it should be)
     from euvsimulator.resist.exposure import gaussian_se_blur
+
     dx_nm = COMMON["period_nm"] / COMMON["grid"]
     ae = gaussian_se_blur(ae, sigma=10.0, dx=dx_nm)
     dx_nm = COMMON["period_nm"] / COMMON["grid"]

@@ -42,8 +42,26 @@ def test_calibrate_simulates_the_requested_geometry(tmp_path, monkeypatch):
     out = tmp_path / "out.json"
     result = CliRunner().invoke(
         app,
-        ["calibrate", str(_write_fem(tmp_path)), "-i", str(ip), "--period", "44", "--cd", "22",
-         "--grid", "64", "--se-blur", "3", "--bootstrap", "0", "--maxiter", "20", "-o", str(out)],
+        [
+            "calibrate",
+            str(_write_fem(tmp_path)),
+            "-i",
+            str(ip),
+            "--period",
+            "44",
+            "--cd",
+            "22",
+            "--grid",
+            "64",
+            "--se-blur",
+            "3",
+            "--bootstrap",
+            "0",
+            "--maxiter",
+            "20",
+            "-o",
+            str(out),
+        ],
     )
     assert result.exit_code == 0, result.output
     assert seen, "pipeline was never called"
@@ -69,7 +87,17 @@ def test_calibrate_only_fits_parameters_given_in_initial_file(tmp_path, monkeypa
     ip = tmp_path / "ip.yaml"
     ip.write_text("peb_sigma_diff: 9.0\n")
     result = CliRunner().invoke(
-        app, ["calibrate", str(_write_fem(tmp_path)), "-i", str(ip), "--bootstrap", "0", "--maxiter", "5"]
+        app,
+        [
+            "calibrate",
+            str(_write_fem(tmp_path)),
+            "-i",
+            str(ip),
+            "--bootstrap",
+            "0",
+            "--maxiter",
+            "5",
+        ],
     )
     assert result.exit_code == 0, result.output
     # every other resist parameter stays at the SimulationConfig default

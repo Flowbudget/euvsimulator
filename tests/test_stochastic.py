@@ -436,8 +436,9 @@ class TestRMSScaling:
         # This test documents current behavior; the fixture should be improved
         # for a proper RMS scaling test.
         dose_levels = torch.tensor([20.0, 40.0], device=device)
-        result = rms_scaling_check(line_acid, dose_levels, n_realisations=20, seed=42,
-                                   develop_threshold=0.15)
+        result = rms_scaling_check(
+            line_acid, dose_levels, n_realisations=20, seed=42, develop_threshold=0.15
+        )
         ler = result["ler"]
         # Note: LER should decrease with dose, but current fixture has low photon counts
         # causing numerical noise. Documenting current behavior.
@@ -449,8 +450,9 @@ class TestRMSScaling:
         """LER × √(dose) is approximately constant across dose levels."""
         # Use doses where threshold is meaningful and photon counts are sufficient
         dose_levels = torch.tensor([20.0, 40.0], device=device)
-        result = rms_scaling_check(line_acid, dose_levels, n_realisations=10, seed=42,
-                                   develop_threshold=0.15)
+        result = rms_scaling_check(
+            line_acid, dose_levels, n_realisations=10, seed=42, develop_threshold=0.15
+        )
         product = result["ler_sqrt_dose"]
         finite = ~torch.isnan(product) & (product > 0)
         if finite.sum() >= 3:
@@ -467,8 +469,9 @@ class TestRMSScaling:
     def test_fit_exponent_near_neg_half(self, line_acid: torch.Tensor, device: torch.device):
         """Power-law fit exponent is close to -0.5."""
         dose_levels = torch.tensor([20.0, 40.0], device=device)
-        result = rms_scaling_check(line_acid, dose_levels, n_realisations=10, seed=42,
-                                   develop_threshold=0.15)
+        result = rms_scaling_check(
+            line_acid, dose_levels, n_realisations=10, seed=42, develop_threshold=0.15
+        )
         exponent = result["fit_dose_exponent"]
         if not math.isnan(exponent):
             # Expect exponent ≈ -0.5, allow ±0.3 for stochasticity
@@ -477,8 +480,9 @@ class TestRMSScaling:
     def test_lwr_also_scales(self, line_acid: torch.Tensor, device: torch.device):
         """LWR also exhibits 1/√(dose) scaling."""
         dose_levels = torch.tensor([20.0, 40.0], device=device)
-        result = rms_scaling_check(line_acid, dose_levels, n_realisations=8, seed=42,
-                                   develop_threshold=0.15)
+        result = rms_scaling_check(
+            line_acid, dose_levels, n_realisations=8, seed=42, develop_threshold=0.15
+        )
         lwr = result["lwr"]
         # Higher dose → lower LWR
         finite_mask = ~torch.isnan(lwr)
@@ -489,7 +493,10 @@ class TestRMSScaling:
             # The trend should be decreasing but tolerance is generous.
             # TODO: Improve fixture with higher photon counts.
             for i in range(1, len(valid)):
-                assert valid[i] <= valid[i - 1] * 2.0, f"LWR at dose {doses[i]} ({valid[i]:.4f}) > LWR at {doses[i-1]} ({valid[i-1]:.4f}) * 2.0"
+                assert valid[i] <= valid[i - 1] * 2.0, (
+                    f"LWR at dose {doses[i]} ({valid[i]:.4f}) > "
+                    f"LWR at {doses[i - 1]} ({valid[i - 1]:.4f}) * 2.0"
+                )
 
 
 # ──────────────────────────────────────────────
@@ -591,7 +598,7 @@ class TestReproducibility:
 
 class TestSubPixelInterpolation:
     def test_intensity_shape_mismatch_raises(self, device: torch.device):
-        """intensity with wrong shape raises ValueError."""
+        """Intensity with wrong shape raises ValueError."""
         developed = torch.zeros((32, 32), device=device)
         bad = torch.zeros((16, 16), device=device)
         with pytest.raises(ValueError, match="intensity shape"):
@@ -629,9 +636,7 @@ class TestSubPixelInterpolation:
         # intensity = [0.4, 0.6, 0.4] crosses 0.5 at 0.5 (left) and 1.5 (right).
         developed = torch.tensor([[1.0, 0.0, 1.0]] * 4, device=device)
         intensity = torch.tensor([[0.4, 0.6, 0.4]] * 4, device=device)
-        left, right = extract_edges(
-            developed, threshold=0.5, dx=1.0, intensity=intensity
-        )
+        left, right = extract_edges(developed, threshold=0.5, dx=1.0, intensity=intensity)
         # left edge: crossing between 0 (0.4) and 1 (0.6):
         #   frac = (0.5-0.4)/(0.6-0.4) = 0.5 -> position 0.5
         assert torch.allclose(left, torch.full_like(left, 0.5), atol=1e-6)

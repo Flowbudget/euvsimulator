@@ -212,8 +212,12 @@ def reaction_diffusion_adi(
     else:
         raise ValueError(f"Unknown boundary condition: '{boundary}'")
 
-    T_x = _build_tridiagonal_matrix(W, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b)
-    T_y = _build_tridiagonal_matrix(H, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b)
+    T_x = _build_tridiagonal_matrix(
+        W, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b
+    )
+    T_y = _build_tridiagonal_matrix(
+        H, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b
+    )
 
     for _ in range(n_steps):
         # --- half-step 1: implicit in x, explicit in y ---

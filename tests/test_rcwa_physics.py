@@ -49,10 +49,14 @@ def _solve_with_S(pol, M, prof, d, period=PERIOD, wl=WL, theta=THETA, n_sub=N_SU
 
     RCWA1D._redheffer_star_matrix = staticmethod(spy)
     try:
-        o = s.solve(prof, torch.tensor([d]), period,
-                    n_incident=torch.tensor([1 + 0j, 1 + 0j]),
-                    n_substrate=torch.tensor([n_sub + 0j, n_sub + 0j]),
-                    ml_stack=ml_stack)
+        o = s.solve(
+            prof,
+            torch.tensor([d]),
+            period,
+            n_incident=torch.tensor([1 + 0j, 1 + 0j]),
+            n_substrate=torch.tensor([n_sub + 0j, n_sub + 0j]),
+            ml_stack=ml_stack,
+        )
     finally:
         RCWA1D._redheffer_star_matrix = staticmethod(orig_star)
     k0 = 2 * math.pi / wl
@@ -91,6 +95,7 @@ def _tmm(n_layer, d, te, theta=THETA, wl=WL, n_sub=N_SUB):
 
 # ── 1. Star product ─────────────────────────────────────────────
 
+
 def test_star_product_is_basis_independent():
     torch.manual_seed(2)
     M = 5
@@ -117,6 +122,7 @@ def test_star_product_is_basis_independent():
 
 # ── 2. Homogeneous layer == TMM ─────────────────────────────────
 
+
 @pytest.mark.parametrize("pol, te", [("TE", True), ("TM", False)])
 def test_homogeneous_layer_matches_tmm(pol, te):
     slab = torch.full((2048,), 2.25 + 0j, dtype=torch.complex128)
@@ -128,6 +134,7 @@ def test_homogeneous_layer_matches_tmm(pol, te):
 
 # ── 3. Zero-thickness grating -> Fresnel ────────────────────────
 
+
 @pytest.mark.parametrize("pol, te", [("TE", True), ("TM", False)])
 def test_zero_thickness_grating_gives_fresnel(pol, te):
     prof = binary_grating_profile(PERIOD, 100e-9, 2.25 + 0j, 1 + 0j, n_samples=2048)
@@ -138,6 +145,7 @@ def test_zero_thickness_grating_gives_fresnel(pol, te):
 
 
 # ── 4. Effective-medium limit ──────────────────────────────────
+
 
 def test_effective_medium_limit():
     P = 20e-9
@@ -160,6 +168,7 @@ def test_effective_medium_limit():
 
 # ── 5. Energy conservation ─────────────────────────────────────
 
+
 @pytest.mark.parametrize("pol", ["TE", "TM"])
 @pytest.mark.parametrize("M", [11, 41])
 def test_lossless_grating_conserves_energy(pol, M):
@@ -170,6 +179,7 @@ def test_lossless_grating_conserves_energy(pol, M):
 
 # ── 6. Multilayer operator: magnitude and phase ─────────────────
 
+
 @pytest.mark.parametrize("pol, te", [("TE", True), ("TM", False)])
 def test_empty_grating_over_multilayer_matches_tmm_with_phase(pol, te):
     table = CXROTable()
@@ -178,12 +188,21 @@ def test_empty_grating_over_multilayer_matches_tmm_with_phase(pol, te):
     ml = mo_si_stack(n_bilayers=50, d_mo_nm=2.8, d_si_nm=4.1, capping_layer="Ru", d_cap_nm=2.5)
     d = 60e-9
     s = RCWA1D(RCWAConfig(wavelength=13.5e-9, n_orders=11, theta=6.0, polarization=pol))
-    o = s.solve(torch.ones(1024, dtype=torch.complex128), torch.tensor([d]), 176e-9,
-                n_incident=torch.tensor([1 + 0j, 1 + 0j]), ml_stack=ml)
-    _, r = reflectivity(ml.n_layers, ml.thicknesses,
-                        torch.tensor([13.5e-9], dtype=torch.float64),
-                        torch.tensor(math.radians(6.0), dtype=torch.float64),
-                        n_substrate=torch.tensor(complex(n_si, k_si), dtype=torch.complex128), te=te)
+    o = s.solve(
+        torch.ones(1024, dtype=torch.complex128),
+        torch.tensor([d]),
+        176e-9,
+        n_incident=torch.tensor([1 + 0j, 1 + 0j]),
+        ml_stack=ml,
+    )
+    _, r = reflectivity(
+        ml.n_layers,
+        ml.thicknesses,
+        torch.tensor([13.5e-9], dtype=torch.float64),
+        torch.tensor(math.radians(6.0), dtype=torch.float64),
+        n_substrate=torch.tensor(complex(n_si, k_si), dtype=torch.complex128),
+        te=te,
+    )
     # Reference: TMM coefficient (E-field for TM -> H-field is −r), propagated
     # up through the 60 nm vacuum gap to the RCWA reference plane.
     kz = 2 * math.pi / 13.5e-9 * math.cos(math.radians(6.0))

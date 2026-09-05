@@ -38,7 +38,9 @@ def test_adi_neumann_conserves_mass(D, dt):
 def test_adi_dirichlet_loses_mass():
     A0 = torch.zeros(32, 32)
     A0[8:24, 8:24] = 1.0
-    A, _ = reaction_diffusion_adi(A0, torch.ones_like(A0), D=20.0, k=0.0, dt=1.0, n_steps=12, dx=1.0, boundary="dirichlet")
+    A, _ = reaction_diffusion_adi(
+        A0, torch.ones_like(A0), D=20.0, k=0.0, dt=1.0, n_steps=12, dx=1.0, boundary="dirichlet"
+    )
     assert float(A.sum()) < float(A0.sum())
 
 
@@ -57,23 +59,53 @@ def test_z_blur_identity_limits():
     field = torch.rand(7, 3, 3)
     assert torch.equal(_gaussian_blur_z(field, sigma_nm=0.0, dz=2.5), field)
     single = torch.rand(1, 3, 3)
-    out = reaction_diffusion_with_quenching(single, 0.0, torch.ones_like(single), D=3.3, k=0.0723,
-                                            quench_rate=15.0, t_bake=60.0, dx=0.25, pag_density=0.2, dz=2.5)[2]
-    ref = reaction_diffusion_with_quenching(single, 0.0, torch.ones_like(single), D=3.3, k=0.0723,
-                                            quench_rate=15.0, t_bake=60.0, dx=0.25, pag_density=0.2)[2]
+    out = reaction_diffusion_with_quenching(
+        single,
+        0.0,
+        torch.ones_like(single),
+        D=3.3,
+        k=0.0723,
+        quench_rate=15.0,
+        t_bake=60.0,
+        dx=0.25,
+        pag_density=0.2,
+        dz=2.5,
+    )[2]
+    ref = reaction_diffusion_with_quenching(
+        single,
+        0.0,
+        torch.ones_like(single),
+        D=3.3,
+        k=0.0723,
+        quench_rate=15.0,
+        t_bake=60.0,
+        dx=0.25,
+        pag_density=0.2,
+    )[2]
     assert torch.allclose(out, ref)
 
 
 def test_peb_step_is_isotropic_with_dz():
     """A delta acid spike in the middle layer/pixel spreads with the same σ
-    along z (dz units) and along x (dx units)."""
+    along z (dz units) and along x (dx units).
+    """
     N, H, W, dx, dz = 161, 1, 201, 0.25, 0.25  # ±20 nm in z = 5 sigma: no boundary influence
     acid = torch.zeros(N, H, W)
     acid[N // 2, 0, W // 2] = 1.0
     sigma = 4.0
-    h, _, _ = reaction_diffusion_with_quenching(acid, 0.0, torch.ones_like(acid), D=0.0, k=0.0,
-                                                quench_rate=0.0, t_bake=1.0, sigma_diff=sigma, dx=dx,
-                                                pag_density=0.2, dz=dz)
+    h, _, _ = reaction_diffusion_with_quenching(
+        acid,
+        0.0,
+        torch.ones_like(acid),
+        D=0.0,
+        k=0.0,
+        quench_rate=0.0,
+        t_bake=1.0,
+        sigma_diff=sigma,
+        dx=dx,
+        pag_density=0.2,
+        dz=dz,
+    )
     prof_z = h[:, 0, W // 2]
     prof_x = h[N // 2, 0, :]
     zc = (torch.arange(N) - N // 2) * dz

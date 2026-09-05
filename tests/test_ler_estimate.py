@@ -8,6 +8,7 @@ Deckt ab:
 - Seed-Sequenz / SE / CI
 - Fehlerfälle
 """
+
 import math
 
 import numpy as np
@@ -37,9 +38,11 @@ def make_field(n_rows, n_cols=256, edge_col=100.0, sigma_edge=1.0, rng=None):
     edge = (edge_col + torch.from_numpy(shift).float()).unsqueeze(1)  # (N,1)
     width = 56.0
     s = width / 6.0
+
     def sig(a):
         return torch.sigmoid(a)
-    hl = sig((edge - x) / s)            # hell links (1 für x<edge)
+
+    hl = sig((edge - x) / s)  # hell links (1 für x<edge)
     hr = sig((x - (edge + width)) / s)  # hell rechts (1 für x>edge+W)
     intensity = torch.minimum(hl + hr, torch.ones_like(hl))
     developed = (intensity > 0.5).float()

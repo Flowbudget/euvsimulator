@@ -33,8 +33,11 @@ OPEN_FRAME_LW_NM = 1e-6  # effectively zero absorber width
 def _open_frame(dose, **kw):
     return run_simulation(
         SimulationConfig(
-            period_nm=64.0, line_width_nm=OPEN_FRAME_LW_NM, dose_mj_cm2=dose,
-            grid=128, **kw,
+            period_nm=64.0,
+            line_width_nm=OPEN_FRAME_LW_NM,
+            dose_mj_cm2=dose,
+            grid=128,
+            **kw,
         )
     )
 
@@ -124,12 +127,20 @@ def test_rcwa_runs_at_mask_scale(monkeypatch):
 
     def spy(self, eps_profile, thicknesses, period, *args, **kwargs):
         orders = real_solve(self, eps_profile, thicknesses, period, *args, **kwargs)
-        calls.append((self.cfg.polarization, float(period), self.m.tolist(), orders.detach().clone()))
+        calls.append(
+            (self.cfg.polarization, float(period), self.m.tolist(), orders.detach().clone())
+        )
         return orders
 
     monkeypatch.setattr(RCWA1D, "solve", spy)
-    cfg = SimulationConfig(period_nm=64.0, line_width_nm=32.0, dose_mj_cm2=20.0,
-                           grid=128, use_rcwa=True, n_rcwa_orders=11)
+    cfg = SimulationConfig(
+        period_nm=64.0,
+        line_width_nm=32.0,
+        dose_mj_cm2=20.0,
+        grid=128,
+        use_rcwa=True,
+        n_rcwa_orders=11,
+    )
     run_simulation(cfg)
     assert len(calls) == 2  # TE and TM
     for pol, period, m, orders in calls:

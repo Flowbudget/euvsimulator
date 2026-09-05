@@ -496,7 +496,7 @@ def reflectivity_at_kx(
         The phase is defined at the TOP of the ML stack (first layer).
     """
     wl = torch.tensor([wavelength_m], dtype=torch.float64)
-    n0_sin2_val = kx_norm ** 2
+    n0_sin2_val = kx_norm**2
 
     # Ensure n_incident and n_substrate are tensors (not Python complex)
     if isinstance(n_incident, complex):
@@ -505,7 +505,9 @@ def reflectivity_at_kx(
         n_substrate = torch.tensor(n_substrate, dtype=torch.complex128)
 
     _, r = reflectivity(
-        n_layers, thicknesses, wl,
+        n_layers,
+        thicknesses,
+        wl,
         theta0=None,
         n_incident=n_incident,
         n_substrate=n_substrate,
