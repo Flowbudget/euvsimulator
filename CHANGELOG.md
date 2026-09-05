@@ -134,6 +134,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   quantum efficiency, which lives inside Dill C (Mack 2013, Eqs. 8/10), and capped the acid yield
   at 0.5. The acid yield is now 1 − exp(−C·E). `SimulationConfig(dill_Q=...)` raises.
 - `resist_threshold`, `mask_sidewall_roughness_nm`: accepted but never read.
+- `resist.exposure.dose_to_acid(Q=...)`: the surviving copy of the removed `dill_Q` prefactor
+  (default 0.04, capping the yield below 1) in the 2D helper used by tests and screening
+  scripts; the yield is 1 − exp(−C·E) there too now.
 
 ### Changed
 - Lint clean (`ruff check` + `ruff format --check`, the CI lint job): 35 files reformatted,

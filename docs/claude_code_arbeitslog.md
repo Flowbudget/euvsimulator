@@ -2382,3 +2382,41 @@ der Billing-Annotation). Deshalb lokal alles, was die CI täte, plus Falsifikati
 11 min 36 s.** Nach der Lint-Bereinigung zusätzlich die schnelle Suite unter Python 3.10 (825 + 2 xfail)
 und die von der Umformatierung berührten Module (55 + 2 xfail) — die Umformatierung ist semantikfrei
 (ruff format; Kommentar-/String-Umbrüche mit Byte-Identität geprüft).
+
+## 2026-09-05 (Fortsetzung 17): Prüfung der vier Stochastik-Regressionsmodule
+
+Auf Wunsch des Nutzers alle 51 Tests in `test_stochastic_pipeline`, `test_development_stochasticity`,
+`test_ler_production_integration`, `test_stochastic_consistency` gelesen und gegen den heutigen
+Code gestellt. Urteil: die geprüften Invarianten sind echt (Seed-Determinismus, Block-/Kachel-
+Äquivalenz, Großzahl-Grenzwert gegen die deterministische CD, ρ^(−1/2), CD/NILS unverändert mit
+Stochastik, Metadaten), keine Tautologien, Goldens als Regressions-Pins mit Herkunft.
+
+**Zwei Vermutungen gemessen, eine falsifiziert:**
+- Preflight `preflight_T_edges_lwr.py` — LER/LWR aus der Ankunftszeit-Kante statt der Tiefenkarte
+  (Vorhersagen: Goldens-Konfiguration < 2 % Unterschied; reines Molekülrauschen bei ρ = 2000 mit
+  Ankunftszeit *kleiner*, weil der Tiefen-Sägezahn wegfällt). Gemessen: (a) P = 64, σ 7, 4,0, 1024
+  Zeilen: LWR 2,966 → 3,011 (+1,5 %), LER 1,852 → 1,871; (b) ρ = 2000, Photonen aus: LWR 0,0194 →
+  0,0204, ρ = 20: 0,232 → 0,255. **(b) falsifiziert:** die Tiefenkarten-Interpolation trägt kein
+  messbares Pseudo-Rauschen bei; der 0,02-nm-Boden ist Molekülrauschen. Kantenextraktion bleibt.
+- Der von keinem Test berührte Pfad „mehrere Kacheln + gesampelter Quencher" läuft: P = 44,
+  21 mJ/cm², ρ_PAG 0,2 / ρ_Q 0,05, 1300 Zeilen: eine Kachel stochCD 15,41 / LWR 2,13 (n_eff 12,7),
+  zwei Kacheln 15,07 / 2,49 (13,3) — verschiedene Ziehungen per Konstruktion, gleiche Physik.
+
+**Befunde und Umsetzung:**
+1. Veraltete Texte: Modulkopf des LER-Moduls („N_eff ≥ 30 im Default", „Konvergenz ≤ 1 %" bei 4 %
+   im Test), drei `dill_Q`-Kommentarblöcke, n_eff-Kommentar (17,8 statt Golden 30,3), Toleranz-
+   begründung im Konsistenztest („deterministische CD pixelquantisiert"), `dill_Q=0.5` im
+   Pipeline-Modul — alle ersetzt. `test_neff_ge_30` prüft jetzt den Default (4096 Zeilen, n_eff
+   30,3) statt 8192.
+2. „Pipeline-equivalent" für `_make_acid_large` war falsch: synthetische Kette (alle einfallenden
+   Photonen, dose_to_acid C = 0,05, keine PEB, Schwelle 0,3). Modulkopf und Docstring sagen das jetzt;
+   der Dosis-Skalierungs-Pin ist als Eigenschaft der Kunstkette benannt.
+3. `dose_to_acid(Q=…)` (Default 0,04) war der überlebende Zwilling des entfernten `dill_Q` —
+   im Quellcode ohne Aufrufer, in Tests mit Q = 1 bzw. kleinen Q. Parameter entfernt, Ausbeute
+   1 − e^{−C·E}; sieben Aufrufer in vier Testdateien angepasst, `test_resist` 76/76 grün.
+4. Redundante Zusicherung in `test_stochastic_produces_ler_lwr` → `isfinite and > 0`.
+
+Laufzeit-Hinweis: 61440-Zeilen-Test ≈ 5 min (kritischster Posten für die CI-Matrix).
+
+**Ergebnis nach Umsetzung:** die vier Module mit `-n auto` und echtem Exit-Code: **51 bestanden in
+10 min 30 s (Exit 0)**; schnelle Suite nach der Q-Entfernung 825 bestanden + 2 xfail; Lint/Format sauber.

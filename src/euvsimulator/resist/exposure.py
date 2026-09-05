@@ -471,19 +471,22 @@ def gaussian_se_blur(
 def dose_to_acid(
     dose: torch.Tensor,
     C: float | torch.Tensor = 0.1,
-    Q: float | torch.Tensor = 0.04,
     sigma_blur: float | torch.Tensor = 5.0,
     dx: float = 1.0,
     apply_blur: bool = True,
 ) -> torch.Tensor:
-    """Map EUV dose to photoacid concentration.
+    """Map EUV dose to photoacid concentration (2D helper, not the pipeline chain).
 
-    This is a simplified end-to-end dose-to-acid pipeline:
+    This is a simplified end-to-end dose-to-acid helper used by tests and
+    screening scripts; the pipeline runs :func:`dill_abc_exposure`.
 
         1. Apply secondary-electron Gaussian blur to the dose map.
-        2. Convert to photoacid concentration: ``[H⁺] = Q · (1 − exp[−C · dose])``
+        2. Convert to photoacid concentration: ``[H⁺] = 1 − exp[−C · dose]``
 
-    where *Q* is the maximum acid yield and *C* is the Dill C parameter.
+    where *C* is the Dill C parameter. The former prefactor ``Q`` (a second
+    "quantum efficiency" on top of the one inside C, capping the yield below
+    1) was removed 2026-09-05 together with the pipeline's ``dill_Q``
+    (Mack 2013, Eqs. 8/10: the PAG quantum efficiency lives inside C).
 
     Parameters
     ----------
@@ -491,12 +494,6 @@ def dose_to_acid(
         Input dose map [mJ/cm²].  Shape ``(H, W)`` or ``(B, H, W)``.
     C : float or torch.Tensor
         Photo-rate constant [cm²/mJ].  Default 0.1 (realistic for EUV CAR).
-    Q : float or torch.Tensor
-        Quantum efficiency — maximum acid molecules per absorbed
-        photon.  Default 0.04 (typical for EUV CAR in simplified model).
-        The full dill_abc_exposure uses Q=0.1 with explicit depth-dependent
-        absorption; the simplified model uses lower Q to account for
-        average depth absorption.
     sigma_blur : float or torch.Tensor
         Secondary-electron blur sigma [nm].  Default 5.0.
     dx : float
@@ -514,5 +511,5 @@ def dose_to_acid(
     else:
         dose_blurred = dose
 
-    acid = Q * (1.0 - torch.exp(-C * dose_blurred))
+    acid = 1.0 - torch.exp(-C * dose_blurred)
     return acid

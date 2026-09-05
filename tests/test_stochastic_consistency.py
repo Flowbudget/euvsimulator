@@ -109,10 +109,11 @@ def test_large_number_limit_recovers_deterministic_cd(photon_noise_off, q_ratio)
     for rho in (0.2, 20.0, 2000.0):
         cds[rho] = _stoch(rho, q_ratio, dose).ler_metadata["stochastic_cd_nm"]
         assert math.isfinite(cds[rho])
-    # Converged: the deterministic cd_nm is pixel-quantised (integer-pixel
-    # run length of the binarised middle row, ±0.5 px per edge), the
-    # stochastic width is a sub-pixel crossing -> agree to 1.5 px; and the
-    # dense realisation is closer than the sparse one.
+    # Converged: the deterministic cd_nm is the arrival-time crossing of the
+    # middle row (sub-pixel since 2026-09-05), the stochastic width is the
+    # depth-map crossing averaged over rows (the two extractors differ by up
+    # to ~1 px per edge on a coarse grid, preflight_subpixel_cd.py) -> agree
+    # to 1.5 px; and the dense realisation is closer than the sparse one.
     assert abs(cds[2000.0] - det) <= 1.5 * DX, f"det {det:.2f}, stochastic {cds}"
     assert abs(cds[2000.0] - det) <= abs(cds[0.2] - det) + 1e-9
 

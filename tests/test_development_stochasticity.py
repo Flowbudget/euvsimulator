@@ -81,7 +81,7 @@ def _acid_large(seed, n_tiles=4):
         dose_to_energy_factor=F,
         rng=rng,
     )
-    return dose_to_acid(d_eff, C=0.05, Q=1.0, apply_blur=False), rng
+    return dose_to_acid(d_eff, C=0.05, apply_blur=False), rng
 
 
 # ── Pipeline: the switch is refused ─────────────────────────────

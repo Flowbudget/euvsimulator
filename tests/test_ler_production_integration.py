@@ -3,16 +3,24 @@
 Validates the large-N LER estimator integration into the stochastic
 production path (pipeline.py):
 
-- legacy mode reproduces the previous production behavior exactly
+- legacy mode reproduces the pinned previous production behavior
 - default large-N mode uses stochastic_ler_grid_y=4096
-- configurable field sizes (2048/4096/6144), no artificial upper bound
+- configurable field sizes (any N, incl. 61440), no artificial upper bound
 - deterministic block/blur equivalence (max|diff| = 0)
 - stochastic non-periodicity, seed determinism/independence
-- N_eff >= 30, 2048→4096 convergence <= 1 %
+- N_eff >= 30 at the default field size, 2048→4096 convergence <= 4 %
 - subsampling/correlation controls, same-N BC control, valid shift test
 - edge="both" equivalence with legacy extract_ler
-- deterministic observables unchanged, dose scaling consistent
+- deterministic observables unchanged, dose scaling pinned
 - full metadata population
+
+Two kinds of tests live here. Tests that call run_simulation() exercise the
+real pipeline chain (absorbed-photon shot noise -> dill_abc_exposure -> PEB ->
+Eikonal development). Tests built on _make_acid_large() run the LER ESTIMATOR
+on a SYNTHETIC field (all incident photons, dose_to_acid with C = 0.05, no PEB,
+threshold 0.3): they test the estimator's statistics, not the resist physics,
+and their pinned numbers (e.g. the dose-scaling slope) are properties of that
+synthetic chain.
 """
 
 import math
@@ -37,34 +45,12 @@ DX = 0.25
 THRESH = 0.3
 SEED = 42
 
-# Golden values updated for P1-1 TCC correction (2026-09-01):
-# The exact source-pupil overlap TCC reduces contrast, which
-# increases LER/LWR values.  This is a documented physics fix.
-#
-# Golden values updated again for the EUV-native Yamamoto et al. 2011
-# dill_C adoption (2026-09-03, see pipeline.py dill_C comment): dill_C
-# rose from 0.05 to 0.08997 cm2/mJ, directly changing dose_to_acid()'s
-# output feeding the stochastic LER/LWR path -- a documented model-input
-# change, not a calibration or a regression. (An earlier version of this
-# comment incorrectly attributed this shift to dill_A/dill_B -- at that
-# time those two fields really were dead code everywhere, corrected in
-# commit 510e9ad; superseded by the next update below, where they became
-# load-bearing.)
-#
-# Golden values updated a THIRD time (2026-09-03, "mach den
-# stochastischen Pfad auch"): the stochastic LER/LWR path itself was
-# rewired to use the same depth-resolved dill_abc_exposure() ->
-# reaction_diffusion_analytical() -> MackModel/
-# surface_advancement_level_set() chain as the deterministic CD path
-# (previously it used its own simpler, PEB-free acid-threshold chain --
-# see pipeline.py's _cd_via_full_chem docstring). dill_A/dill_B are
-# therefore no longer dead code by the time these values were measured.
-# _car_cfg()'s dill_Q=1.0 pin was ALSO removed in this same round: it
-# was chosen to make the OLD chain produce a non-degenerate result, but
-# floods the whole field with the new one (no edges left to measure) --
-# _car_cfg() now uses the plain SimulationConfig default (dill_Q=0.5,
-# Mack et al. 2011's own real baseline). Re-measured reproducibly
-# (seed=42, se_blur=5, plain _car_cfg() defaults).
+# Golden-value history: P1-1 TCC correction (2026-09-01); dill_C 0.05 ->
+# 0.08997 (Yamamoto 2011, 2026-09-03); stochastic path rewired onto the same
+# depth-resolved chain as the deterministic CD (2026-09-03); Phase 0 and
+# Phase 2b re-measurements (2026-09-04, see below). The former dill_Q pin
+# (1.0 in this config, 0.5 default) no longer exists: the acid yield is
+# 1 - exp(-C*E) (Mack 2013, Eqs. 8/10).
 TEST_DOSE = 4.0  # mJ/cm² at the wafer, near dose-to-size at TEST_SIGMA (see _car_cfg)
 TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg)
 # Golden values are regression pins of the test configuration (seed 42,
@@ -92,18 +78,10 @@ def _car_cfg(**kw):
         stochastic_n_realisations=1,
         stochastic_seed=SEED,
         se_blur_nm=5.0,
-        # Operating point (2026-09-04): dose_mj_cm2 is now the WAFER dose in
-        # a clear area (pipeline.py SimulationConfig.dose_mj_cm2, Mack 1997)
-        # and the Dill acid yield saturates at 1 (former dill_Q cap removed).
-        # Under these conventions the default Yamamoto-2011 resist prints
-        # the 32 nm line of the default 64 nm pitch near 5.7 mJ/cm² (measured
-        # with se_blur=5: CD 34.0 nm at 5.5, 27.5 at 6.0, 15.5 at 7.0). The
-        # previous implicit 20 mJ/cm² was chosen when the resist saw only
-        # 0.647 × the nominal dose and half the acid; at a true 20 mJ/cm²
-        # the line is fully cleared and there is no edge to measure
-        # (LER/LWR = NaN). NOTE: the deterministic path has no quencher yet;
-        # adding it (Phase 1) is expected to move dose-to-size up by the
-        # dose the quencher neutralises (~3 mJ/cm² for Mack 2011's loading).
+        # Operating point (2026-09-04): dose_mj_cm2 is the WAFER dose in a clear
+        # area (pipeline.py SimulationConfig.dose_mj_cm2, Mack 1997) and the
+        # Dill acid yield saturates at 1. At the former implicit 20 mJ/cm2 the
+        # line is fully cleared (LER/LWR = NaN).
         dose_mj_cm2=TEST_DOSE,
         # Operating point (2026-09-04, Phase 2b): with the exact PEB blur and
         # the Eikonal development front, the default sigma_PEB = 19.9 nm gives
@@ -113,16 +91,6 @@ def _car_cfg(**kw):
         # at 4.0 mJ/cm2). This is a choice of test operating point, not a
         # physics default -- the default sigma is Phase 3's subject.
         peb_sigma_diff=TEST_SIGMA,
-        # dill_Q no longer pinned to 1.0 here (2026-09-03): that override
-        # was chosen for the OLD, un-wired full_chem chain, where a
-        # non-degenerate result needed dill_Q pushed well past any real
-        # cited value. With MackModel/dill_abc_exposure wired in (see
-        # pipeline.py's mack_R_max "RESOLVED" note), dill_Q=1.0 combined
-        # with the new peb_k default floods the whole field (no edges
-        # left to measure -- "no valid edges found in any realization"),
-        # while the plain new default (0.5, Mack et al. 2011's own real
-        # baseline) gives a genuine, resolvable line. Just use cfg
-        # defaults now instead of overriding.
     )
     base.update(kw)
     return SimulationConfig(**base)
@@ -136,7 +104,7 @@ def _aerial():
 
 
 def _make_acid_large(dose_map, seed, n_real=1):
-    """Pipeline-equivalent stochastic acid on a large field."""
+    """SYNTHETIC stochastic acid on a large field (estimator tests, see module docstring)."""
     out = []
     rng = torch.Generator().manual_seed(seed)
     for _ in range(n_real):
@@ -148,7 +116,7 @@ def _make_acid_large(dose_map, seed, n_real=1):
             dose_to_energy_factor=F,
             rng=rng,
         )
-        out.append(dose_to_acid(d_eff, C=0.05, Q=1.0, apply_blur=False))
+        out.append(dose_to_acid(d_eff, C=0.05, apply_blur=False))
     return out
 
 
@@ -355,7 +323,7 @@ def test_stochastic_integrity_3000():
     d_eff = photon_deposition_shot_noise(
         dose_map, 5.0, dx_nm=DX, photon_energy_eV=E_PH, dose_to_energy_factor=F, rng=rng
     )
-    acid = dose_to_acid(d_eff, C=0.05, Q=1.0, apply_blur=False)
+    acid = dose_to_acid(d_eff, C=0.05, apply_blur=False)
     dev = (acid > THRESH).float()
     left, right = extract_edges(dev, threshold=THRESH, dx=DX, intensity=acid)
     fin = ~(torch.isnan(left) | torch.isnan(right))
@@ -376,20 +344,13 @@ def test_stochastic_integrity_3000():
 
 
 def test_neff_ge_30():
-    # 2026-09-03 ("mach den stochastischen Pfad auch"): the plain default
-    # (grid_y=4096) no longer reaches n_eff>=30 on its own -- the
-    # stochastic path's depth-resolved MackModel chain has a genuinely
-    # longer spatial correlation length than the old, simpler chain (real
-    # PEB diffusion now correctly couples neighbouring rows: l_int_nm rose
-    # from ~8.4 to ~29.2), so n_eff at 4096 rows dropped from ~61 to
-    # ~17.8. This is an honest physical consequence of a more complete
-    # model, not a regression to paper over -- rather than silently
-    # lowering this test's threshold, or silently doubling the global
-    # default grid_y (and with it the compute cost of every default
-    # stochastic call), this test now explicitly asks for enough rows to
-    # reach the statistically-defensible n_eff>=30 threshold (verified:
-    # grid_y=8192 gives n_eff~37), keeping the global default at 4096.
-    r = run_simulation(_car_cfg(stochastic_ler_grid_y=8192))
+    # n_eff at the default 4096 rows: 17.8 after the 2026-09-03 rewiring
+    # (longer PEB correlation length), 30.3 after Phase 2b (exact blur,
+    # sigma_PEB 7 nm operating point; GOLDEN_N_EFF). The statistically
+    # defensible threshold is asked of the DEFAULT field size; if a future
+    # physics change lowers n_eff again, raise stochastic_ler_grid_y here
+    # explicitly rather than lowering the threshold.
+    r = run_simulation(_car_cfg())
     assert r.ler_metadata["n_eff"] >= 30.0
 
 

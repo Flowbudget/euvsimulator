@@ -602,7 +602,7 @@ class TestEndToEnd:
         X, _ = torch.meshgrid(x, x, indexing="ij")
         dose = 100.0 * torch.exp(-0.5 * (X / 8.0) ** 2)
 
-        acid = dose_to_acid(dose, C=0.5, Q=0.3, sigma_blur=3.0)
+        acid = dose_to_acid(dose, C=0.5, sigma_blur=3.0)
         inhib_in = torch.ones_like(acid)
         _, inhib = reaction_diffusion_analytical(acid, inhib_in, k=1.0, t_bake=10.0)
 
@@ -617,7 +617,7 @@ class TestEndToEnd:
         dose = 20.0 * torch.exp(-0.5 * (X / 6.0) ** 2)
         dose.requires_grad_(True)
 
-        acid = dose_to_acid(dose, C=0.01, Q=0.04, sigma_blur=3.0)
+        acid = dose_to_acid(dose, C=0.01, sigma_blur=3.0)
         inhib_in = torch.ones_like(acid)
         _, inhib = reaction_diffusion_analytical(acid, inhib_in, k=0.1, t_bake=5.0)
 
@@ -634,7 +634,7 @@ class TestEndToEnd:
         dose = torch.zeros((64, 64), device=device)
         dose[:, 22:42] = 40.0  # 20 nm line at high dose
 
-        acid = dose_to_acid(dose, C=0.05, Q=0.08, sigma_blur=1.5)
+        acid = dose_to_acid(dose, C=0.05, sigma_blur=1.5)
         inhib_in = torch.ones_like(acid)
         _, inhib = reaction_diffusion_analytical(acid, inhib_in, k=0.2, t_bake=5.0)
 
@@ -678,7 +678,7 @@ class TestEdgeCases:
         """Different dx values produce consistent results."""
         dose = torch.zeros((64, 64), device=device)
         dose[:, 24:40] = 30.0
-        acid = dose_to_acid(dose, C=0.02, Q=0.05)
+        acid = dose_to_acid(dose, C=0.02)
         dev = threshold_development(acid, threshold=0.01)
         cd1 = extract_cd(dev, dx=1.0)
         cd2 = extract_cd(dev, dx=2.0)

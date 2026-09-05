@@ -64,8 +64,8 @@ def test_full_chem_chemistry_affected_by_params():
     dx_nm = 64.0 / G
 
     # Test dill_C affects acid
-    acid_low = dose_to_acid(ae_dose, C=0.01, Q=1.0, sigma_blur=0.0, dx=dx_nm, apply_blur=False)
-    acid_high = dose_to_acid(ae_dose, C=0.2, Q=1.0, sigma_blur=0.0, dx=dx_nm, apply_blur=False)
+    acid_low = dose_to_acid(ae_dose, C=0.01, sigma_blur=0.0, dx=dx_nm, apply_blur=False)
+    acid_high = dose_to_acid(ae_dose, C=0.2, sigma_blur=0.0, dx=dx_nm, apply_blur=False)
     assert acid_high.mean() > acid_low.mean(), "Higher dill_C should produce more acid"
 
     # Test peb_k affects inhibitor

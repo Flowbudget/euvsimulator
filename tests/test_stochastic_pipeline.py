@@ -1,7 +1,8 @@
 """Integration tests for stochastic pipeline (shot noise → LER/LWR)."""
 
+import math
+
 import pytest
-import torch
 
 from euvsimulator.pipeline import SimulationConfig, run_simulation
 
@@ -21,14 +22,8 @@ def test_stochastic_requires_full_chem():
 
 
 def test_stochastic_produces_ler_lwr():
-    """Stochastic pipeline returns positive LER/LWR.
-
-    2026-09-03: no longer pins dill_Q=1.0 -- that was chosen for the
-    OLD, un-wired full_chem chain (see pipeline.py mack_R_max "RESOLVED"
-    note); with MackModel/dill_abc_exposure now wired in, dill_Q=1.0
-    floods the whole field (no edges left to measure). Plain
-    SimulationConfig defaults (dill_Q=0.5, Mack et al. 2011's own real
-    baseline) now give a genuine, resolvable, non-degenerate result.
+    """Stochastic pipeline returns positive LER/LWR at the regression operating
+    point (sigma_PEB 7 nm, 4.0 mJ/cm2, see test_ler_production_integration).
     """
     cfg = SimulationConfig(
         resist_model="full_chem",
@@ -41,12 +36,9 @@ def test_stochastic_produces_ler_lwr():
         peb_sigma_diff=7.0,
     )
     result = run_simulation(cfg)
-    # LER/LWR should be positive (or NaN if no features)
-    assert result.ler_nm >= 0 or torch.isnan(torch.tensor(result.ler_nm))
-    assert result.lwr_nm >= 0 or torch.isnan(torch.tensor(result.lwr_nm))
-    # With our test pattern, should get positive values
-    assert result.ler_nm > 0
-    assert result.lwr_nm > 0
+    # a line prints at this operating point, so both must be finite and > 0
+    assert math.isfinite(result.ler_nm) and result.ler_nm > 0
+    assert math.isfinite(result.lwr_nm) and result.lwr_nm > 0
 
 
 def test_stochastic_reproducible_with_seed():
