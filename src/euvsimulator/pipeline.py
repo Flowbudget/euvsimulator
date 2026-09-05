@@ -65,6 +65,26 @@ DEFAULT_RESIST_DENSITY_G_CM3 = 1.20
 # tests/test_absorption_coefficient.py
 DEFAULT_DILL_B_PER_UM = 4.44
 
+
+def acids_per_absorbed_photon(cfg: "SimulationConfig") -> float:
+    """Acids generated per ABSORBED EUV photon in the low-dose limit implied by
+    the configured Dill C, PAG density and absorption coefficient.
+
+    dH/dE = C·G0 [nm⁻³ per mJ/cm²] (acid = G0·(1 − e^{−C·E}), E → 0) divided by
+    the absorbed photon density per unit dose, N_ph·α with N_ph = photons per
+    nm² per mJ/cm² (0.68 at 13.5 nm) and α = A + B in nm⁻¹ (thin-film limit,
+    no depth averaging). This is the "film quantum yield" of Brainard/LBNL
+    (acids per absorbed photon; measured 1.4–2.1 for EUV-2D, MET-2D, XP-5496 at
+    standard PAG loadings, OSTI 1004159 Table 3) and Kozawa's acid-generation
+    quantum efficiency (≈ 2), and it ties C, G0 and B together -- three numbers
+    that otherwise come from three different sources.
+    """
+    photon_energy_J = 6.62607015e-34 * 2.99792458e8 / (cfg.wavelength_nm * 1e-9)
+    photons_per_nm2_per_mjcm2 = 1e-3 / photon_energy_J / 1e14
+    alpha_per_nm = (cfg.dill_A + cfg.dill_B) * 1e-3
+    return cfg.dill_C * cfg.pag_density_per_nm3 / (photons_per_nm2_per_mjcm2 * alpha_per_nm)
+
+
 RESIST_PRESETS = {
     "CAR": 5.0,  # Chemically Amplified Resist (typical EUV)
     "nonCAR": 2.5,  # Non-chemically amplified / metal resist

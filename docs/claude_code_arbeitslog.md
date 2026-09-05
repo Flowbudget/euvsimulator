@@ -2743,3 +2743,24 @@ Photonenstatistisch skaliert: auf A0 (16 mJ/cm²) **3,07 nm gegen 2,47 gemessen 
 Dosis-Skalierung um 1,2–1,7 darüber, mit erkennbaren, benannten Gründen. Das ist eine Plausibilitätsprüfung, keine
 Validierung: dafür bräuchte es Dill/PEB/Mack-Parameter und LWR *desselben* Resists (NXE1716 wäre der Kandidat: Mack-Kurve
 liegt vor, Dill/PEB nicht). Keine Codeänderung, keine Anpassung.
+
+## 2026-09-05 (Fortsetzung 24): Stufe A1 — Säuren pro absorbiertem Photon als Invariante
+
+**Herleitung:** dH/dE = C·G₀ im Kleindosis-Grenzfall (acid = G₀(1 − e^{−C·E})); absorbierte Photonen pro Volumen und Dosis
+= N_ph·α mit N_ph = 1 mJ/cm² / E_ph = 6,8·10¹³ cm⁻² = 0,68 nm⁻² und α = 4,44·10⁻³ nm⁻¹ → 3,0·10⁻³ nm⁻³ pro mJ/cm².
+Defaults (C 0,090, G₀ 0,2): **6,0 Säuren pro absorbiertem Photon**; mit Yamamotos 3,1 mol % (≈ 0,15 nm⁻³): 4,5.
+
+**Messband (Primärquellen, Runde 10):** Brainard/LBNL „Film Quantum Yields of EUV & Ultra-High PAG Photoresists"
+(OSTI 1004159), FQY = Säuren pro *absorbiertem* Photon: EUV-2D 2,08 (Fig. 2; Neumessung 1,94, Table 3), **MET-2D 1,39**,
+XP-5496 1,45 (Table 3, 80-nm-Filme, PEB 130 °C); bei Ultra-hoch-PAG-Beladung steigt FQY etwa linear mit [PAG] (Fig. 5).
+Kozawa (JPST 28(4) 501, Fig. 2): Quanteneffizienz ≈ 2,0 (anionengebundene Resists). Band für Standardbeladungen:
+**1,4–2,1**, Obergrenze mit hoher Beladung ≈ 3.
+
+**Befund:** 6,0 liegt um Faktor 3 über dem Band — C (Yamamoto/Sekiguchi, PROLITH-Fit) und G₀ (Mack 2011, anderer Resist)
+sind nicht miteinander konsistent. Nebenbefund: LBNLs „corrected C-parameter" für MET-2D ist **0,0152 cm²/mJ**, Sekiguchis
+PROLITH-C für denselben Resist **0,090** — Faktor 6; die beiden „C" sind offenbar verschieden definiert (LBNL bezieht C auf
+die dichtekorrigierte Filmabsorbanz und den Clearing-Dose-Fit). Das ist für Stufe A2 die zentrale Frage: welches C gehört
+zu unserem Modell acid = 1 − e^{−C·E} mit *einfallender* Dosis E.
+
+**Umsetzung A1:** `pipeline.acids_per_absorbed_photon(cfg)`; `tests/test_acid_yield.py` mit strict-xfail auf das Band
+[1,3; 3,0] (fällt heute mit 6,0) und einem Pin des heutigen Werts. Kein Default geändert — das ist A2.

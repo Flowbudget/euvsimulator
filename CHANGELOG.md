@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added (diagnostics, 2026-09-05)
+- **`pipeline.acids_per_absorbed_photon(cfg)`** – film quantum yield implied by the configured
+  Dill C, PAG density G0 and absorption coefficient (C·G0 / (N_ph·α), low-dose limit). Measured
+  values are 1.4–2.1 acids per absorbed photon (Brainard/LBNL, OSTI 1004159, Table 3: EUV-2D
+  2.08/1.94, MET-2D 1.39, XP-5496 1.45) and ≈2 (Kozawa, JPST 28(4) 501). The defaults imply
+  **6.0** – C (PROLITH fit, Yamamoto/Sekiguchi) and G0 (Mack 2011) are not mutually consistent.
+  `tests/test_acid_yield.py` pins today's value and carries the band test [1.3, 3.0] as a strict
+  xfail until plan stage A2 decides which parameter moves. No default changed.
+
 ### Changed (physics, 2026-09-05)
 - **Default acid diffusivity 3.3 → 4.2 nm²/s (Kang et al. 2010, measured).** The old value was
   back-calculated so that D·60 s gave Anderson 2009's 19.9 nm blur; with the acid lifetime the
