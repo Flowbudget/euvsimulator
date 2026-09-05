@@ -2619,3 +2619,47 @@ Neutralisation. Fix im Test, nicht im Code: Fixture pinnt G₀ = 0,2 nm⁻³ fü
 Molekülzahl skaliert weiter. Physikalische Nebenerkenntnis: mit Säurelebensdauer ist die Quencher-Neutralisation in
 diesem Resist ratenbegrenzt — ein Effekt, den das Modell jetzt trägt und der später gegen Sekiguchis Dill-C-gegen-
 Quencher-Tabelle geprüft werden kann.
+
+## 2026-09-05 (Fortsetzung 21): Preflight Quencher — Sekiguchi (IEEJ 2013) Dill C gegen Quencherbeladung
+
+Messung (IEEJ Trans. FM 133(10) 500, japanisch; `mack fits/pdfs/jstage/IEEJ_2013_…`): EUV-Open-Frame-Belichtung (EQ-10M,
+13,5 nm), Pseudo-Resist aus Acrylpolymer GMH (GBLMA/MAdMA/HAdMA 40/40/20) + 4 Gew.-% TPS-tf + Coumarin-6 (2× PAG-Molmenge)
+als Säureindikator, Quencher mit 0 / 0,05 / 0,1 / 0,5 / 0,75 Mol pro Mol PAG, Film 100 nm (Messzelle 400 nm), PAB 100 °C/60 s,
+**kein PEB** — die Neutralisation läuft bei Raumtemperatur während der Belichtung, Sekiguchi modelliert sie bimolekular
+mit der Dosis als Zeitachse (Gl. 3/4, kq). Table 1: effektives C aus Fit [H⁺] = 1 − e^{−C·E}: **0,1280 / 0,1090 / 0,0982 /
+0,0435 / 0,0228 cm²/mJ.**
+
+Was prüfbar ist und was nicht: unsere Pipeline neutralisiert in der PEB mit k_Q·G₀·t_eff (Mack 2011, zweite Ordnung) —
+andere Temperatur, andere Zeitachse; der *Wert* k_Q·G₀·t ist hier nicht testbar. Testbar ist die **Funktionsform** der
+Neutralisation (bimolekular, Stöchiometrie H − Q) gegen die gemessene Quencherabhängigkeit des effektiven C, mit C₀ = 0,128
+aus der q = 0-Zeile und derselben Fit-Prozedur (Least Squares von 1 − e^{−C·E} auf 0–40 mJ/cm²).
+
+Vorhersagen vorab:
+- **V1 (Stöchiometrie-Grenzfall, vollständige Neutralisation, A = max(H₀ − q, 0)):** effektives C fällt mit q, und zwar
+  *stärker* als gemessen bei kleinen q (die Schwelle unterdrückt die Anfangssteigung komplett), Ordnung: C_eff(0,05) ≈
+  0,10–0,11, C_eff(0,75) ≈ 0,02–0,03. Zahlen werden vom Skript vor dem Vergleich ausgegeben.
+- **V2 (Sekiguchis/Macks bimolekulare Form mit endlicher Rate, ein freier Parameter kq·E-Skala, an q = 0,5 gefittet):**
+  die übrigen drei Zeilen (0,05, 0,1, 0,75) werden auf ±15 % getroffen. Scheitert V2, ist die zweite-Ordnung-Form an dieser
+  Messung falsifiziert — dann wäre auch unser PEB-Neutralisationsmodell fraglich.
+
+**Ergebnis (analytisch, Fit-Fenster 0–40 mJ/cm², C₀ = 0,128):**
+
+| q = Q/PAG | gemessen C_eff | V1 vollständig (H₀ − q) | V2 bimolekular, s an q = 0,5 gefittet (s = 1,27) |
+|---|---|---|---|
+| 0,05 | 0,1090 | 0,1052 | 0,1139 (+4 %) |
+| 0,10 | 0,0982 | 0,0864 | 0,1010 (+3 %) |
+| 0,50 | 0,0435 | 0,0223 | 0,0435 (Fit) |
+| 0,75 | 0,0228 | 0,0079 | 0,0292 (+28 %) |
+
+- **V1 falsifiziert:** vollständige Neutralisation unterschätzt das effektive C bei hoher Beladung um Faktor 2–3 — die
+  Neutralisation ist auf der Zeitskala der Messung (Raumtemperatur, Belichtungsdauer) *unvollständig*. Das heißt auch:
+  ein Modell, das Quencher als reine Stöchiometrie (H − Q) behandelt, wäre an dieser Messung widerlegt.
+- **V2 teilweise bestätigt:** die zweite-Ordnung-Form (identisch mit Mack 2011 / `peb._reaction_limited_quench`) trifft
+  mit einem einzigen Ratenparameter die Zeilen 0,05 und 0,10 auf 3–4 %, verfehlt aber 0,75 um +28 % (Schranke ±15 %).
+  Die Form trägt also den Trend, aber bei hoher Beladung bleibt zu viel Säure übrig — Kandidaten: Neutralisation läuft
+  nach der Belichtung bis zur Messung weiter (mehr Zeit bei hohem q wirksamer), oder Farbstoff/Quencher-Konkurrenz.
+  Nicht auflösbar ohne Sekiguchis Rohkurven.
+- **Folge für die Pipeline:** keine Codeänderung; der Ratenparameter ist bei PEB-Bedingungen nicht aus dieser Messung
+  ableitbar. Als lokaler Test hinterlegt (`tests/test_quencher_sekiguchi.py`): die Pipeline-Funktion
+  `_reaction_limited_quench` muss Sekiguchis Zeilen 0,05/0,10 auf 10 % und 0,75 auf 35 % reproduzieren, und der
+  Stöchiometrie-Grenzfall muss *schlechter* sein — damit die Form und ihre bekannte Abweichung festgehalten sind.

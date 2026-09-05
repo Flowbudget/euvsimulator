@@ -25,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   (field deviation < 0.1 px at ρ = 2000; sparse/dense LWR ratio ≤ 20) replaced by invariants
   (deviation falls ≥ 5× per two decades of density; the sparse ratio has a floor only, because
   at several nm of LWR the Mack threshold and the lateral front can only amplify roughness).
+- `tests/test_quencher_sekiguchi.py`: the neutralisation closed form (`peb._reaction_limited_quench`,
+  second order) is checked against Sekiguchi's (IEEJ 2013) effective Dill C versus quencher loading:
+  one rate fitted on the 0.5 row reproduces the 0.05/0.10 rows within 5 % and the 0.75 row within
+  30 % (known deviation), while complete neutralisation (A = H0 − q) is clearly worse. The rate
+  itself is not transferable to the PEB and is not asserted.
 - **Default Dill B is now computed from the resist composition (4.44 µm⁻¹), no longer Yamamoto's
   Table-2 value (1.06 µm⁻¹).** `materials.linear_absorption_coefficient_per_um(composition, density)`
   evaluates α = 4πβ/λ from the CXRO f₂ tables; for PHS with 35 % tBOC protection at 1.20 g/cm³ this
