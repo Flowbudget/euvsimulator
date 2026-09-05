@@ -2707,3 +2707,39 @@ Preflight (`preflight_blur_default.py`, D = 3,3 → 4,2, σ implizit 8,3 → 9,4
   Damit ist der Default-Blur σ = 9,4 nm — im Band der direkt gemessenen Blur-Längen benannter EUV-CARs (7,5–12 nm), ohne
   daran angepasst zu sein. Bekannte Unsicherheit: Yamamotos PEB ist 110 °C, Kangs Messung 90 °C; die Arrhenius-Extrapolation
   ist mit ±25 kJ/mol unbrauchbar, daher bleibt der 90 °C-Wert mit dieser Einschränkung stehen (dokumentiert im Feldkommentar).
+
+## 2026-09-05 (Fortsetzung 23): Vesters-Vergleich als Prüfung — mit dem vollständig belegten Default-Satz
+
+Referenz: Vesters, Dissertation KU Leuven 2019, Table 4.2 (NXE3300, NA 0,33, 22 nm HP bei 44 nm Pitch, CD-SEM, LWR 3σ,
+biased): Referenzresists ohne Sensibilisator **A0 = NXE1631: D2S 16,0 mJ/cm², LWR 7,4 ± 0,3 (3σ) ≙ 2,47 (1σ)**;
+**B0 = NXE1716: 11,0 mJ/cm², 6,7 ± 0,3 ≙ 2,23** (Table 4.1; NXE1716 ist derselbe Resist, dessen Auflösungsratenkurve mit
+Mack-Fit in JPST 30(6) 675 vorliegt); mit Sensibilisator 8–11 mJ/cm², 6,5–10,3 (3σ). Unser Default ist Yamamotos 2011er
+Polymer A — ein anderer Resist; ein Fit findet nicht statt. Geprüft wird, ob die Photonenrausch-Größenordnung der Kette
+mit einer Industriemessung bei 22 nm HP verträglich ist, wenn man die Dosisdifferenz herausrechnet.
+
+Vorhersagen vorab (`preflight_vesters.py`, P = 44/22, Gitter 256, Defaults: σ_PEB 9,4, se_blur 5, B 4,44, k 1,4, τ 10,5):
+- **V1** D2S_ours = 1,6–1,8 mJ/cm² (Fortsetzung 22: 1,669) → Faktor 6–10 empfindlicher als A0/B0. Erwartet, kein Ziel.
+- **V2** Photonen-LWR (1σ) am D2S = 7–9 nm über mehrere Seeds (n_eff ≈ 8 je Lauf).
+- **V3 (der eigentliche Test):** photonenstatistisch auf die Vesters-Dosen skaliert, LWR·√(D2S_ours/D2S_ref), liegt das
+  Ergebnis im Bereich 1,6–3,7 nm (Faktor ≤ 1,5 um A0 2,47 / B0 2,23). Handrechnung: 7,8·√(1,67/16) = 2,5; ·√(1,67/11) = 3,1.
+  Scheitert V3, ist die Rauschgröße der Kette um mehr als 1,5× von einer Industriemessung entfernt.
+- **V4** Mit Molekülrauschen (ρ_PAG 0,2, kein Quencher) steigt das LWR am D2S um 10–30 % gegenüber Photonen-only.
+
+**Ergebnis (`preflight_vesters.py`):** D2S_ours = **1,669 mJ/cm²** (CD 21,97). Photonen-only LWR (1σ) über drei Seeds:
+7,83 / 10,21 / 10,50 → **Mittel 9,5 nm** (n_eff 6–8 je Lauf). Mit Molekülrauschen (ρ 0,2): 11,89 / 10,60 → 11,2 nm (**+18 %**).
+Photonenstatistisch skaliert: auf A0 (16 mJ/cm²) **3,07 nm gegen 2,47 gemessen (Faktor 1,24)**; auf B0 (11 mJ/cm²)
+**3,71 gegen 2,23 (Faktor 1,66)**.
+
+- **V1 bestätigt.** **V4 bestätigt** (+18 %).
+- **V2 verfehlt:** Mittel 9,5 nm statt 7–9 — der Einzelseed aus Fortsetzung 22 (7,8) lag am unteren Rand der Streuung;
+  bei n_eff ≈ 7 sind ±25 % pro Lauf normal, drei Seeds streuen 7,8–10,5.
+- **V3 halb bestätigt:** A0 innerhalb Faktor 1,5 (1,24), B0 knapp außerhalb (1,66). Beide Referenzwerte sind *biased*
+  CD-SEM-Werte (SEM-Rauschen enthalten), die wahren Rauheiten liegen also niedriger — der Überschuss der Kette ist eher
+  größer als 1,2–1,7. Zwei Gründe, die ohne den gleichen Resist nicht trennbar sind: (1) die √Dosis-Skalierung gilt im
+  linearen Regime; bei 1,7 mJ/cm² arbeitet die Kette im nichtlinearen Verstärkungsregime (Fortsetzung 19/20), d. h. der
+  skalierte Wert überschätzt; (2) Blur und Kontrast des 2011er Resists (σ_tot 10,6 nm) sind nicht die der NXE-Resists.
+
+**Urteil:** kein grober Widerspruch mehr — vor Phase 2b lag die Kette um Faktor 3–4 über dem Band, jetzt liegt sie nach
+Dosis-Skalierung um 1,2–1,7 darüber, mit erkennbaren, benannten Gründen. Das ist eine Plausibilitätsprüfung, keine
+Validierung: dafür bräuchte es Dill/PEB/Mack-Parameter und LWR *desselben* Resists (NXE1716 wäre der Kandidat: Mack-Kurve
+liegt vor, Dill/PEB nicht). Keine Codeänderung, keine Anpassung.

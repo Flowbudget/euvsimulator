@@ -281,7 +281,10 @@
 > the literature without a resist-specific calibration (`euv calibrate`); and the default PEB blur (9.4 nm = sqrt(2·D·t_eff) with D = 4.2 nm²/s measured by Kang 2010 at
 > 90 °C for the same polymer class, and the acid's effective lifetime) is inside the 7.5–12 nm band of
 > directly measured blur lengths of named EUV resists but is not a measurement on this resist at its
-> 110 °C PEB.
+> 110 °C PEB. Cross-check against industry data (Vesters 2019, NXE1631/NXE1716 at 22 nm half-pitch):
+> after scaling the chain's photon-shot-noise LWR to those resists' dose-to-size (√dose), it lies
+> 1.2–1.7× above their biased CD-SEM values -- a plausibility check with named residual causes, not a
+> validation (log Fortsetzung 23).
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|

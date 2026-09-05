@@ -204,6 +204,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   PDFs/HTML removed from version control; `testberechnungen.md` moved to `docs/`.
 
 ### Documentation
+- Vesters cross-check (log Fortsetzung 23): with the fully sourced default set, the dose-scaled
+  photon-shot-noise LWR at 22 nm half-pitch is 1.2–1.7× above the biased CD-SEM values of two
+  NXE resists (was 3–4× before Phase 2b). Documented as a plausibility check, not a validation.
 - `docs/audit_2026-09-04_vollpruefung.md`: full scientific audit of the code base. Records
   several **open physics defects** that are not yet fixed (photon shot noise computed on
   incident instead of absorbed photons; undocumented dose convention — aerial image is not
