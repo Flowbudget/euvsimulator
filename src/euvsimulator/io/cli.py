@@ -136,11 +136,12 @@ def simulate(
     ),
     # PEB options
     peb_D: float = typer.Option(
-        3.3,
+        4.2,
         "--peb-D",
         help=(
-            "Acid diffusivity [nm²/s]; drives the effective diffusion length via sqrt(2*D*t_bake)"
-            " unless --peb-sigma-diff overrides it directly"
+            "Acid diffusivity [nm²/s]; diffusion length sqrt(2*D*t_eff) with t_eff the acid's "
+            "effective lifetime, unless --peb-sigma-diff overrides it; default 4.2 = Kang 2010 "
+            "(PHS-co-tBA, 90 C)"
         ),
     ),
     peb_k: float = typer.Option(

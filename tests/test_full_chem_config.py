@@ -108,7 +108,7 @@ def test_both_paths_produce_reasonable_cd():
     # convention, acid yield saturating at 1, Eikonal development front). At
     # the aerial_threshold model's reference dose of 20 mJ/cm² the resist is
     # fully cleared (CD = 0) -- physics, not a failure -- and at the default
-    # 19.9 nm PEB blur the 32 nm line exists only in a knife-edge dose window,
+    # then-default 19.9 nm PEB blur the 32 nm line existed only in a knife-edge dose window,
     # so the test uses sigma_PEB = 7 nm / 4.0 mJ/cm² like the stochastic
     # regression tests (see test_ler_production_integration._car_cfg).
     cfg2 = SimulationConfig(resist_model="full_chem", grid=128, dose_mj_cm2=1.1, peb_sigma_diff=7.0)

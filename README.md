@@ -278,9 +278,10 @@
 > via the CXRO tables (4.44 µm⁻¹, `tests/test_absorption_coefficient.py`). Two caveats remain:
 > this is a very sensitive 2011 research resist (dose-to-size ≈ 1.3 mJ/cm² at 64 nm pitch), so
 > its sensitivity and LWR are not those of a production resist and should not be compared with
-> the literature without a resist-specific calibration (`euv calibrate`); and the 19.9 nm default
-> PEB blur is back-calculated from Anderson 2009 and has no source for the 22 nm half-pitch
-> regime.
+> the literature without a resist-specific calibration (`euv calibrate`); and the default PEB blur (9.4 nm = sqrt(2·D·t_eff) with D = 4.2 nm²/s measured by Kang 2010 at
+> 90 °C for the same polymer class, and the acid's effective lifetime) is inside the 7.5–12 nm band of
+> directly measured blur lengths of named EUV resists but is not a measurement on this resist at its
+> 110 °C PEB.
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|

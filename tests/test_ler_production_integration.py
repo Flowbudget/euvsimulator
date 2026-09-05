@@ -94,7 +94,7 @@ def _car_cfg(**kw):
         # line is fully cleared (LER/LWR = NaN).
         dose_mj_cm2=TEST_DOSE,
         # Operating point (2026-09-04, Phase 2b): with the exact PEB blur and
-        # the Eikonal development front, the default sigma_PEB = 19.9 nm gives
+        # the Eikonal development front, the then-default sigma_PEB = 19.9 nm gave
         # the 32 nm line at 64 nm pitch only in a knife-edge dose window (CD
         # 35.5 -> 14 -> 0 between 5.0 and 6.0 mJ/cm2); the stochastic machinery
         # is therefore exercised at sigma_PEB = 7 nm (smooth window, CD 31.5 nm

@@ -412,10 +412,21 @@ class SimulationConfig:
     # of bug as the earlier-fixed CLI --threshold dead-parameter issue.
     # Fixed by making peb_sigma_diff Optional (None default) and passing
     # D=cfg.peb_D through in run_simulation()'s _cd_via_full_chem() call.
-    # Acid diffusivity [nm²/s] -- within Lavery et al. 2006's measured 2-8 nm²/s; chosen with
-    # peb_t_bake=60s to reproduce Anderson et al. 2009's measured EUV deprotection blur (see note
-    # above)
-    peb_D: float = 3.3
+    # Acid diffusivity [nm²/s]. 4.2 ± 0.3 nm²/s is the FT-IR bilayer measurement
+    # of Kang et al. 2010 (Macromolecules 43, 4275, Table 2) for P(HOSt-co-tBA)
+    # at 90 °C PEB -- the closest measured polymer class to the default resist
+    # (PHS with 35 % acid-labile protection), independent of film thickness and
+    # PAG loading (2/5 %). Caveat: the default PEB is 110 °C; Kang's Arrhenius
+    # fit (ln A = 44 ± 8, Ea = 127 ± 25 kJ/mol) would put D(110 °C) near 60 nm²/s,
+    # but ±25 kJ/mol is a factor ≈ 500, so the extrapolation is not used and
+    # the 90 °C value stands with this caveat. Until 2026-09-05 the value was
+    # 3.3, back-calculated so that D·60 s reproduced Anderson 2009's 19.9 nm
+    # blur -- a reasoning that no longer holds now that the diffusion time is
+    # the acid's effective lifetime (10.5 s): the default blur is
+    # sqrt(2·D·t_eff) = 9.4 nm, inside the band of directly measured blur
+    # lengths of named EUV CARs (7.5-12 nm: LBNL resist PSF, Langner 2010,
+    # Thackeray 2010) without being fitted to it (log Fortsetzung 22).
+    peb_D: float = 4.2
     # peb_k STATUS (2026-09-02): UNCITED. A real EUV-adjacent kinetics study
     # was found -- Prabhu, V. M. et al. (NIST), "Characterization of the
     # Photoacid Diffusion Length and Reaction Kinetics in EUV Photoresists

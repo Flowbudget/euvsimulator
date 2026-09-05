@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Changed (physics, 2026-09-05)
+- **Default acid diffusivity 3.3 → 4.2 nm²/s (Kang et al. 2010, measured).** The old value was
+  back-calculated so that D·60 s gave Anderson 2009's 19.9 nm blur; with the acid lifetime the
+  diffusion time is the effective lifetime (10.5 s), so that reasoning no longer applied and the
+  implicit default blur had already become 8.3 nm. 4.2 ± 0.3 nm²/s is the FT-IR bilayer value for
+  P(HOSt-co-tBA) at 90 °C (Kang, Macromolecules 43, 4275, Table 2); the resulting default blur
+  σ = 9.4 nm lies inside the 7.5–12 nm band of directly measured blur lengths of named EUV CARs
+  (LBNL resist PSF, Langner 2010, Thackeray 2010) without being fitted to it. Pre-registered
+  preflight (log Fortsetzung 22): dose-to-size +0.6 % (64 nm pitch) / +3 % (44 nm); photon LWR
+  +14 % at 44 nm, no rise at 64 nm. Caveat kept in the field comment: measured at 90 °C, the
+  default PEB is 110 °C, and Kang's Arrhenius extrapolation is too uncertain to use.
 - **Acid lifetime in the PEB, and the deprotection rate read from the source's own kinetics.**
   New `SimulationConfig.peb_acid_lifetime_s` (CLI `--peb-acid-lifetime`; `None`/0 = no loss): a
   first-order acid loss H(t) = H0·e^{−t/τ} (Yamamoto et al. 2011 Eq. 1 "τ", Kang et al. 2010

@@ -2663,3 +2663,47 @@ Vorhersagen vorab:
   ableitbar. Als lokaler Test hinterlegt (`tests/test_quencher_sekiguchi.py`): die Pipeline-Funktion
   `_reaction_limited_quench` muss Sekiguchis Zeilen 0,05/0,10 auf 10 % und 0,75 auf 35 % reproduzieren, und der
   Stöchiometrie-Grenzfall muss *schlechter* sein — damit die Form und ihre bekannte Abweichung festgehalten sind.
+
+## 2026-09-05 (Fortsetzung 22): Blur-Default — Befund vorab und Preflight
+
+**Befund 1 (Nebenwirkung der Lebensdauer, bisher undokumentiert):** der Default-Blur wird aus D·t gebildet, und t ist seit
+Fortsetzung 20 die effektive Zeit t_eff = 10,47 s. Damit ist der implizite Default nicht mehr 19,9 nm, sondern
+σ = √(2·3,3·10,47) = **8,31 nm** — ohne dass D geändert wurde. Physikalisch richtig (Säure diffundiert nur, solange sie lebt),
+aber die Herkunft von D = 3,3 nm²/s war eine *Rückrechnung* auf Andersons 19,9 nm bei t = 60 s; diese Begründung ist mit
+der Lebensdauer hinfällig. D braucht eine eigene Quelle.
+
+**Befund 2 (Quellenlage für D):** für Yamamotos Polymer A gibt es keine Diffusionsmessung. Nächste gemessene Verwandte:
+Kang et al. 2010 (NIST), P(HOSt-co-tBA), FT-IR-Bilayer: **DH = 4,2 ± 0,3 nm²/s bei 90 °C** (Table 2; unabhängig von
+Schichtdicke und PAG-Beladung 2/5 %). Arrhenius (Table 3, „A" ist ln A): ln A = 44 ± 8, Ea = 127 ± 25 kJ/mol — die
+Extrapolation auf 110 °C ergäbe ≈ 60 nm²/s, aber ±25 kJ/mol entspricht einem Faktor ≈ 500; unbrauchbar als Default.
+Direkte Blur-Messungen benannter EUV-CARs (Runde 10): LBNL-PSF σ ≈ 7,6 nm (MET-1K), Langner Ld 14,5 nm ≙ σ_Bild ≈ 10 nm
+(FEVS-P1101), Thackeray 9,3–11,8 nm, Sekiguchi/PROLITH 10 nm — Band **≈ 7,5–12 nm**.
+
+**Entscheidung, die geprüft wird:** D = 4,2 nm²/s (Kang 2010, gemessen, gleiche Polymerklasse, 90 °C; 110 °C-Wert
+unmessbar/unbelegt) statt 3,3 (Rückrechnung). Mit t_eff = 10,47 s: σ = √(2·4,2·10,47) = **9,4 nm**. Kein Fit — die
+unabhängige Kontrolle ist, ob 9,4 nm im Band der direkt gemessenen Blur-Längen liegt (ja: 7,5–12). Vorhersagen für den
+Preflight (`preflight_blur_default.py`, D = 3,3 → 4,2, σ implizit 8,3 → 9,4, se_blur 5):
+- **V1** D2S bei P = 64/32 (Gitter 128) ändert sich um < 10 %; bei P = 44/22 (Gitter 256) um < 15 % (mehr Blur → weniger
+  Kontrast → etwas mehr Dosis).
+- **V2** Photonen-LWR am jeweiligen D2S steigt um 5–25 % (σ_tot 9,7 → 10,6 nm liegt bei P = 44 jenseits des U-Kurven-Minimums
+  ≈ 7 nm; bei P = 64 näher am Minimum ≈ 10 nm, daher dort kleinerer Effekt).
+- **V3** Die 22-nm-Linie bei P = 44 druckt weiterhin (D2S existiert im Fenster 0,3–8 mJ/cm²).
+
+**Ergebnis (`preflight_blur_default.py`, Photonen-only, 2 × 1024 Zeilen, Seed 42):**
+
+| P/lw | D [nm²/s] | σ_PEB | σ_tot | D2S [mJ/cm²] | LWR_Photon [nm] | n_eff |
+|---|---|---|---|---|---|---|
+| 64/32 | 3,3 | 8,31 | 9,70 | 1,269 | 3,41 | 15 |
+| 64/32 | 4,2 | 9,38 | 10,63 | 1,277 (+0,6 %) | 2,75 (−19 %) | 15 |
+| 44/22 | 3,3 | 8,31 | 9,70 | 1,621 | 6,86 | 8,5 |
+| 44/22 | 4,2 | 9,38 | 10,63 | 1,669 (+3 %) | 7,83 (+14 %) | 8,3 |
+
+- **V1 bestätigt** (D2S +0,6 % / +3 %). **V3 bestätigt.**
+- **V2 nur bei P = 44 bestätigt** (+14 %, im Bereich 5–25 %); bei P = 64 fällt das LWR um 19 % statt zu steigen. Bei
+  n_eff ≈ 15 ist ±20 % die Streuung eines Einzelseeds, also kein belastbarer Gegenbefund — aber auch kein Anstieg: bei
+  P = 64 liegt σ_tot = 10,6 nm nahe dem U-Kurven-Minimum P/(2π) = 10,2 nm, wo die Ableitung verschwindet; meine Vorhersage
+  „5–25 % auch bei P = 64" war zu grob. Festgehalten als halb verfehlt.
+- **Entscheidung:** D = 4,2 nm²/s (Kang 2010, Table 2, gemessen an P(HOSt-co-tBA) bei 90 °C) ersetzt die Rückrechnung 3,3.
+  Damit ist der Default-Blur σ = 9,4 nm — im Band der direkt gemessenen Blur-Längen benannter EUV-CARs (7,5–12 nm), ohne
+  daran angepasst zu sein. Bekannte Unsicherheit: Yamamotos PEB ist 110 °C, Kangs Messung 90 °C; die Arrhenius-Extrapolation
+  ist mit ±25 kJ/mol unbrauchbar, daher bleibt der 90 °C-Wert mit dieser Einschränkung stehen (dokumentiert im Feldkommentar).

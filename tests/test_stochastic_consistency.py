@@ -36,7 +36,7 @@ PITCH, LW = 44.0, 22.0
 DX = PITCH / 256
 # PEB blur for these tests: 7 nm (sigma_tot ≈ 8.6 nm with the 5 nm SE blur),
 # the regime in which the 22 nm line at 44 nm pitch prints. With the
-# default 19.9 nm the exact Gaussian (kernel no longer clamped since
+# then-default 19.9 nm the exact Gaussian (kernel no longer clamped since
 # 2026-09-04) leaves 1.8 % contrast at the pitch frequency and no line
 # prints at any dose -- an invariant cannot be tested on a non-existent
 # edge. This is a choice of operating point, not a physics parameter.
