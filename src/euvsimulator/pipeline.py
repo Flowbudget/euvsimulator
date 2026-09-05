@@ -56,6 +56,15 @@ from euvsimulator.resist.stochastic import (
 # literal in two places.
 AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 = 20.0
 
+# Default resist composition for the first-principles Dill B (see the dill_B
+# field): poly(hydroxystyrene) C8H8O with 35 % of the phenol sites carrying a
+# tBOC group (adds C5H8O2 per protected site), film density 1.20 g/cm3.
+DEFAULT_RESIST_COMPOSITION = {"C": 8 + 0.35 * 5, "H": 8 + 0.35 * 8, "O": 1 + 0.35 * 2}
+DEFAULT_RESIST_DENSITY_G_CM3 = 1.20
+# = linear_absorption_coefficient_per_um(composition, density); pinned by
+# tests/test_absorption_coefficient.py
+DEFAULT_DILL_B_PER_UM = 4.44
+
 RESIST_PRESETS = {
     "CAR": 5.0,  # Chemically Amplified Resist (typical EUV)
     "nonCAR": 2.5,  # Non-chemically amplified / metal resist
@@ -302,11 +311,22 @@ class SimulationConfig:
     # with dill_B/C and mack_* below); Fallica et al. 2016 independently confirms the same A<<B
     # regime (their range 0.2-0.45); see note above
     dill_A: float = 0.0
-    # Non-bleachable absorption coefficient [1/µm] -- Yamamoto et al. 2011 (EUV-native,
-    # self-consistent with dill_A/C and mack_* below); Fallica et al. 2016 found a higher range
-    # (4-5) for a different, undisclosed EUV-CAR formulation -- both real, resist-specific; see note
-    # above
-    dill_B: float = 1.06
+    # Non-bleachable absorption coefficient [1/µm]. COMPUTED from the default
+    # resist's composition (2026-09-05), not taken from Yamamoto Table 2:
+    # far from absorption edges the EUV absorption of an organic film is fixed
+    # by composition and density through the CXRO f2 factors (materials.
+    # linear_absorption_coefficient_per_um). Polymer A of Yamamoto 2011 is PHS
+    # with 35 % acid-labile protection; with a tBOC-type group and 1.20 g/cm3
+    # (Kang et al. 2010's density for the same polymer class) that gives
+    # 4.44 µm-1 (PHS itself 4.0-4.2, PMMA 5.2, oxygen-free polystyrene 2.95).
+    # Table 2's 1.06 µm-1 is below polystyrene and therefore not possible for a
+    # PHS film; three independent measurements agree with the computed range
+    # (Sekiguchi InTech 2011 Table 6: MET-1K/2D 4.32/5.21; Fallica et al. 2016:
+    # 4-5; Kang et al. 2010). Effect measured before the change (arbeitslog
+    # Fortsetzung 19): absorbed fraction 5.2 % -> 19 %, dose-to-size +14-16 %,
+    # photon-shot-noise LWR down by ~2.5-3.5x. tests/test_absorption_coefficient.py
+    # pins this default to the derivation.
+    dill_B: float = DEFAULT_DILL_B_PER_UM
     #
     # dill_C ADDITIONAL CROSS-CHECK (2026-09-02, third research pass): Kazazis,
     # D. et al. (ARCNL), "Absorption coefficient and exposure kinetics of
@@ -1407,7 +1427,8 @@ def _cd_via_full_chem(
         # depth dependence of the relative noise, which would need a per-
         # layer draw. Before 2026-09-04 absorption was left at its default
         # of 1.0 (every incident photon counted): with the default 50 nm /
-        # 1.06 µm⁻¹ film that is 19× too many photons and a 4.4× (linear)
+        # 1.06 µm⁻¹ film (the default until 2026-09-05) that is 19× too many
+        # photons and a 4.4× (linear)
         # to 7.9× (measured, through the Mack nonlinearity) under-estimate
         # of the photon-shot-noise LWR -- docs/audit_2026-09-04_vollpruefung.md, A1.
         alpha_per_um = cfg.dill_A + cfg.dill_B

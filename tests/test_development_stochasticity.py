@@ -36,8 +36,8 @@ TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point
 # Eikonal front, sigma_PEB 7 / 4.0 mJ/cm2); see the provenance note in
 # test_ler_production_integration.py. Phase 0 values: 2.8802534977 /
 # 5.6471533713; pre-Phase-0: 0.3251749642 / 0.6158645956.
-GOLDEN_LARGE_N_LER = 2.3891057997
-GOLDEN_LARGE_N_LWR = 4.0032531626
+GOLDEN_LARGE_N_LER = 1.4022154241  # 2026-09-05 Dill B 4.44 (was 2.3891057997)
+GOLDEN_LARGE_N_LWR = 2.3954591804  # 2026-09-05 Dill B 4.44 (was 4.0032531626)
 
 
 def _car_cfg(**kw):
@@ -115,8 +115,9 @@ def test_legacy_off_golden_unchanged():
     r = run_simulation(_car_cfg(stochastic_ler_estimator="legacy"))
     # Re-measured 2026-09-04 Phase 2b (see the GOLDEN note above); Phase 0
     # values 0.6648028427 / 1.2965263709, pre-Phase-0 0.0860674324 / 0.1297861139.
-    assert abs(r.ler_nm - 0.8469136421) <= 1e-9
-    assert abs(r.lwr_nm - 1.4741479568) <= 1e-9
+    # 2026-09-05 Dill B 4.44 (Phase 2b: 0.8469136421 / 1.4741479568)
+    assert abs(r.ler_nm - 0.3398195917) <= 1e-9
+    assert abs(r.lwr_nm - 0.5112461853) <= 1e-9
 
 
 # ── Function-level tests of the standalone building block ───────

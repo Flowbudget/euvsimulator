@@ -3,10 +3,11 @@
 Physics: acid is generated only where a photon is absorbed (Mack, Biafore &
 Smith 2011, "Stochastic exposure kinetics of EUV photoresists"); the number
 of absorbed photons in a resist column is Poisson with mean
-N_inc · (1 − e^{−α t}). For the default film (t = 50 nm, α = 1.06 µm⁻¹) that
-is 5.2 % of the incident photons. Counting incident photons instead (the
-behaviour before 2026-09-04, audit A1) under-estimates the relative noise by
-√(1/0.052) ≈ 4.4× before the resist nonlinearity acts on it.
+N_inc · (1 − e^{−α t}). For the 50 nm default film that is 19.9 % of the
+incident photons with the composition-derived α = 4.44 µm⁻¹ (2026-09-05); with
+the former default 1.06 µm⁻¹ it was 5.2 %. Counting incident photons instead
+(the behaviour before 2026-09-04, audit A1) under-estimated the relative noise
+by √(1/0.052) ≈ 4.4× before the resist nonlinearity acted on it.
 
 Invariants pinned here are grid-free and contain no calibrated number.
 """

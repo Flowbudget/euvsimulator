@@ -3,7 +3,7 @@
 3|[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 4|[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 5|[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/euvsimulator/actions)
-6|[![Tests](https://img.shields.io/badge/tests-797%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
+6|[![Tests](https://img.shields.io/badge/tests-880%2B%20passing-brightgreen)](https://github.com/Flowbudget/euvsimulator)
 7|[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?include_prereleases&sort=semver)](https://github.com/Flowbudget/euvsimulator/releases)
 8|9|
 10|**From plasma source to CD metrology — full-stack EUV lithography simulation on your laptop.**
@@ -12,7 +12,7 @@
 13||---|---|
 14|| ⚛️ **First-principles physics** | CXRO atomic scattering → TMM reflectivity → RCWA mask diffraction → Hopkins imaging → Dill ABC resist |
 15|| 🚀 **GPU-native** | PyTorch autograd throughout — differentiable from mask geometry to CD |
-16||| 🧪 **Tested** | 796+ unit tests, cross-checked against CXRO material database |
+16||| 🧪 **Tested** | 880+ unit tests, cross-checked against CXRO material database |
 17|| 📦 **Zero commercial dependencies** | Apache 2.0 — fork, modify, deploy freely |
 18|| 🌐 **Web API + Dashboard** | FastAPI REST server with interactive web UI |
 19|| 📓 **Teaching-ready** | 6 executable Jupyter notebooks covering full pipeline |
@@ -274,7 +274,8 @@
 > set found, but implemented in the standard Mack forms they deprotect ≈ 3.4× too little against
 > the same paper's own FTIR and dissolution-rate measurements (`tests/test_yamamoto_anchor.py`,
 > `docs/claude_code_arbeitslog.md` Fortsetzung 15). Shape parameters (M_th, n, R_max/R_min, B) are
-> sourced; sensitivity and LWR of the default resist should not be compared with the literature
+> sourced, and the absorption coefficient B is computed from the resist composition via the CXRO
+> tables (4.44 µm⁻¹; `tests/test_absorption_coefficient.py`), but sensitivity and LWR of the default resist should not be compared with the literature
 > without a resist-specific calibration (`euv calibrate`). The 19.9 nm default PEB blur is
 > back-calculated from Anderson 2009 and has no source for the 22 nm half-pitch regime.
 271|

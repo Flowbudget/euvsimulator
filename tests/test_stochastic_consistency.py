@@ -97,25 +97,77 @@ def photon_noise_off(monkeypatch):
     monkeypatch.setattr(P, "photon_deposition_shot_noise", mean_field)
 
 
+def _stoch_depth(rho, q_ratio, dose, exposure_stochasticity=True, rows=1024, seed=42):
+    """Run the stochastic chain and capture its developed-depth map (H, W)."""
+    captured = {}
+    orig = P._noisy_depth_map
+
+    def wrapped(d_eff, cfg, **kw):
+        out = orig(d_eff, cfg, **kw)
+        captured["depth"] = out
+        return out
+
+    P._noisy_depth_map = wrapped
+    try:
+        r = run_simulation(
+            _cfg(
+                dose_mj_cm2=dose,
+                enable_stochastic=True,
+                stochastic_seed=seed,
+                stochastic_n_realisations=1,
+                stochastic_ler_grid_y=rows,
+                exposure_stochasticity=exposure_stochasticity,
+                pag_density_per_nm3=rho,
+                quencher_density_per_nm3=rho * q_ratio,
+            )
+        )
+    finally:
+        P._noisy_depth_map = orig
+    return r, captured["depth"]
+
+
+def _width_from_depth(depth, thickness=50.0):
+    from euvsimulator.resist.stochastic import extract_edges
+
+    left, right = extract_edges(depth, threshold=thickness - 1e-6, dx=DX, intensity=depth)
+    w = right - left
+    return float(w[~torch.isnan(w)].mean())
+
+
 @pytest.mark.parametrize("q_ratio", [0.0, 0.25])
 def test_large_number_limit_recovers_deterministic_cd(photon_noise_off, q_ratio):
     """At the dose-to-size of each chemistry (without / with Mack-2011
     quencher loading), found by bisection so the test follows the model.
+
+    The limit is taken field-to-field: with the photon sampler replaced by
+    its mean, the sampled-molecule chain at rho -> inf must reproduce the
+    MEAN-FIELD chain's developed-depth map (same tiles, same PEB, same front)
+    and hence the same line width when both are measured with the SAME
+    extractor. Comparing against `cd_nm` directly would mix two edge
+    extractors (arrival-time crossing for the deterministic CD since
+    2026-09-05, depth-map crossing for the realisations), which differ by up
+    to ~1 px on their own -- that is not the invariant under test.
     """
     dose = _dose_to_size(0.2 * q_ratio)
     det = run_simulation(_cfg(dose_mj_cm2=dose, quencher_density_per_nm3=0.2 * q_ratio)).cd_nm
     assert det > 0.0
-    cds = {}
+    _, depth_mean = _stoch_depth(2000.0, q_ratio, dose, exposure_stochasticity=False)
+    w_mean = _width_from_depth(depth_mean)
+    widths, dev = {}, {}
     for rho in (0.2, 20.0, 2000.0):
-        cds[rho] = _stoch(rho, q_ratio, dose).ler_metadata["stochastic_cd_nm"]
-        assert math.isfinite(cds[rho])
-    # Converged: the deterministic cd_nm is the arrival-time crossing of the
-    # middle row (sub-pixel since 2026-09-05), the stochastic width is the
-    # depth-map crossing averaged over rows (the two extractors differ by up
-    # to ~1 px per edge on a coarse grid, preflight_subpixel_cd.py) -> agree
-    # to 1.5 px; and the dense realisation is closer than the sparse one.
-    assert abs(cds[2000.0] - det) <= 1.5 * DX, f"det {det:.2f}, stochastic {cds}"
-    assert abs(cds[2000.0] - det) <= abs(cds[0.2] - det) + 1e-9
+        _, d = _stoch_depth(rho, q_ratio, dose)
+        widths[rho] = _width_from_depth(d)
+        dev[rho] = float((d - depth_mean).abs().mean())
+        assert math.isfinite(widths[rho])
+    # Converged: same extractor -> agree to a fraction of a pixel; the field
+    # itself converges monotonically; and the dense realisation is closer
+    # than the sparse one.
+    assert abs(widths[2000.0] - w_mean) <= 0.5 * DX, f"mean-field {w_mean:.3f}, stochastic {widths}"
+    assert dev[2000.0] < dev[20.0] < dev[0.2], dev
+    assert dev[2000.0] < 0.1 * DX, dev
+    # sanity against the pipeline's own deterministic CD (different extractor,
+    # so only a coarse bound)
+    assert abs(w_mean - det) <= 3.0 * DX, f"det {det:.2f}, mean-field width {w_mean:.2f}"
 
 
 def test_molecular_noise_scales_as_inverse_sqrt_density(photon_noise_off):

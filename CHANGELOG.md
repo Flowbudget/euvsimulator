@@ -5,6 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed (physics, 2026-09-05)
+- **Default Dill B is now computed from the resist composition (4.44 µm⁻¹), no longer Yamamoto's
+  Table-2 value (1.06 µm⁻¹).** `materials.linear_absorption_coefficient_per_um(composition, density)`
+  evaluates α = 4πβ/λ from the CXRO f₂ tables; for PHS with 35 % tBOC protection at 1.20 g/cm³ this
+  gives 4.44 µm⁻¹ (PHS 4.0–4.2, PMMA 5.2, polystyrene 2.95). A value of 1.06 µm⁻¹ is below even
+  oxygen-free polystyrene and cannot describe a PHS film; three independent measurements agree with
+  the computed range (Sekiguchi 2011: 4.32/5.21 for MET-1K/2D; Fallica 2016: 4–5; Kang 2010).
+  Measured consequences (pre-registered preflight, log Fortsetzung 19): absorbed photon fraction
+  5.2 % → 19.9 %, dose-to-size +14–20 %, photon-shot-noise LWR at dose-to-size down by ≈ 2.5–3.5×
+  (P = 44 nm: ≈ 10.6 → ≈ 4 nm). All stochastic regression goldens re-derived. The default is pinned
+  to the derivation by `tests/test_absorption_coefficient.py`.
+- `tests/test_stochastic_consistency.py`: the large-number-limit invariant now compares the
+  sampled-molecule chain with the mean-field chain field-to-field (same tiles, same edge
+  extractor) instead of against `cd_nm`, which since the sub-pixel CD uses a different edge
+  estimator (arrival-time crossing) than the realisations (depth-map crossing); the two differ
+  by up to ~1 px on their own and that difference was being tested by accident.
+
 ### Fixed (physics — Phase 0 of the 2026-09-04 audit, see `docs/audit_2026-09-04_vollpruefung.md`)
 - **Exposure-dose convention.** `dose_mj_cm2` is now the wafer dose in a clear area (Mack 1997):
   the aerial image is divided by the multilayer's clear-field reflectivity (|r_ML|² ≈ 0.647 for

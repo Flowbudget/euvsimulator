@@ -63,12 +63,17 @@ TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg
 # to the image, isotropic z-diffusion, Eikonal development front, operating
 # point sigma_PEB 7 nm / 4.0 mJ/cm2): values below. Pre-Phase-0 values:
 # 0.0860674324 / 0.1297861139 / 0.3251749642 / 17.8463 / 29.2004.
-GOLDEN_LEGACY_LER = 0.8469136421
-GOLDEN_LEGACY_LWR = 1.4741479568
-GOLDEN_LARGE_N_LER = 2.3891057997
-GOLDEN_N_EFF = 30.2642
-GOLDEN_L_INT_NM = 17.1421
-GOLDEN_RHO_TRUNC = 200
+# 2026-09-05: Dill B computed from the resist composition (4.44 µm⁻¹ instead
+# of Yamamoto's 1.06, see pipeline.py dill_B and tests/test_absorption_coefficient.py):
+# absorbed fraction 5.2 % -> 19.9 %, so the photon-shot-noise goldens fall
+# (Phase 2b values: LEGACY 0.8469136421 / 1.4741479568, LARGE_N_LER 2.3891057997,
+# N_EFF 30.2642, L_INT_NM 17.1421, RHO_TRUNC 200; CD at 4.0 mJ/cm2 now 36.25 nm).
+GOLDEN_LEGACY_LER = 0.3398195917
+GOLDEN_LEGACY_LWR = 0.5112461853
+GOLDEN_LARGE_N_LER = 1.4022154241
+GOLDEN_N_EFF = 32.2051
+GOLDEN_L_INT_NM = 16.0550
+GOLDEN_RHO_TRUNC = 126
 
 
 def _car_cfg(**kw):

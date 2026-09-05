@@ -118,11 +118,12 @@ def simulate(
         ),
     ),
     dill_B: float = typer.Option(
-        1.06,
+        4.44,
         "--dill-B",
         help=(
-            "Non-bleachable absorption coefficient [1/µm]; EUV CAR literature (Yamamoto et al. "
-            "2011, Fallica et al. 2016) suggests this dominates over dill-A"
+            "Non-bleachable absorption coefficient [1/µm]; default computed from the PHS/35 % "
+            "tBOC composition at 1.20 g/cm3 via CXRO f2 (pipeline.py dill_B note); measured "
+            "EUV CARs: 4.3-5.2 (Sekiguchi 2011, Fallica 2016)"
         ),
     ),
     dill_C: float = typer.Option(

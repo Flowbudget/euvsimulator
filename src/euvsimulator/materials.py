@@ -421,3 +421,61 @@ def get_cxro_table() -> CXROTable:
     if _DEFAULT_TABLE is None:
         _DEFAULT_TABLE = CXROTable()
     return _DEFAULT_TABLE
+
+
+# Atomic masses [g/mol] for the composition-based absorption coefficient below
+ATOMIC_MASS_G_MOL: Dict[str, float] = {
+    "H": 1.008,
+    "C": 12.011,
+    "N": 14.007,
+    "O": 15.999,
+    "F": 18.998,
+    "S": 32.06,
+    "Si": 28.085,
+    "Sn": 118.71,
+    "Hf": 178.49,
+    "Zr": 91.224,
+    "I": 126.904,
+    "Cl": 35.45,
+}
+
+
+def linear_absorption_coefficient_per_um(
+    composition: Dict[str, float],
+    density_g_cm3: float,
+    energy_eV: float = EUV_ENERGY_EV,
+    table: Optional["CXROTable"] = None,
+) -> float:
+    """Linear (Beer-Lambert) absorption coefficient α [µm⁻¹] of a compound from
+    its atomic composition and mass density, using the CXRO f₂ tables.
+
+    β = (r_e λ² / 2π) · Σ_i N_i f₂,i  and  α = 4πβ/λ  (Henke, Gullikson, Davis
+    1993), with N_i the number density of element i. This is the quantity the
+    Dill B parameter measures for an EUV resist whose absorption does not
+    bleach (A = 0): far from absorption edges the composition fixes it, so a
+    quoted B can be checked against first principles. Example (2026-09-05):
+    poly(hydroxystyrene) C₈H₈O at 1.15–1.20 g/cm³ gives 4.0–4.2 µm⁻¹, PMMA
+    5.2 µm⁻¹; a value of 1.06 µm⁻¹ is below even oxygen-free polystyrene
+    (2.95) and therefore not possible for a PHS-based resist.
+
+    Parameters
+    ----------
+    composition : dict
+        Atoms per repeat unit (or per molecule), e.g. ``{"C": 8, "H": 8, "O": 1}``;
+        fractional counts are allowed (copolymers, partial protection).
+    density_g_cm3 : float
+        Mass density of the film [g/cm³].
+    energy_eV : float
+        Photon energy [eV]; default 91.84 eV (13.5 nm).
+    """
+    if density_g_cm3 <= 0:
+        raise ValueError("density must be positive")
+    t = table or get_cxro_table()
+    molar_mass = sum(ATOMIC_MASS_G_MOL[e] * n for e, n in composition.items())
+    units_per_cm3 = density_g_cm3 * AVOGADRO / molar_mass
+    f2_sum = sum(n * t.get_f1f2(e, energy_eV)[1] for e, n in composition.items())
+    lam_cm = 1239.84198 / energy_eV * 1e-7
+    r_e_cm = CLASSICAL_ELECTRON_RADIUS * 100.0  # constant is in metres
+    beta = r_e_cm * lam_cm**2 / (2.0 * math.pi) * units_per_cm3 * f2_sum
+    alpha_per_cm = 4.0 * math.pi * beta / lam_cm
+    return alpha_per_cm * 1e-4

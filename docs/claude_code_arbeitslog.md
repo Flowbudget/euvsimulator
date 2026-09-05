@@ -2420,3 +2420,124 @@ Laufzeit-Hinweis: 61440-Zeilen-Test ≈ 5 min (kritischster Posten für die CI-M
 
 **Ergebnis nach Umsetzung:** die vier Module mit `-n auto` und echtem Exit-Code: **51 bestanden in
 10 min 30 s (Exit 0)**; schnelle Suite nach der Q-Entfernung 825 bestanden + 2 xfail; Lint/Format sauber.
+
+## 2026-09-05 (Fortsetzung 18): Literaturrunde 10 — was für euvsimulator daraus folgt
+
+Auf Nutzerwunsch („mehr Fachliteratur, was uns noch fehlt, alle Sprachen, auch Patente, auch weitere Mack-Fits") eine
+bedarfsgetriebene Suche; Katalog und Suchprotokoll in `/Users/flo/mack fits/` (Runde 10), ≈ 65 neue Dateien. Für den
+Simulator unmittelbar relevant:
+
+1. **Säureverlust ist messbar und gemessen:** Kang et al. 2010 (Macromolecules 43, 4275; NIST/Intel) fitten FT-IR-Kinetik
+   mit kP, Trapping-Rate kT (0–0,05 s⁻¹) und DH (≈ 4,2 nm²/s bei 90 °C) für einen EUV-Resist (Rohm&Haas CM4R, PAG 1 %,
+   H0 = 0,0129 nm⁻³). Das ist die Modellform, die unserer PEB fehlt (Fortsetzung 15, Yamamoto-Plateau). Kein Einbau ohne
+   Preflight; aber jetzt gibt es eine Primärquelle mit Zahlen für die Diskussion.
+2. **Zwei benannte EUV-CARs mit vollständigem Dill+Mack-Satz aus Messung** (Sekiguchi, InTech 2011, Table 6; LTJ-Methodik
+   wie Yamamoto): MET-1K/MET-2D bei EUV: B 4,32/5,21 µm⁻¹, C 0,086/0,090 cm²/mJ, Rmax 221/170 nm/s, Rmin 0,039/0,028,
+   Mth 0,624/0,518, n 12,65/18,96; PEB 110 °C/90 s, Film 125 nm. Die PEB-Arrhenius-Werte der Tabelle sind teils
+   unphysikalisch (Diffusivität ln(Ar) = 30 „Rundwert"; Amplification-Ea 2–4 kcal/mol) — nur Dill/Mack belastbar.
+   Folge: Yamamotos Dill B = 1,06 µm⁻¹ ist am unteren Rand; drei unabhängige Quellen (Sekiguchi, Fallica 2016/2017, Kang)
+   liegen bei 4–5 µm⁻¹ für organische CARs. Das ändert die absorbierte Photonenzahl um ×4 — Kandidat für den nächsten
+   Preflight (Photonenrauschen bei B = 4,3 statt 1,06).
+3. **Dill C vs. Quencher gemessen** (Sekiguchi IEEJ 2013, Table 1): effektives C fällt von 0,128 (kein Quencher) auf 0,0228
+   cm²/mJ bei Q/PAG = 0,75 — ein unabhängiger Test für unseren Quencher-Pfad (mittlere Säure nach Neutralisation).
+4. **Resist-Blur direkt gemessen** (Langner 2010, PSI/imec/ASML): Ld = 14,5 nm (Fujifilm FEVS-P1101), NILS-korrigiert 11,8;
+   Thackeray 2010: Gesamtblur 10,6–11,8 nm mit 2,5 nm EUV-spezifischem Anteil. Das rahmt unseren se_blur = 5 nm und den
+   Default σ_PEB = 19,9 nm ein: 19,9 ist deutlich über allen gemessenen Blur-Längen benannter EUV-CARs.
+5. **Rezepturen mit Wirkung:** Shin-Etsu-/JSR-Patente geben Quencher 4–9 pbw auf 100 pbw Polymer, EUV-Empfindlichkeit
+   17–33 mJ/cm², LWR 3,2–4,5 nm (32-nm-L/S) — Umrechnung in ρ_Q (nm⁻³) über Molmassen möglich.
+6. **Stochastik-Referenz aus der Industrie:** Samsung (Sci. Rep. 2025): 36-nm-Pitch, LWR 2,1 nm bei 40 mJ/cm² → 7,5 nm bei
+   20 mJ/cm² (Materialstochastik dominiert). Vergleichsdatensatz neben Vesters.
+Kein Code geändert.
+
+## 2026-09-05 (Fortsetzung 19): Preflight Dill B — 1,06 µm⁻¹ (Yamamoto) gegen 4,32/5,21 µm⁻¹ (Sekiguchi MET-1K/2D)
+
+Anlass: drei unabhängige Quellen (Sekiguchi InTech 2011 Table 6: 4,32/5,21; Fallica 2016: 4–5; Kang 2010: CM4R) setzen den
+nicht-bleichbaren Absorptionskoeffizienten organischer EUV-CARs auf 4–5 µm⁻¹; Yamamoto Table 2 gibt 1,06. Es wird KEIN Code
+geändert; `dill_B` ist Konfigurationsparameter. Vorhersagen vorab (Film 50 nm, se_blur 5, σ_PEB 7, Eikonal):
+- **V1** absorbierter Anteil 1 − e^{−B·t}: 5,2 % → 19,4 % (4,32) → 22,9 % (5,21) — rein analytisch, dient als Kontrolle des Codes.
+- **V2** Dosis-zu-Größe steigt mit B nur schwach (+3…+12 %): die Säureerzeugung hängt von der *einfallenden* Dosis ab
+  (C·E), B wirkt nur über den Tiefengradienten (Fußbereich sieht e^{−B·t} = 0,81 statt 0,95 der Oberflächendosis).
+- **V3** Photonen-LWR am jeweiligen D2S fällt mit B um den Faktor √(19,4/5,2) ≈ 1,9 (Bereich 1,6–2,2), weil nur absorbierte
+  Photonen zum Schrotrauschen zählen und D2S sich kaum ändert. Bei 5,21: Faktor ≈ 2,1.
+- **V4** Die LWR-Abhängigkeit vom Pitch bleibt: P = 44 weiterhin deutlich rauer als P = 64 (Faktor > 2), unabhängig von B.
+Gemessen wird mit `preflight_dill_B.py` (P = 64/32 Gitter 128; P = 44/22 Gitter 256; Bisektion D2S; 2 Realisierungen × 1024
+Zeilen, Seed 42, Photonen-only-Pfad).
+
+**Ergebnis (`preflight_dill_B.py`):**
+
+| P/lw | B [µm⁻¹] | absorbiert | D2S [mJ/cm²] | LWR_Photon [nm] | n_eff | stochCD [nm] |
+|---|---|---|---|---|---|---|
+| 64/32 | 1,06 | 5,2 % | 3,93 | 3,59 | 22 | 33,0 |
+| 64/32 | 4,32 | 19,4 % | 4,55 (+16 %) | 1,04 | 19 | 31,9 |
+| 64/32 | 5,21 | 22,9 % | 4,73 (+20 %) | 1,09 | 22 | 31,7 |
+| 44/22 | 1,06 | 5,2 % | 4,94 | 10,49 | 7,7 | 26,2 |
+| 44/22 | 4,32 | 19,4 % | 5,62 (+14 %) | 3,25 | 7,7 | 22,5 |
+| 44/22 | 5,21 | 22,9 % | 5,83 (+18 %) | 2,41 | 7,8 | 21,8 |
+
+- **V1 bestätigt** (Code rechnet 1 − e^{−B·t} exakt).
+- **V2 mechanisch richtig, Bereich verfehlt:** D2S steigt um 14–20 %, vorhergesagt 3–12 %. Der Fehler war meine Abschätzung:
+  der Fuß des Films sieht e^{−B·t}·(Oberfläche) = 0,81 statt 0,95, also braucht die Kette 0,95/0,81 = 1,17 mehr Dosis, damit
+  die unterste Schicht klärt — genau die gemessenen +14…+16 % bei 4,32. Keine neue Physik, eine schlampige Zahl.
+- **V3 in der Größe falsifiziert:** LWR fällt um Faktor 3,2–3,5 (4,32) bzw. 3,3–4,3 (5,21), vorhergesagt 1,6–2,2 aus √N.
+  Erklärung, mit Messung belegt: bei B = 1,06 lag die Kette in einem nichtlinearen Rauschregime — die stochastische CD (26,2)
+  wich um 4 nm von der deterministischen (22,0) ab (Jensen-Bias durch Mack-Nichtlinearität und laterale Entwicklung); mit
+  4× mehr Photonen verschwindet der Bias (22,5 ≈ 22,0) und mit ihm die Zusatzverstärkung. LWR ∝ 1/√N gilt nur im linearen
+  Regime; die Vorhersage hat das ignoriert. Bei n_eff 7,7 ist der P = 44-Wert auf ≈ ±25 % genau; die Diskrepanz zu 1,9 liegt
+  weit außerhalb.
+- **V4 bestätigt:** P = 44 bleibt 3,1× rauer als P = 64.
+
+**Einordnung, ohne Kalibrierung:** mit B im Bereich der drei unabhängigen Quellen liegt das reine Photonen-LWR bei 22 nm HP
+bei 2,4–3,3 nm (D2S 5,6–5,8 mJ/cm²). Das ist Vesters' Band (2,2–3,4) bei einer Dosis unterhalb von Vesters (8–16) — kein
+Fit, kein Anker, aber ein Hinweis, dass die „Überrauheit" aus Fortsetzung 10 zu einem großen Teil ein falscher
+Absorptionskoeffizient war. Nächste Schritte: (a) Streuung mit weiteren Seeds und Zwischenwert B = 2,5 messen, (b) B für
+PHS-Polymere aus CXRO-Streufaktoren rechnen (erste Prinzipien statt Quellenvergleich), (c) erst dann über den Default entscheiden.
+
+### Erste-Prinzipien-Kontrolle: Dill B aus CXRO-Streufaktoren (kein Quellenvergleich, reine Physik)
+
+α = 4πβ/λ mit β = (r_e λ²/2π)·Σ_i N_i f₂,i (Henke/CXRO), f₂ bei 91,84 eV aus der projekteigenen CXRO-Datenbank
+(`euvsimulator.materials`): C 0,766, H 0,033, O 2,765, S 1,130, F 4,273.
+
+| Polymer | ρ [g/cm³] | α [µm⁻¹] |
+|---|---|---|
+| PHS (C₈H₈O) | 1,15 / 1,20 | 4,02 / 4,19 |
+| PHS mit 35 % tBOC-Schutz (Yamamoto Polymer A, Annahme tBOC) | 1,15 | 4,25 |
+| PHS-co-tBA 65/35 (NIST-Typ) | 1,20 | 4,43 |
+| PMMA | 1,18 | 5,20 |
+| Polystyrol | 1,05 | 2,95 |
+| TPS-Triflat (PAG, rein) | 1,4 | 5,98 |
+
+Befund: **Kein PHS-basiertes Polymer kann bei 13,5 nm einen Absorptionskoeffizienten von 1,06 µm⁻¹ haben** — selbst
+sauerstofffreies Polystyrol liegt bei 2,95, und der Sauerstoffanteil des PHS treibt den Wert auf ≈ 4,0–4,4. Yamamotos
+Table-2-Wert B = 1,06 ist damit nicht nur ein Ausreißer gegenüber Sekiguchi (4,32/5,21), Fallica (4–5) und Kang, sondern
+physikalisch ausgeschlossen (mögliche Ursachen: PROLITH-Eingabe in anderen Einheiten, Absorbanz statt Koeffizient — nicht
+aufklärbar). Konsequenz: der Default-B wird aus der Zusammensetzung des Default-Resists *berechnet* (PHS, 35 % geschützt,
+ρ = 1,15–1,20 → 4,25–4,43 µm⁻¹) und als Funktion mit Test in `materials.py` hinterlegt, damit die Ableitung reproduzierbar
+bleibt — keine Kalibrierung, keine Übernahme eines Fremdwerts. Die Dichte ist die einzige Annahme (Literaturbereich für PHS
+1,15–1,2 g/cm³; Kang 2010 verwendet 1,2).
+
+**Nachmessung mit weiteren Seeds (P = 44, `preflight_dill_B2.py`), Photonen-LWR [nm] (n_eff 6–8, je ±25 %):**
+B = 1,06 bei D2S 4,94: 10,49 / 9,89 / 11,29 / 10,56 (Seeds 42/7/11/23) → Mittel **10,6**; B = 4,32 bei D2S 5,62: 3,25 / 5,85 /
+5,17 / 2,72 → Mittel **4,25**, Streuung groß (stochCD 21,6–24,3, d. h. das nichtlineare Regime ist bei P = 44 noch nicht ganz
+verlassen). Ehrliches Verhältnis: **≈ 2,5 (Bereich 1,8–3,9)**, nicht die 3,2 des Einzelseeds. Gegen V3 (1,6–2,2) bleibt das
+knapp außerhalb, aber die Falsifikation ist schwächer als oben geschrieben; bei P = 64 (n_eff ≈ 20) steht der Faktor 3,45
+belastbarer. Zwischenwert B = 2,0: D2S 5,12, LWR 7,9 — monoton.
+
+**Umsetzung (2026-09-05):** `materials.linear_absorption_coefficient_per_um(composition, density)` (CXRO f₂, Henke-Formel;
+Einheitenfehler r_e in Metern beim ersten Entwurf durch PMMA-Kontrolle gefunden: 0,052 statt 5,2), `pipeline.DEFAULT_RESIST_
+COMPOSITION/DENSITY/DILL_B_PER_UM` (PHS + 0,35 tBOC, 1,20 g/cm³ → 4,44 µm⁻¹), Default `dill_B = 4.44` in `SimulationConfig` und
+CLI, `tests/test_absorption_coefficient.py` (PMMA 4,6–5,6 als Literaturkontrolle, PHS-Familie 3,8–4,7, Polystyrol-Boden > 2,5,
+Dichte-Linearität, Default = Herleitung ±0,02). Schnelle Suite mit neuem Default: 830 bestanden + 2 xfail — kein Test hatte
+den alten Wert als Zahl gepinnt. Stochastische Goldens werden neu abgeleitet (Arbeitspunkt bleibt σ_PEB 7 nm, 4,0 mJ/cm²;
+D2S bei P = 64 jetzt 4,55, die Linie druckt dort mit ≈ 34 nm). Zwischenwert aus der Nachmessung: B = 3,0 → D2S 5,33, LWR 7,3 nm.
+
+**Neue Goldens (derive_goldens.py, σ_PEB 7, 4,0 mJ/cm², Seed 42, P = 64):** LARGE_N LER 1,4022 / LWR 2,3955 (vorher 2,3891 /
+4,0033), n_eff 32,2, l_int 16,06 nm, ρ-Trunkierung 126, Legacy LER 0,3398 / LWR 0,5112 (vorher 0,8469 / 1,4741), CD 36,25 nm,
+NILS 3,89. Alle Rauheitspins fallen um Faktor 1,7 (Großzahl) bis 2,5–2,9 (Legacy) — konsistent mit dem Preflight.
+
+**Regression nach der Umstellung:** vier Stochastik-Module 50/51 — der Großzahl-Test [q = 0] fiel mit 0,36 nm (2,1 px) gegen
+Toleranz 1,5 px. Ursache kein Physikfehler, sondern ein Extraktor-Mismatch: seit der Sub-Pixel-CD misst `cd_nm` die
+Ankunftszeit-Kreuzung, die Realisierungen messen die Tiefenkarten-Kreuzung; beide unterscheiden sich für sich genommen um
+bis zu ≈ 1 px (Preflight Fortsetzung 15). Der Test verglich also zwei Schätzer, nicht die Invariante. Umgeschrieben auf
+Feld-gegen-Feld: gesampelte Kette (ρ = 0,2/20/2000, Photonen aus) gegen Mittelfeld-Kette auf denselben Kacheln, gleicher
+Extraktor; Zusicherungen: Breite ≤ 0,5 px, mittlere Tiefenabweichung monoton fallend und < 0,1 px bei ρ = 2000, grobe
+Schranke 3 px gegen `cd_nm`. 2/2 bestanden (99 s). Notebooks 03/05 riefen `dose_to_acid(Q=…)` — Q-Zeile entfernt.
