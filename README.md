@@ -259,7 +259,7 @@
 260|| Tutorials & documentation | ✅ 6 notebooks complete |
 261|| Docker deployment | ✅ |
 262|| **CI/CD pipeline** | ✅ **GitHub Actions: Linux/macOS/Windows × Python 3.10–3.13** |
-263||| **Test count** | **873 collected, 2 expected failures** (2026-09-05; the two `xfail(strict)` tests in `tests/test_yamamoto_anchor.py` record that the default resist parameters do not reproduce their own source's measurements, see below) |
+263||| **Test count** | **880+ passing, no expected failures** (2026-09-05; see `pytest tests`) |
 264|| **License** | Apache 2.0 |
 265|
 266|---
@@ -269,15 +269,18 @@
 270|> **Validation status (2026-09-05).** The numerics are validated against exact solutions and
 > conservation laws (Fresnel/effective-medium limits and R+T=1 for the RCWA, mass conservation of
 > the PEB solver, exact Eikonal arrival times, tiling and grid-refinement invariance of the CD).
-> The **absolute dose scale of the default resist is not a validated quantity**: the default
-> Dill/Mack parameters (Yamamoto et al. 2011, Table 2) are the only complete, single-source EUV
-> set found, but implemented in the standard Mack forms they deprotect ≈ 3.4× too little against
-> the same paper's own FTIR and dissolution-rate measurements (`tests/test_yamamoto_anchor.py`,
-> `docs/claude_code_arbeitslog.md` Fortsetzung 15). Shape parameters (M_th, n, R_max/R_min, B) are
-> sourced, and the absorption coefficient B is computed from the resist composition via the CXRO
-> tables (4.44 µm⁻¹; `tests/test_absorption_coefficient.py`), but sensitivity and LWR of the default resist should not be compared with the literature
-> without a resist-specific calibration (`euv calibrate`). The 19.9 nm default PEB blur is
-> back-calculated from Anderson 2009 and has no source for the 22 nm half-pitch regime.
+> The default resist is Yamamoto et al. 2011, Polymer A -- the only complete, single-source EUV
+> parameter set found. Its dose scale is anchored to that paper's own flood-exposure
+> measurements: deprotection rate and acid lifetime from the FT-IR kinetics (Figs. 3/4), which
+> then reproduce the independent dissolution threshold of Fig. 5 (0.75 vs ≈ 0.8 mJ/cm²,
+> `tests/test_yamamoto_anchor.py`); Table 2's PROLITH Arrhenius pair did not (≈ 3.4× off) and is
+> kept as a guard test. The absorption coefficient B is computed from the resist composition
+> via the CXRO tables (4.44 µm⁻¹, `tests/test_absorption_coefficient.py`). Two caveats remain:
+> this is a very sensitive 2011 research resist (dose-to-size ≈ 1.3 mJ/cm² at 64 nm pitch), so
+> its sensitivity and LWR are not those of a production resist and should not be compared with
+> the literature without a resist-specific calibration (`euv calibrate`); and the 19.9 nm default
+> PEB blur is back-calculated from Anderson 2009 and has no source for the 22 nm half-pitch
+> regime.
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|

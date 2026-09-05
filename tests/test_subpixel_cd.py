@@ -50,7 +50,7 @@ def test_pipeline_cd_is_smooth_and_monotone_in_dose_on_a_coarse_grid():
     sub-pixel CD must fall monotonically with dose in sub-nm steps.
     """
     cds = []
-    for dose in (4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6):
+    for dose in (1.06, 1.08, 1.10, 1.12, 1.14, 1.16, 1.18):
         r = run_simulation(
             SimulationConfig(
                 resist_model="full_chem",
@@ -81,7 +81,7 @@ def test_coarse_grid_agrees_with_fine_grid():
                 period_nm=64.0,
                 line_width_nm=32.0,
                 grid=grid,
-                dose_mj_cm2=4.5,
+                dose_mj_cm2=1.2,
                 peb_sigma_diff=7.0,
                 se_blur_nm=5.0,
             )
@@ -100,7 +100,7 @@ def test_column_model_still_runs_and_is_wider_than_eikonal():
         period_nm=64.0,
         line_width_nm=32.0,
         grid=64,
-        dose_mj_cm2=4.5,
+        dose_mj_cm2=1.2,
         peb_sigma_diff=7.0,
         se_blur_nm=5.0,
     )

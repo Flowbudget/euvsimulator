@@ -1,29 +1,22 @@
 """Single-source anchor: Yamamoto et al. 2011, J. Photopolym. Sci. Technol. 24(4) 405.
 
-The default resist parameters (dill_B/C, peb_k, mack_*) are Table 2 of that
-paper ("Calculation parameters of Polymer A on PROLITH").  The same paper
+The default resist parameters are Yamamoto's Polymer A. The same paper
 measured, on the same resist at the same PEB condition (110 °C / 60 s, 2.38 %
 TMAH 30 s):
 
 * Fig. 3 -- FTIR protection ratio P(t) during PEB after 1.4 mJ/cm² flood
-  exposure: P(60 s, 110 °C) ≈ 0.18 (plateau 0.17; read from the figure,
-  ±0.03).
-* Fig. 5 -- RDA dissolution rate vs. flood dose, 35 % protection: R = 0.1 nm/s
-  up to 0.65 mJ/cm², 1.5 nm/s at 0.75, ≈ 60 nm/s from 0.84 mJ/cm²
-  (axis-calibrated reading, ±10 % in dose).
+  exposure at 110 °C: P(5 s) ≈ 0.60, P(10) ≈ 0.35, P(20) ≈ 0.22, P(40) ≈ 0.18,
+  P(60) ≈ 0.18 (read from the figure, ±0.03 each).
+* Fig. 4 -- Arrhenius plot of the deprotection rate: Kdp(110 °C) ≈ 1.4 s⁻¹.
+* Fig. 5 -- RDA dissolution rate vs. flood dose, 35 % protection: threshold
+  (R ≈ R_max/2) at ≈ 0.8 mJ/cm² (axis-calibrated reading, ±10 %).
 
-Implemented in the standard Mack forms this chain uses, Table 2 gives
-P(60 s) = 0.60 and a dissolution threshold of ≈ 2.7 mJ/cm² -- the same factor
-≈ 3.4 in k·C from two independent figures.  The paper's own kinetics (its
-Eq. 1) has an acid-loss term and a reaction order that Table 2 does not carry
-and for which no values are published.
-
-These tests are therefore ``xfail(strict=True)``: they encode the primary
-measurements as the falsification target, fail today for a documented
-reason, and will start FAILING-AS-UNEXPECTED-PASS the moment a model change
-makes the chain reproduce its own source -- at which point the caveat in
-pipeline.py must be revisited.  The last test pins the chain's current
-numbers so a silent drift of the default set shows up.
+History: with Table 2's PROLITH Arrhenius pair (k = 0.0723 s⁻¹, no acid
+loss) the chain gave P(60 s) = 0.60 and a threshold of 2.75 mJ/cm² -- both
+≈ 3.4× off -- and no acid lifetime alone could fix it (log Fortsetzung
+15/20). Since 2026-09-05 the defaults are Kdp = 1.4 s⁻¹ (Fig. 4) and an
+acid lifetime τ = 10.5 s (from the Fig. 3 plateau); Fig. 5 was NOT used to
+set either, so the threshold test below is an independent check.
 """
 
 from __future__ import annotations
@@ -67,7 +60,12 @@ def _chain_surface(dose_mj_cm2: float, cfg: SimulationConfig) -> tuple[float, fl
     # pipeline discards it the same way (pipeline.py, _cd_via_full_chem).
     a0 = acid[0]
     _, M = reaction_diffusion_analytical(
-        a0, torch.ones_like(a0), k=cfg.peb_k, t_bake=cfg.peb_t_bake, sigma_diff=0.0
+        a0,
+        torch.ones_like(a0),
+        k=cfg.peb_k,
+        t_bake=cfg.peb_t_bake,
+        sigma_diff=0.0,
+        acid_lifetime_s=cfg.peb_acid_lifetime_s,
     )
     mack = MackModel(R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, M_th=cfg.mack_M_th, n=cfg.mack_n)
     R = mack.rate(M)
@@ -88,11 +86,6 @@ def _threshold_dose(cfg: SimulationConfig) -> float:
     return math.sqrt(lo * hi)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Yamamoto 2011 Table 2 in standard Mack form deprotects ~3.4x too little "
-    "(P(60 s) = 0.60 vs Fig. 3 ≈ 0.18); the source's acid-loss/order terms are unpublished",
-)
 def test_fig3_protection_ratio_after_peb():
     cfg = SimulationConfig()
     _, M, _ = _chain_surface(FIG3_DOSE_MJ_CM2, cfg)
@@ -101,12 +94,6 @@ def test_fig3_protection_ratio_after_peb():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "chain dissolution threshold ≈ 2.7 mJ/cm² vs Fig. 5 ≈ 0.8 mJ/cm² (same factor as Fig. 3)"
-    ),
-)
 def test_fig5_dissolution_threshold():
     cfg = SimulationConfig()
     e_th = _threshold_dose(cfg)
@@ -115,18 +102,42 @@ def test_fig5_dissolution_threshold():
     )
 
 
+def test_fig3_full_curve():
+    """All five read points of the 110 °C deprotection curve."""
+    cfg = SimulationConfig()
+    fig3 = {5.0: 0.60, 10.0: 0.35, 20.0: 0.22, 40.0: 0.18, 60.0: 0.18}
+    for t, p_meas in fig3.items():
+        dose = torch.full((2, 2), FIG3_DOSE_MJ_CM2, dtype=torch.float64)
+        acid, _ = dill_abc_exposure(
+            dose, A=cfg.dill_A, B=cfg.dill_B, C=cfg.dill_C, thickness=0.05, n_layers=2
+        )
+        _, M = reaction_diffusion_analytical(
+            acid[0],
+            torch.ones_like(acid[0]),
+            k=cfg.peb_k,
+            t_bake=t,
+            sigma_diff=0.0,
+            acid_lifetime_s=cfg.peb_acid_lifetime_s,
+        )
+        assert abs(float(M.mean()) - p_meas) < 0.1, (t, float(M.mean()), p_meas)
+
+
 def test_chain_numbers_are_pinned():
-    """Pins what the default chain currently does, so that the factor documented
-    in pipeline.py (≈ 3.4) cannot drift silently.
+    """Pins what the default chain does so that a drift of the default set
+    (k, τ, C, Mack) shows up here first.
     """
     cfg = SimulationConfig()
     acid, M, _ = _chain_surface(FIG3_DOSE_MJ_CM2, cfg)
     assert acid == pytest.approx(1.0 - math.exp(-cfg.dill_C * FIG3_DOSE_MJ_CM2), rel=1e-6)
-    assert M == pytest.approx(0.598, abs=0.005)
-    e_th = _threshold_dose(cfg)
-    assert e_th == pytest.approx(2.7, abs=0.1)
-    # the two independent figure readings imply the same shortfall in k*C
-    factor_fig3 = -math.log(FIG3_P_60S_110C) / -math.log(M)
-    factor_fig5 = e_th / FIG5_THRESHOLD_MJ_CM2
-    assert 2.5 < factor_fig3 < 4.5
-    assert 2.5 < factor_fig5 < 4.5
+    assert M == pytest.approx(0.18, abs=0.02)
+    assert _threshold_dose(cfg) == pytest.approx(0.75, abs=0.03)
+
+
+def test_table2_arrhenius_pair_is_rejected_for_a_reason():
+    """The former default (Table 2: k = 0.0723 s⁻¹, no loss) misses both
+    measurements by the same factor -- kept as a guard against reverting.
+    """
+    cfg = SimulationConfig(peb_k=0.0723, peb_acid_lifetime_s=None)
+    _, M, _ = _chain_surface(FIG3_DOSE_MJ_CM2, cfg)
+    assert M == pytest.approx(0.60, abs=0.02)
+    assert _threshold_dose(cfg) == pytest.approx(2.75, abs=0.1)

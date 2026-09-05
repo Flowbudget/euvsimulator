@@ -51,7 +51,9 @@ SEED = 42
 # Phase 2b re-measurements (2026-09-04, see below). The former dill_Q pin
 # (1.0 in this config, 0.5 default) no longer exists: the acid yield is
 # 1 - exp(-C*E) (Mack 2013, Eqs. 8/10).
-TEST_DOSE = 4.0  # mJ/cm² at the wafer, near dose-to-size at TEST_SIGMA (see _car_cfg)
+# mJ/cm² at the wafer, near dose-to-size (1.27) at TEST_SIGMA with the 2026-09-05
+# acid-lifetime default (see _car_cfg)
+TEST_DOSE = 1.1
 TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg)
 # Golden values are regression pins of the test configuration (seed 42,
 # se_blur 5, P=64, TEST_SIGMA/TEST_DOSE), measured with
@@ -63,17 +65,20 @@ TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg
 # to the image, isotropic z-diffusion, Eikonal development front, operating
 # point sigma_PEB 7 nm / 4.0 mJ/cm2): values below. Pre-Phase-0 values:
 # 0.0860674324 / 0.1297861139 / 0.3251749642 / 17.8463 / 29.2004.
-# 2026-09-05: Dill B computed from the resist composition (4.44 µm⁻¹ instead
-# of Yamamoto's 1.06, see pipeline.py dill_B and tests/test_absorption_coefficient.py):
-# absorbed fraction 5.2 % -> 19.9 %, so the photon-shot-noise goldens fall
-# (Phase 2b values: LEGACY 0.8469136421 / 1.4741479568, LARGE_N_LER 2.3891057997,
-# N_EFF 30.2642, L_INT_NM 17.1421, RHO_TRUNC 200; CD at 4.0 mJ/cm2 now 36.25 nm).
-GOLDEN_LEGACY_LER = 0.3398195917
-GOLDEN_LEGACY_LWR = 0.5112461853
-GOLDEN_LARGE_N_LER = 1.4022154241
-GOLDEN_N_EFF = 32.2051
-GOLDEN_L_INT_NM = 16.0550
-GOLDEN_RHO_TRUNC = 126
+# 2026-09-05 (a): Dill B computed from the resist composition (4.44 µm⁻¹ instead
+# of Yamamoto's 1.06): LEGACY 0.3398195917 / 0.5112461853, LARGE_N_LER
+# 1.4022154241, N_EFF 32.2051, L_INT_NM 16.0550, RHO_TRUNC 126 at 4.0 mJ/cm².
+# 2026-09-05 (b): acid lifetime (Kdp 1.4 s⁻¹, τ 10.5 s, see pipeline.py peb_k /
+# peb_acid_lifetime_s): dose-to-size at P = 64 / σ 7 fell 4.55 -> 1.27 mJ/cm²,
+# operating point moved to TEST_DOSE = 1.1 (CD 36.61 nm, NILS 3.87). Fewer
+# photons -> higher shot-noise goldens. Phase 2b values (Dill B 1.06, 4.0 mJ/cm²):
+# LEGACY 0.8469136421 / 1.4741479568, LARGE_N_LER 2.3891057997, N_EFF 30.2642.
+GOLDEN_LEGACY_LER = 0.7931348623
+GOLDEN_LEGACY_LWR = 1.5327717691
+GOLDEN_LARGE_N_LER = 2.7350296402
+GOLDEN_N_EFF = 28.6615
+GOLDEN_L_INT_NM = 18.0931
+GOLDEN_RHO_TRUNC = 198
 
 
 def _car_cfg(**kw):
@@ -355,7 +360,9 @@ def test_neff_ge_30():
     # defensible threshold is asked of the DEFAULT field size; if a future
     # physics change lowers n_eff again, raise stochastic_ler_grid_y here
     # explicitly rather than lowering the threshold.
-    r = run_simulation(_car_cfg())
+    # 2026-09-05 acid-lifetime default: n_eff 28.7 at 4096 rows (GOLDEN_N_EFF) --
+    # below the bar by 4 %; per the rule above the field size is raised, not the bar.
+    r = run_simulation(_car_cfg(stochastic_ler_grid_y=8192))
     assert r.ler_metadata["n_eff"] >= 30.0
 
 

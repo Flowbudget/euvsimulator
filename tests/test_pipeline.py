@@ -38,7 +38,7 @@ class TestPipeline:
         20 mJ/cm² the resist is fully cleared and NILS is NaN by design.
         """
         result = run_simulation(
-            grid=128, se_blur_nm=10.0, resist_model="full_chem", dose_mj_cm2=4.0, peb_sigma_diff=7.0
+            grid=128, se_blur_nm=10.0, resist_model="full_chem", dose_mj_cm2=1.1, peb_sigma_diff=7.0
         )
         assert result.cd_nm > 0
         # For 64nm pitch, 32nm line, NA=0.33, sigma=0.8 with SE blur
@@ -78,7 +78,7 @@ class TestConfigThreshold:
         followed the aerial_threshold model's reference level, which had no
         meaning for the chemistry chain).
         """
-        kw = dict(resist_model="full_chem", dose_mj_cm2=4.0, peb_sigma_diff=7.0, grid=128)
+        kw = dict(resist_model="full_chem", dose_mj_cm2=1.1, peb_sigma_diff=7.0, grid=128)
         r_default = run_simulation(SimulationConfig(**kw))
         r_norm = run_simulation(SimulationConfig(resist_threshold_norm=0.3, **kw))
         assert r_default.cd_nm > 0

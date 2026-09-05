@@ -485,14 +485,28 @@ class SimulationConfig:
     # ADOPTED as the new default for the same reason as dill_Q above: this
     # is Yamamoto et al. 2011's own real, cited Arrhenius-derived rate (kJ/mol
     # reading, see above), not a new or re-guessed number.
-    # Deprotection rate constant [s⁻¹] -- Yamamoto et al. 2011's own Arrhenius fit (Ea=27.8 kJ/mol,
-    # ln(Ar)=6.1/s) evaluated at their own PEB condition (110C); see note above for the
-    # unit-ambiguity resolution and why this is now adopted (works with the depth-resolved MackModel
-    # chain, did not with the old simplified one). CAVEAT 2026-09-05: the paper's own Fig. 4
-    # Arrhenius plot gives Kdp(110C) ~ 1.4 s^-1 for this polymer (axis-calibrated reading), 19x this
-    # value; together with the missing acid-loss term this is why the chain deprotects ~3.4x too
-    # little against Figs. 3/5 -- see the dill_A caveat and tests/test_yamamoto_anchor.py
-    peb_k: float = 0.0723
+    # Deprotection rate constant [s⁻¹] at the default PEB (110 °C). 1.4 s⁻¹ is
+    # Kdp of Yamamoto et al. 2011, Polymer A (35 % protection), read from the
+    # Arrhenius plot of their FT-IR kinetics (Fig. 4, point at 1/T = 0.002616
+    # K⁻¹ ≙ 109 °C; axis-calibrated reading, ±15 %). Until 2026-09-05 the
+    # default was 0.0723 s⁻¹ from Table 2's Arrhenius pair (Ea = 27.8 "kJ/mol",
+    # ln Ar = 6.1) -- PROLITH's translation, which reproduces neither the
+    # paper's Fig. 3 deprotection curve nor its Fig. 5 dissolution threshold
+    # (log Fortsetzung 15/20). With this Kdp AND the acid lifetime below, the
+    # chain reproduces Fig. 3 at all five read points (≤ 0.08) and the
+    # independent Fig. 5 threshold (0.75 vs ≈ 0.8 mJ/cm²), tests/
+    # test_yamamoto_anchor.py. No fit to Fig. 5 was made.
+    peb_k: float = 1.4
+    # Average acid lifetime τ [s] during the PEB (first-order acid loss;
+    # Yamamoto et al. 2011 Eq. 1 "τ", Kang et al. 2010 "trapping"). 10.5 s
+    # follows from the Fig. 3 plateau at 110 °C: M∞ = exp(−Kdp·H0·τ) = 0.17
+    # with H0 = 1 − exp(−C·1.4 mJ/cm²) = 0.118 and Kdp = 1.4 s⁻¹. None = no
+    # loss (the model before 2026-09-05). Deprotection, D·t diffusion length
+    # and neutralisation use the effective time τ(1 − e^{−t/τ})
+    # (resist.peb.effective_reaction_time). Consequence: the default resist
+    # is a very sensitive 2011 research resist (dose-to-size ≈ 1.3 mJ/cm² at
+    # 64 nm pitch, σ_PEB 7 nm) -- a property of the source, not a target.
+    peb_acid_lifetime_s: float | None = 10.5
     peb_t_bake: float = 60.0  # Bake time [s]
     # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see
     # note above
@@ -978,6 +992,8 @@ class SimulationConfig:
             raise ValueError("dill_C must be > 0")
         if self.peb_k <= 0:
             raise ValueError("peb_k must be > 0")
+        if self.peb_acid_lifetime_s is not None and self.peb_acid_lifetime_s <= 0:
+            raise ValueError("peb_acid_lifetime_s must be > 0 or None")
         if self.peb_t_bake <= 0:
             raise ValueError("peb_t_bake must be > 0")
         if self.mack_R_max <= self.mack_R_min:
@@ -1257,6 +1273,7 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
             k=cfg.peb_k,
             quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
             t_bake=cfg.peb_t_bake,
+            acid_lifetime_s=cfg.peb_acid_lifetime_s,
             sigma_diff=cfg.peb_sigma_diff,
             dx=dx_nm,
             pag_density=cfg.pag_density_per_nm3,  # k_Q [nm^3/s] -> k_Q*G0 [1/s]
@@ -1363,6 +1380,7 @@ def _cd_via_full_chem(
         k=cfg.peb_k,
         quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
         t_bake=cfg.peb_t_bake,
+        acid_lifetime_s=cfg.peb_acid_lifetime_s,
         sigma_diff=cfg.peb_sigma_diff,
         dx=dx_nm,
         pag_density=cfg.pag_density_per_nm3,

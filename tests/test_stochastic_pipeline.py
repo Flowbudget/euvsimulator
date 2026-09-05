@@ -32,7 +32,7 @@ def test_stochastic_produces_ler_lwr():
         stochastic_seed=42,
         se_blur_nm=5.0,
         grid=128,
-        dose_mj_cm2=4.0,  # operating point, see test_ler_production_integration._car_cfg
+        dose_mj_cm2=1.1,  # operating point, see test_ler_production_integration._car_cfg
         peb_sigma_diff=7.0,
     )
     result = run_simulation(cfg)
@@ -50,7 +50,7 @@ def test_stochastic_reproducible_with_seed():
         stochastic_seed=123,
         se_blur_nm=5.0,
         grid=128,
-        dose_mj_cm2=4.0,  # operating point, see test_ler_production_integration._car_cfg
+        dose_mj_cm2=1.1,  # operating point, see test_ler_production_integration._car_cfg
         peb_sigma_diff=7.0,
     )
     cfg2 = SimulationConfig(
@@ -60,7 +60,7 @@ def test_stochastic_reproducible_with_seed():
         stochastic_seed=123,
         se_blur_nm=5.0,
         grid=128,
-        dose_mj_cm2=4.0,  # operating point, see test_ler_production_integration._car_cfg
+        dose_mj_cm2=1.1,  # operating point, see test_ler_production_integration._car_cfg
         peb_sigma_diff=7.0,
     )
     r1 = run_simulation(cfg1)
@@ -78,7 +78,7 @@ def test_stochastic_different_seeds_different_results():
         stochastic_seed=1,
         se_blur_nm=5.0,
         grid=128,
-        dose_mj_cm2=4.0,  # operating point, see test_ler_production_integration._car_cfg
+        dose_mj_cm2=1.1,  # operating point, see test_ler_production_integration._car_cfg
         peb_sigma_diff=7.0,
     )
     cfg2 = SimulationConfig(
@@ -88,7 +88,7 @@ def test_stochastic_different_seeds_different_results():
         stochastic_seed=2,
         se_blur_nm=5.0,
         grid=128,
-        dose_mj_cm2=4.0,  # operating point, see test_ler_production_integration._car_cfg
+        dose_mj_cm2=1.1,  # operating point, see test_ler_production_integration._car_cfg
         peb_sigma_diff=7.0,
     )
     r1 = run_simulation(cfg1)

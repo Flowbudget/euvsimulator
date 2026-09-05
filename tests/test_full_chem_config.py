@@ -111,7 +111,7 @@ def test_both_paths_produce_reasonable_cd():
     # 19.9 nm PEB blur the 32 nm line exists only in a knife-edge dose window,
     # so the test uses sigma_PEB = 7 nm / 4.0 mJ/cm² like the stochastic
     # regression tests (see test_ler_production_integration._car_cfg).
-    cfg2 = SimulationConfig(resist_model="full_chem", grid=128, dose_mj_cm2=4.0, peb_sigma_diff=7.0)
+    cfg2 = SimulationConfig(resist_model="full_chem", grid=128, dose_mj_cm2=1.1, peb_sigma_diff=7.0)
 
     r1 = run_simulation(cfg1)
     r2 = run_simulation(cfg2)
@@ -237,7 +237,7 @@ def test_full_chem_nils_is_measured_at_the_printed_edge():
     """
     r = run_simulation(
         SimulationConfig(
-            resist_model="full_chem", dose_mj_cm2=4.0, se_blur_nm=5.0, peb_sigma_diff=7.0, grid=128
+            resist_model="full_chem", dose_mj_cm2=1.1, se_blur_nm=5.0, peb_sigma_diff=7.0, grid=128
         )
     )
     assert r.cd_nm > 0

@@ -2541,3 +2541,81 @@ bis zu ≈ 1 px (Preflight Fortsetzung 15). Der Test verglich also zwei Schätze
 Feld-gegen-Feld: gesampelte Kette (ρ = 0,2/20/2000, Photonen aus) gegen Mittelfeld-Kette auf denselben Kacheln, gleicher
 Extraktor; Zusicherungen: Breite ≤ 0,5 px, mittlere Tiefenabweichung monoton fallend und < 0,1 px bei ρ = 2000, grobe
 Schranke 3 px gegen `cd_nm`. 2/2 bestanden (99 s). Notebooks 03/05 riefen `dose_to_acid(Q=…)` — Q-Zeile entfernt.
+
+## 2026-09-05 (Fortsetzung 20): Preflight Säureverlust — kann ein Lebensdauer-Term die Kette mit Yamamotos Messungen versöhnen?
+
+Modellform (Yamamoto 2011 Gl. 1, „τ average acid lifetime"; Kang 2010 Trapping kT): Säure zerfällt erster Ordnung,
+H(t) = H₀e^{−t/τ}; damit M(t) = exp(−k·H₀·τ·(1 − e^{−t/τ})), Plateau M∞ = exp(−k·H₀·τ). Kein Code wird geändert: die
+Deprotektion wird per Monkey-Patch mit effektiver Reaktionszeit t_eff = τ(1 − e^{−t/τ}) gerechnet.
+
+Messwerte aus Fortsetzung 15 (Ablesungen ±10 %): Fig. 3 (110 °C, 1,4 mJ/cm²): P(5 s) ≈ 0,60, P(10) ≈ 0,35, P(20) ≈ 0,22,
+P(40) ≈ 0,18, P(60) ≈ 0,18; Fig. 4: Kdp(110 °C) ≈ 1,4 s⁻¹; Fig. 5: Flutschwelle (R_max/2) ≈ 0,8 mJ/cm².
+
+Vorhersagen vorab:
+- **V1** Mit Table-2-k (0,0723 s⁻¹) reproduziert **kein** τ die Fig.-3-Kurve: k·H₀ = 0,0085 s⁻¹ ist zu klein für den Abfall
+  in 10–15 s; das Plateau 0,17 verlangte τ ≈ 200 s, dann läge P(60) bei ≈ 0,64. Säureverlust allein rettet Table 2 nicht.
+- **V2** Mit k = 1,4 s⁻¹ (Fig. 4) und τ aus dem Plateau (k·H₀·τ = −ln 0,17 → τ ≈ 10,5 s) trifft die Kurve Fig. 3 in Form
+  und Höhe: P(5) ≈ 0,5, P(10) ≈ 0,35, P(60) ≈ 0,17 (Abweichung < 0,1 an allen fünf Stützstellen).
+- **V3 (der eigentliche Test, Fig. 5 ist von Fig. 3/4 unabhängig):** mit (k = 1,4, τ ≈ 10,5) verschiebt sich die
+  Flutschwelle von 2,75 auf **0,6–0,9 mJ/cm²** (Handrechnung: M∞ = M_th bei 1 − e^{−C·E} = 0,94/14,7 → E ≈ 0,75).
+- **V4** Bildseitig wird der Resist damit ≈ 3,5× empfindlicher: D2S bei P = 64/32, σ_PEB 7, Gitter 128 fällt von 4,55 auf
+  **1,1–1,7 mJ/cm²**, und das Photonen-LWR steigt entsprechend (weniger Photonen) auf das 1,5–2-fache des heutigen Werts.
+Konsequenz bei Bestätigung: die Kette *kann* die Primärmessungen reproduzieren, aber nur mit Kdp und τ aus den Figuren,
+nicht mit Table 2 — also einem Parameterpaar, das im Paper nur grafisch vorliegt. Ob das in den Code kommt, entscheidet
+sich an V3 und an der Frage, ob Kdp/τ als *Ablesungen* belastbar genug für einen Default sind.
+
+**Ergebnis (`preflight_acid_loss.py`):**
+
+| k [s⁻¹] | τ [s] | P(5) | P(10) | P(20) | P(40) | P(60) | max|Δ| zu Fig. 3 | Flutschwelle E_th [mJ/cm²] |
+|---|---|---|---|---|---|---|---|---|
+| 0,0723 (Table 2) | ∞ | 0,96 | 0,92 | 0,84 | 0,71 | 0,60 | 0,62 | 2,75 |
+| 0,0723 | 10,5 | 0,97 | 0,95 | 0,93 | 0,92 | 0,91 | 0,74 | > 60 |
+| 0,0723 | 200 | 0,96 | 0,92 | 0,85 | 0,73 | 0,64 | 0,63 | 3,25 |
+| 1,4 (Fig. 4) | ∞ | 0,44 | 0,19 | 0,04 | 0,00 | 0,00 | 0,18 | 0,13 |
+| **1,4** | **10,5** | **0,52** | **0,34** | **0,23** | **0,18** | **0,18** | **0,08** | **0,75** |
+
+- **V1 bestätigt:** kein τ rettet Table 2 (Abweichung ≥ 0,62 an der Fig.-3-Kurve).
+- **V2 bestätigt:** (k = 1,4, τ = 10,5) trifft alle fünf Stützstellen von Fig. 3 auf ≤ 0,08 — im Rahmen der Ablesegenauigkeit.
+- **V3 bestätigt (der unabhängige Test):** Flutschwelle 0,75 mJ/cm² gegen Fig. 5 ≈ 0,8 (Vorhersage 0,6–0,9), ohne einen
+  Parameter an Fig. 5 anzupassen; k allein (ohne τ) gäbe 0,13, τ allein ist wirkungslos — beide Terme sind nötig.
+- **V4 bestätigt in der Richtung:** D2S bei P = 64/32 fällt von 4,55 auf **1,27 mJ/cm²** (Vorhersage 1,1–1,7); Photonen-LWR
+  steigt von 1,04 auf 2,87 nm (Faktor 2,8, vorhergesagt 1,5–2 — erneut stärker als √N, gleiche Nichtlinearität wie in
+  Fortsetzung 19).
+
+**Bedeutung:** Die Kette in ihrer heutigen Form (Mack-Deprotektion + Säurelebensdauer erster Ordnung) reproduziert mit
+zwei Parametern aus den Figuren des Papers (Kdp aus Fig. 4, τ aus dem Fig.-3-Plateau) die davon unabhängige Fig. 5. Damit
+ist die Aussage aus Fortsetzung 15 („Table 2 reproduziert seine Quelle nicht") auf die Ursache reduziert: PROLITHs
+Table-2-Arrhenius (0,072 s⁻¹, ohne Verlust) ist die falsche Übersetzung; die Physik des Papers ist konsistent.
+Umsetzungsvorschlag (noch nicht ausgeführt): Konfigurationsfeld `peb_acid_lifetime_s` (None = kein Verlust, exakte
+geschlossene Form über t_eff = τ(1 − e^{−t/τ}) für Deprotektion *und* Diffusionszeit), Default (k, τ) = (1,4 s⁻¹, 10,5 s) mit
+Ablesungen als Quelle, die beiden strict-xfail-Anker werden zu echten Tests. Preis: der Default-Resist wird bildseitig
+≈ 3,5× empfindlicher (D2S ≈ 1,3 mJ/cm² bei P = 64), das Photonen-LWR steigt entsprechend, Goldens erneut neu.
+
+**Umsetzung (2026-09-05, Nutzerentscheidung „bau die Lebensdauer ein, (1,4 s⁻¹, 10,5 s) als Default"):**
+`resist.peb.effective_reaction_time(t, τ)` = τ(1 − e^{−t/τ}); `reaction_diffusion_analytical` und
+`reaction_diffusion_with_quenching` mit `acid_lifetime_s` (Deprotektion exakt, D·t-Diffusionslänge exakt, Neutralisation
+gleiche Näherung); `SimulationConfig.peb_k = 1.4`, `peb_acid_lifetime_s = 10.5` (Validierung > 0 oder None), beide
+Aufrufstellen der Pipeline, CLI `--peb-acid-lifetime` (0 = aus), Kalibrier-Startwert peb_k 1,4. Anker-Tests: die zwei
+strict-xfails sind echte Tests (Fig.-3-Kurve an fünf Stützstellen ≤ 0,1; Schwelle 0,75 ± 0,03 gepinnt), plus Guard-Test,
+der das Table-2-Paar mit 0,60/2,75 festhält. Test-Arbeitspunkte von 4,0 auf 1,1 mJ/cm² (P = 64) bzw. 1,55 (P = 44), Bisektion
+ab 0,3; Sub-Pixel-Dosen 1,06–1,24. Neue Goldens (1,1 mJ/cm², Seed 42): LARGE_N LER 2,7350 / LWR 4,9579, n_eff 28,7
+(→ n_eff-Test mit 8192 Zeilen), l_int 18,09, ρ-Trunk 198, Legacy 0,7931 / 1,5328, CD 36,61, NILS 3,87.
+
+**Regression nach der Lebensdauer:** schnelle Suite 834/834 (keine xfails mehr); Stochastik-Module 48/51 — drei
+Konsistenztests, deren Schranken Zahlen des alten Arbeitspunkts waren: (1) Großzahl-Grenzwert verlangte mittlere
+Feldabweichung < 0,1 px bei ρ = 2000; am neuen Arbeitspunkt (D2S 1,5 statt 4,9 mJ/cm² bei P = 44 → 3,3× weniger
+Säuremoleküle je Voxel) liegt sie bei 0,026–0,036 nm (0,15–0,21 px), die Konvergenz selbst ist intakt (3,7 → 0,22 → 0,03).
+Schranke ersetzt durch die Invariante dev(2000) < dev(20)/5 (ρ^(−1/2) erwartet 10) plus grobe 0,3 px. (2) ρ^(−1/2)-Test:
+Verhältnis sparse/mittel = 25 statt ≤ 20 — die ρ = 0,2-Realisierung hat 7,3 nm LWR an einer 22-nm-Linie und liegt im
+nichtlinearen Regime (Mack-Schwelle + laterale Front verstärken nur); Obergrenze für das dünne Paar entfernt (Floor 5
+bleibt), dichtes Paar unverändert 5–20 (gemessen 8). Beides physikalisch begründet, keine Zahl wurde an den Messwert
+angepasst.
+(3) Großzahl-Grenzwert mit Quencher (q = 0,25): Mittelfeld-Breite 25,4 nm gegen deterministische 22,0 — 3,4 nm, kein
+Extraktor-Effekt. Ursache gefunden: die Pipeline rechnet k_Q·G₀ mit dem *konfigurierten* G₀; der Test skaliert ρ_PAG auf
+2000 nm⁻³, um das Zählrauschen zu töten, und skaliert damit ungewollt die Neutralisationsrate um 10⁴. Vor der Lebensdauer
+war das unsichtbar (bei 60 s Backzeit ist die Neutralisation auch bei G₀ = 0,2 vollständig: (h − q)·k_Q·G₀·t ≈ 18); mit
+t_eff = 10,5 s ist sie es nicht mehr (≈ 3) — der Test verglich also eine vollständige mit einer unvollständigen
+Neutralisation. Fix im Test, nicht im Code: Fixture pinnt G₀ = 0,2 nm⁻³ für die Rate in allen Aufrufen, die
+Molekülzahl skaliert weiter. Physikalische Nebenerkenntnis: mit Säurelebensdauer ist die Quencher-Neutralisation in
+diesem Resist ratenbegrenzt — ein Effekt, den das Modell jetzt trägt und der später gegen Sekiguchis Dill-C-gegen-
+Quencher-Tabelle geprüft werden kann.

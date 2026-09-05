@@ -144,9 +144,20 @@ def simulate(
         ),
     ),
     peb_k: float = typer.Option(
-        0.0723,
+        1.4,
         "--peb-k",
-        help="Deprotection rate constant [s⁻¹]; Yamamoto et al. 2011's own Arrhenius fit",
+        help=(
+            "Deprotection rate constant [s⁻¹] at the PEB temperature; default = Kdp(110 °C) "
+            "read from Yamamoto et al. 2011 Fig. 4 (see pipeline.py peb_k note)"
+        ),
+    ),
+    peb_acid_lifetime: Optional[float] = typer.Option(
+        10.5,
+        "--peb-acid-lifetime",
+        help=(
+            "Average acid lifetime [s] during PEB (first-order acid loss, Yamamoto 2011 Eq. 1); "
+            "0 disables the loss"
+        ),
     ),
     peb_t_bake: float = typer.Option(60.0, "--peb-t-bake", help="Bake time [s]"),
     peb_sigma_diff: Optional[float] = typer.Option(
@@ -271,6 +282,7 @@ def simulate(
             peb_k=peb_k,
             peb_t_bake=peb_t_bake,
             peb_sigma_diff=peb_sigma_diff,
+            peb_acid_lifetime_s=(peb_acid_lifetime if peb_acid_lifetime else None),
             # Mack development parameters
             mack_R_max=mack_R_max,
             mack_R_min=mack_R_min,
@@ -796,7 +808,7 @@ def calibrate(
         # Default initial guess for typical EUV CAR resist
         initial_params = {
             "dill_C": 0.08997,  # Yamamoto et al. 2011, EUV-native (see pipeline.py dill_C comment)
-            "peb_k": 0.0723,  # Yamamoto et al. 2011 Arrhenius fit (see pipeline.py peb_k comment)
+            "peb_k": 1.4,  # Yamamoto et al. 2011 Fig. 4 Kdp(110 C) (see pipeline.py peb_k comment)
             "peb_t_bake": 60.0,
             # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference"
             # formulations cluster 17-35nm
@@ -849,6 +861,8 @@ def calibrate(
         }
 
     # Create pipeline function
+    _defaults = SimulationConfig()
+
     def pipeline_fn(dose: float, focus: float, **params) -> float:
         cfg = SimulationConfig(
             period_nm=period,
@@ -859,14 +873,17 @@ def calibrate(
             grid=grid,
             se_blur_nm=se_blur,
             # Resist parameters from calibration
-            dill_C=params.get("dill_C", 0.08997),
-            peb_k=params.get("peb_k", 0.0723),
-            peb_t_bake=params.get("peb_t_bake", 60.0),
-            peb_sigma_diff=params.get("peb_sigma_diff", 20.0),
-            mack_R_max=params.get("mack_R_max", 68.6),
-            mack_R_min=params.get("mack_R_min", 0.10),
-            mack_n=params.get("mack_n", 18.2),
-            mack_M_th=params.get("mack_M_th", 0.39),
+            # unfitted parameters stay at the SimulationConfig defaults (single
+            # source of truth; hard-coded copies drifted, 2026-09-05)
+            dill_C=params.get("dill_C", _defaults.dill_C),
+            peb_k=params.get("peb_k", _defaults.peb_k),
+            peb_t_bake=params.get("peb_t_bake", _defaults.peb_t_bake),
+            peb_sigma_diff=params.get("peb_sigma_diff", _defaults.peb_sigma_diff),
+            peb_acid_lifetime_s=params.get("peb_acid_lifetime_s", _defaults.peb_acid_lifetime_s),
+            mack_R_max=params.get("mack_R_max", _defaults.mack_R_max),
+            mack_R_min=params.get("mack_R_min", _defaults.mack_R_min),
+            mack_n=params.get("mack_n", _defaults.mack_n),
+            mack_M_th=params.get("mack_M_th", _defaults.mack_M_th),
         )
         result = run_simulation(cfg)
         return float(result.cd_nm)

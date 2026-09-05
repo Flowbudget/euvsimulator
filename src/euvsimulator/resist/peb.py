@@ -42,6 +42,7 @@ M.D. Stewart et al., "Comparison of analytical and finite-difference
 
 from __future__ import annotations
 
+import math
 from typing import Tuple
 
 import torch
@@ -250,6 +251,20 @@ def reaction_diffusion_adi(
 # ──────────────────────────────────────────────
 
 
+def effective_reaction_time(t_bake: float, acid_lifetime_s: float | None) -> float:
+    """Time-integral of the acid that survives a first-order loss.
+
+    With acid decaying as H(t) = H0·exp(−t/τ) during the bake (Yamamoto et al.
+    2011, Eq. 1: "τ, the average acid lifetime"; Kang et al. 2010: trapping),
+    the deprotection integrates ∫H dt = H0·τ·(1 − exp(−t/τ)), so every
+    closed form of the kind exp(−k·H0·t) stays exact with t replaced by this
+    effective time. ``None`` (or a non-positive value) means no loss.
+    """
+    if acid_lifetime_s is None or acid_lifetime_s <= 0.0:
+        return float(t_bake)
+    return float(acid_lifetime_s) * (1.0 - math.exp(-float(t_bake) / float(acid_lifetime_s)))
+
+
 def reaction_diffusion_analytical(
     acid: torch.Tensor,
     inhibitor: torch.Tensor,
@@ -258,8 +273,13 @@ def reaction_diffusion_analytical(
     t_bake: float = 10.0,
     sigma_diff: float | torch.Tensor | None = None,
     dx: float = 1.0,
+    acid_lifetime_s: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Analytical PEB model — Gaussian diffusion + first-order deprotection.
+
+    ``acid_lifetime_s`` (τ, optional): first-order acid loss during the bake;
+    deprotection and the D·t diffusion length then use the effective time
+    τ·(1 − e^{−t/τ}) (:func:`effective_reaction_time`).
 
     When acid diffusivity is negligible (or already captured by SE blur
     from the exposure step), the PEB is approximated by:
@@ -298,20 +318,21 @@ def reaction_diffusion_analytical(
         Inhibitor concentration after PEB.  Same shape as *inhibitor*.
     """
     A = acid.clone()
+    t_eff = effective_reaction_time(t_bake, acid_lifetime_s)
 
     if sigma_diff is not None and sigma_diff > 0:
         from euvsimulator.resist.exposure import gaussian_se_blur
 
         A = gaussian_se_blur(A, sigma=sigma_diff, dx=dx)
-    elif D > 0 and t_bake > 0:
-        sigma_val = (2.0 * D * t_bake) ** 0.5
+    elif D > 0 and t_eff > 0:
+        sigma_val = (2.0 * D * t_eff) ** 0.5
         if sigma_val > 0.1:
             from euvsimulator.resist.exposure import gaussian_se_blur
 
             A = gaussian_se_blur(A, sigma=sigma_val, dx=dx)
 
-    # Deprotection: M(t) = M₀ · exp(−k · A · t)
-    M_t = inhibitor * torch.exp(-k * A * t_bake)
+    # Deprotection: M(t) = M₀ · exp(−k · A · t_eff)
+    M_t = inhibitor * torch.exp(-k * A * t_eff)
 
     return A, M_t
 
@@ -430,6 +451,7 @@ def reaction_diffusion_with_quenching(
     dx: float = 1.0,
     pag_density: float | None = None,
     dz: float | None = None,
+    acid_lifetime_s: float | None = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """PEB with explicit acid-base quenching, for the sampled-PAG/quencher path.
 
@@ -527,6 +549,10 @@ def reaction_diffusion_with_quenching(
         which is inconsistent for a 50 nm film (measured effect on dose-to-
         size: −0.03 % at α = 1.06 µm⁻¹, −2.8 % at α = 8 µm⁻¹).
 
+    acid_lifetime_s : float, optional
+        Average acid lifetime τ [s] (Yamamoto et al. 2011 Eq. 1); ``None`` =
+        no acid loss (behaviour before 2026-09-05).
+
     Returns
     -------
     acid_final : torch.Tensor
@@ -545,11 +571,17 @@ def reaction_diffusion_with_quenching(
         )
     rate_rel = float(quench_rate) * float(pag_density)  # k_Q·G0 [1/s]
 
+    # First-order acid loss (lifetime τ): closed forms below run on the
+    # effective time τ(1 − e^{−t/τ}) -- exact for the deprotection and the
+    # D·t diffusion length; for the neutralisation it is the same
+    # approximation (acid and base react only while the acid is alive).
+    t_eff = effective_reaction_time(t_bake, acid_lifetime_s)
+
     blur_sigma = None
     if sigma_diff is not None and sigma_diff > 0:
         blur_sigma = sigma_diff
-    elif D > 0 and t_bake > 0:
-        sigma_val = (2.0 * D * t_bake) ** 0.5
+    elif D > 0 and t_eff > 0:
+        sigma_val = (2.0 * D * t_eff) ** 0.5
         if sigma_val > 0.1:
             blur_sigma = sigma_val
 
@@ -576,10 +608,10 @@ def reaction_diffusion_with_quenching(
                 if dz is not None and q.ndim == 3 and q.shape[0] > 1:
                     q = _gaussian_blur_z(q, sigma_nm=float(blur_sigma), dz=dz)
         # 2. React (reaction-limited closed form on the mixed fields).
-        A_quenched, Q_final = _reaction_limited_quench(h, q, rate_rel, t_bake)
+        A_quenched, Q_final = _reaction_limited_quench(h, q, rate_rel, t_eff)
 
-    # 3. Deprotect.
-    M_t = inhibitor * torch.exp(-k * A_quenched * t_bake)
+    # 3. Deprotect (effective time, see above).
+    M_t = inhibitor * torch.exp(-k * A_quenched * t_eff)
 
     return A_quenched, Q_final, M_t
 

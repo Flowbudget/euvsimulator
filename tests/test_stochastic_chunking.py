@@ -27,7 +27,7 @@ def _cfg(**kw):
         se_blur_nm=5.0,
         grid=128,
         peb_sigma_diff=7.0,
-        dose_mj_cm2=4.9,
+        dose_mj_cm2=1.55,
         enable_stochastic=True,
         stochastic_seed=7,
         stochastic_n_realisations=1,

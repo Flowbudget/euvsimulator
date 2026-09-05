@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Changed (physics, 2026-09-05)
+- **Acid lifetime in the PEB, and the deprotection rate read from the source's own kinetics.**
+  New `SimulationConfig.peb_acid_lifetime_s` (CLI `--peb-acid-lifetime`; `None`/0 = no loss): a
+  first-order acid loss H(t) = H0·e^{−t/τ} (Yamamoto et al. 2011 Eq. 1 "τ", Kang et al. 2010
+  "trapping") enters the closed-form PEB through the effective time τ(1 − e^{−t/τ})
+  (`resist.peb.effective_reaction_time`) -- exact for the deprotection and the D·t diffusion
+  length, the same approximation for the neutralisation. Defaults: `peb_k = 1.4 s⁻¹` (Kdp at
+  110 °C from Yamamoto's Fig. 4 Arrhenius plot) and `peb_acid_lifetime_s = 10.5` (from the Fig. 3
+  plateau). With these the chain reproduces Fig. 3 at all five read points (≤ 0.08) and, without
+  any adjustment to it, the independent Fig. 5 dissolution threshold (0.75 vs ≈ 0.8 mJ/cm²);
+  Table 2's PROLITH Arrhenius pair (0.0723 s⁻¹, no loss) missed both by ≈ 3.4× and no lifetime
+  alone could rescue it (pre-registered preflight, log Fortsetzung 20). The two former
+  `xfail(strict)` anchor tests are now real tests. Consequence: the default resist is a very
+  sensitive 2011 research resist -- dose-to-size ≈ 1.3 mJ/cm² at 64 nm pitch (σ_PEB 7 nm) --
+  which is a property of the source, not a target; the stochastic regression operating point
+  moved to 1.1 mJ/cm² and all goldens were re-derived.
+- `tests/test_stochastic_consistency.py`: two bounds that were numbers of the old operating point
+  (field deviation < 0.1 px at ρ = 2000; sparse/dense LWR ratio ≤ 20) replaced by invariants
+  (deviation falls ≥ 5× per two decades of density; the sparse ratio has a floor only, because
+  at several nm of LWR the Mack threshold and the lateral front can only amplify roughness).
 - **Default Dill B is now computed from the resist composition (4.44 µm⁻¹), no longer Yamamoto's
   Table-2 value (1.06 µm⁻¹).** `materials.linear_absorption_coefficient_per_um(composition, density)`
   evaluates α = 4πβ/λ from the CXRO f₂ tables; for PHS with 35 % tBOC protection at 1.20 g/cm³ this
