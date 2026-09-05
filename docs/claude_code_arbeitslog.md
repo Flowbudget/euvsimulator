@@ -2831,3 +2831,18 @@ Säurezahl pro Voxel (∝ C·G₀·E): `test_stochastic_chunking` (Mittelwertver
 Dekaden, Breite ±0,5 px) hielten unverändert. Golden-Werte neu: LER 3,490 (vorher 2,735) bei festem 1,1 mJ/cm² — reiner
 Betriebspunkt-Effekt: alte Defaults bei dosisgleich skaliertem Punkt (1,0707) geben CD 37,7/LER 3,78, neue bei 1,1
 CD 37,9/LER 3,49. Läufe: volle Suite 891 bestanden + 1 (die Schranke), danach das Modul allein 5/5, Chunking-Modul 4/4.
+
+**V4b (nach Commit 076e0e1; scratchpad/preflight_V4b.py, 3 Seeds × 2 Realisationen × 2048 Zeilen, P = 44, G₀ = 0,2):**
+
+| Satz | nur Photonen | + molekular | Verhältnis | Überschussvarianz |
+|---|---|---|---|---|
+| alt (C 0,090, k 1,4) | 9,78 ± 0,9 | 10,86 ± 0,6 | 1,11 | 22 nm² (± ≈ 20) |
+| neu (C 0,0152, k 7,87) | 10,29 ± 0,04 | 12,32 ± 0,2 | 1,20 | 46 nm² (± ≈ 5) |
+
+Vorregistriert war Überschussvarianz neu/alt ≈ 5,6 (binomiales Säurezählen ∝ 1/(C·G₀)); gemessen ≈ 2,0 — bei der
+Unsicherheit des alten Werts (± 20 nm²) nicht scharf, aber 5,6 ist unwahrscheinlich. Für den neuen Satz ist der Befund
+belastbar: molekulares Rauschen erhöht die LWR um ≈ 20 % (46 nm² Überschuss gegen ≈ 106 nm² Photonenvarianz), d. h. weniger
+als die naive Zählstatistik erwartet (Säuren ≈ absorbierte Photonen im Blur-Volumen → Faktor √2 ≈ +41 %). Warum der
+Binomial-Sampler weniger Varianz liefert als Poisson-Zählen der Säuren, ist **nicht verstanden** — kein Code geändert.
+Offen für Stufe C (Multiplizität/Rauschmodell): Sampler gegen eine analytische Poisson-Erwartung auf einem uniformen
+Feld prüfen (Varianz der Säurezahl pro Voxel und nach Blur), bevor exposure_stochasticity als Default diskutiert wird.
