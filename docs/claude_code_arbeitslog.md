@@ -3579,3 +3579,8 @@ Dosis) 1,0. Trifft das zu, schließt C2b ohne Codeänderung; sonst fehlt Varianz
 ist in der Kette bereits enthalten; Plan-Punkt 3.3 war ein Irrtum der Analyse vom 2026-09-05. Kein Code geändert; als Test gepinnt
 (`tests/test_acid_multiplicity.py`). Offen bleibt nur eine *nicht*-Poisson-Verteilung der Säuren pro Photon (Mack 2011 Table 3, γ),
 für die keine Messung vorliegt.
+Korrektur zum Test: die erste Fassung (ein Seed, 768²-Feld, 1-nm-Schicht) hatte zu wenig Photonen (Fano-Schätzer ±30 %) und lief in
+der Commit-Kette durch, obwohl sie rot war (Exitcode hinter `tail` versteckt — derselbe Fehler wie in Fortsetzung 17; ab jetzt
+`pipestatus` prüfen). Zweiter Befund: bei endlichen Blöcken zerschneiden die Blockränder die Säurewolke eines Photons (σ 2,5 nm),
+Fano(b) = 1 + m·(1 − c·σ/b)²: gemessen 1,45 (b 8 nm) … 1,88 (b 44 nm), Extrapolation 1/b → 0: **1,97** gegen 1 + m = 2,007. Test jetzt mit
+3 Seeds × 6 Blockgrößen und Extrapolation (18 s), grün mit explizitem Exitcode.
