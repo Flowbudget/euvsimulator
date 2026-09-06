@@ -102,7 +102,7 @@ where it does not, is tabulated in [docs/physics.md](docs/physics.md) §6; the d
 
 ```bibtex
 @software{euvsimulator2026,
-  author  = {Flowbudget},
+  author  = {Florian Scheide},
   title   = {euvsimulator: Open Source EUV Lithography Simulator},
   version = {2.1.0},
   year    = {2026},

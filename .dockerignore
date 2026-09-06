@@ -1,5 +1,5 @@
 # =============================================================================
-# OpEnUV — .dockerignore
+# euvsimulator — .dockerignore
 # =============================================================================
 # Exclude from Docker build context: version control, caches, tests, notebooks,
 # and other non-essential files.

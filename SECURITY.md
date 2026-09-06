@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-We take the security of OpEnUV seriously. If you discover a security vulnerability, please report it responsibly.
+We take the security of euvsimulator seriously. If you discover a security vulnerability, please report it responsibly.
 
 **Do not report security vulnerabilities through public GitHub issues.**
 
@@ -16,7 +16,7 @@ Instead, please send an email to **openeuv-security@nousresearch.com** with the 
 
 - A description of the vulnerability
 - Steps to reproduce the issue
-- The version(s) of OpEnUV affected
+- The version(s) of euvsimulator affected
 - Any potential impact you have identified
 
 You should receive a response within 48 hours. If you do not, please follow up to ensure we received your message.
@@ -38,4 +38,4 @@ When a vulnerability report is received, we will:
 
 We aim to release fixes as soon as possible, depending on the severity and complexity of the issue.
 
-Thank you for helping keep OpEnUV and its users safe.
+Thank you for helping keep euvsimulator and its users safe.

@@ -1,6 +1,6 @@
-# OpEnUV — Testberechnungen zum Nachrechnen
+# euvsimulator — Testberechnungen zum Nachrechnen
 Generiert: 2026-07-09
-Git: Flowbudget/OpEnUV
+Git: Flowbudget/euvsimulator
 
 ---
 

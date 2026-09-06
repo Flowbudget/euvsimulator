@@ -40,7 +40,7 @@ Thank you for your interest in contributing to euvsimulator, the open-source EUV
 
 ## Coding Standards
 
-OpEnUV follows strict coding standards to maintain consistency and readability:
+euvsimulator follows strict coding standards to maintain consistency and readability:
 
 - **Docstrings**: All public modules, classes, functions, and methods must have [numpydoc](https://numpydoc.readthedocs.io/) style docstrings.
 - **Formatting**: Code is formatted with [Black](https://black.readthedocs.io/), line length 100.
@@ -102,7 +102,7 @@ mypy src/
 
 ## License and DCO
 
-By contributing to OpEnUV, you agree that your contributions will be licensed under the [Apache License, Version 2.0](LICENSE).
+By contributing to euvsimulator, you agree that your contributions will be licensed under the [Apache License, Version 2.0](LICENSE).
 
 This project requires **Developer Certificate of Origin (DCO)** sign-off on every commit. To sign off, use the `-s` flag when committing:
 

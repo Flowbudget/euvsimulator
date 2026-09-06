@@ -53,7 +53,7 @@ AGENT_FINISH_PROMPT.md
 _debug*.py
 _test*.py
 
-# EUV textbooks (not OpEnUV — keep only locally)
+# EUV textbooks (not euvsimulator — keep only locally)
 EUV-Lithography_*.pdf
 
 # Manim video build artifacts

@@ -32,7 +32,7 @@
   "defaultInputModes": ["text", "data"],
   "defaultOutputModes": ["text", "data", "file"],
   "contact": {
-    "name": "Flowbudget",
+    "name": "Florian Scheide",
     "url": "https://github.com/Flowbudget/euvsimulator",
     "email": "https://github.com/Flowbudget/euvsimulator/issues"
   },

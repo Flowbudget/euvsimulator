@@ -1,36 +1,26 @@
 cff-version: 1.2.0
-message: "If you use OpEnUV in your research, please cite it as below."
+message: "If you use euvsimulator in your research, please cite it as below."
 authors:
-- family-names: "Flowbudget"
-  orcid: "https://orcid.org/0000-0000-0000-0000"
-title: "OpEnUV: Open Source EUV Lithography Simulator"
-version: 1.0.3
-doi: "10.5281/zenodo.XXXXXXX"
-date-released: 2026-07-22
-url: "https://github.com/Flowbudget/OpEnUV"
-repository: "https://github.com/Flowbudget/OpEnUV"
+- family-names: "Scheide"
+  given-names: "Florian"
+title: "euvsimulator: Open Source EUV Lithography Simulator"
+version: 2.1.0
+date-released: 2026-09-06
+url: "https://github.com/Flowbudget/euvsimulator"
+repository-code: "https://github.com/Flowbudget/euvsimulator"
 license: "Apache-2.0"
 keywords:
   - "EUV lithography"
-  - "semiconductor simulation"
   - "computational lithography"
+  - "resist modeling"
   - "RCWA"
   - "Hopkins imaging"
-  - "resist modeling"
-  - "Dill model"
   - "multilayer optics"
-  - "plasma physics"
-  - "open source"
+  - "line-edge roughness"
   - "Python"
   - "PyTorch"
-  - "FastAPI"
-  - "scientific computing"
 references:
 - type: "software"
-  title: "CXRO/Henke Database"
+  title: "CXRO/Henke atomic scattering factors"
   url: "https://henke.lbl.gov/optical_constants/"
-  notes: "Atomic scattering factors f₁, f₂ used for material optical constants"
-- type: "software"
-  title: "OpenILT"
-  url: "https://github.com/OpenILT/OpenILT"
-  notes: "Inverse lithography technology bridge integrated via differentiable API"
+  notes: "Material optical constants (redistributed unmodified, see NOTICE)"
