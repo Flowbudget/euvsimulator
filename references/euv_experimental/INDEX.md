@@ -106,3 +106,7 @@ Legende: ✅ vorhanden · 🔶 vorhanden, Extraktion ausstehend · ❌ nicht ver
 - Vergleich erst nach Abschluss der Simulation unter nachgestellten
   experimentellen Bedingungen (Simulation − Experiment).
 - KEINE Kalibrierung vor dem ersten unabhängigen Vergleich.
+
+**Hinweis (2026-09-06, Lizenzprüfung):** Volltext- und Kontext-Extrakte aus den zitierten Artikeln (`fulltext.txt`,
+`number_lines.txt`, `keyword_context.txt`) sind nicht Teil des Repositories — das wären Kopien geschützter Texte. Im Repo bleiben nur
+die extrahierten Zahlenwerte mit Quellenangabe (`*.ini`, `metadata.json`); der Wortlaut ist beim jeweiligen Verlag bzw. bei PMC.

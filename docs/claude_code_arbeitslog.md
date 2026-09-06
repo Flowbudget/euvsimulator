@@ -3624,3 +3624,12 @@ Keine Physikänderung. Damit ist der Abschlussplan §6 umgesetzt; weitere Physik
   (5 MB, Buch von 1997) war im Repository getrackt — vom Autor frei herunterladbar, aber ohne Weitergabelizenz → aus dem Repo entfernt
   (lokale Kopie im Literaturordner), README dort mit Hinweis und Autoren-URL. NOTICE auf den heutigen Namen und um Chart.js und
   Anker-Daten ergänzt.
+
+## 2026-09-06 (Fortsetzung 44): Rechtsprüfung des Repositoriums (kein Rechtsrat)
+Geprüft: alle getrackten Dateien nach Typ (keine Binärdateien mehr), Suche nach fremden Copyright-Vermerken und „copied/adapted
+from" (nur Contributor Covenant mit Attribution, eigene reference_model-Notiz), Notebooks (nur eigene matplotlib-PNGs, keine externen
+Bilder), Dashboard (Chart.js MIT per CDN, kein vendored JS, keine Fonts), CXRO-CSV (frei, attribuiert), Anker-JSON (eigene Zahlen +
+Zitat), `references/`. **Entfernt:** `keyword_context.txt` (gescrapter PMC-Volltext), zuvor das Mack-Buch-PDF; die ungetrackten
+`fulltext.txt`/`number_lines.txt` (SPIE-Volltext) von der Platte gelöscht. **Verbleibendes Risiko:** die Git-Historie enthält noch das
+PDF (e39fd44…bca6d67) und den SPIE-Volltext (14d1dea…b0bd346). Solange das Repo privat ist, sieht das niemand; vor einer
+Veröffentlichung ist eine Historien-Bereinigung (git filter-repo, Force-Push, alle Klone neu) nötig — Entscheidung des Nutzers.
