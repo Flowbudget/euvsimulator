@@ -4,9 +4,9 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?sort=semver)](https://github.com/Flowbudget/euvsimulator/releases)
-[![Tests](https://img.shields.io/badge/tests-940%20passing%20locally-brightgreen)](tests/)
-[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Flowbudget/euvsimulator/actions)
+[![Version 2.1.0](https://img.shields.io/badge/version-2.1.0-blue.svg)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-940%20passing%20locally-brightgreen.svg)](tests/)
+[![Type-checked](https://img.shields.io/badge/mypy-clean-brightgreen.svg)](pyproject.toml)
 
 euvsimulator models the EUV imaging and resist chain at 13.5 nm — multilayer mirror, mask
 diffraction, partially coherent imaging, chemically amplified resist, development, and the
