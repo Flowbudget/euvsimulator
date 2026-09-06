@@ -1,0 +1,190 @@
+{
+ "source": "Vesters, De Simone, De Gendt, J. Photopolym. Sci. Technol. 30(6) 675 (2017), Fig. 6 (= Vesters 2019 PhD thesis, KU Leuven, Fig. 2.7); digitised 2026-09-06 from the J-STAGE PDF page 6 rendered at 400 dpi",
+ "resist": "NXE1716 (high quencher loading), PAB 110 C/60 s, film 40 nm, flood exposure on ASML NXE3300, PEB 90 C/60 s, TMAH 0.26 N (paper prints 0.026 N)",
+ "axes": "E in mJ/cm2 (open-frame scanner dose), R in nm/s; calibration 486.5 px/decade (x), 181.8 px/decade (y); reading uncertainty about 3 % in E and 5 % in R",
+ "markers_E_R": [
+  [
+   1.0,
+   0.0151
+  ],
+  [
+   3.6,
+   0.0288
+  ],
+  [
+   4.06,
+   0.0375
+  ],
+  [
+   4.5,
+   0.0517
+  ],
+  [
+   5.13,
+   0.1133
+  ],
+  [
+   6.11,
+   0.3973
+  ],
+  [
+   6.5,
+   0.5138
+  ],
+  [
+   7.03,
+   1.265
+  ],
+  [
+   8.01,
+   1.8108
+  ],
+  [
+   10.0,
+   71.325
+  ],
+  [
+   11.67,
+   64.4315
+  ],
+  [
+   12.0,
+   116.1247
+  ],
+  [
+   12.7,
+   91.8367
+  ],
+  [
+   14.05,
+   125.7689
+  ],
+  [
+   15.89,
+   163.1349
+  ],
+  [
+   24.71,
+   243.3805
+  ]
+ ],
+ "authors_mack_fit_E_R": [
+  [
+   1.05,
+   0.0186
+  ],
+  [
+   1.22,
+   0.0186
+  ],
+  [
+   1.43,
+   0.0188
+  ],
+  [
+   1.68,
+   0.019
+  ],
+  [
+   1.96,
+   0.0193
+  ],
+  [
+   2.3,
+   0.02
+  ],
+  [
+   2.68,
+   0.0213
+  ],
+  [
+   3.12,
+   0.0239
+  ],
+  [
+   4.89,
+   0.0742
+  ],
+  [
+   5.58,
+   0.1591
+  ],
+  [
+   5.89,
+   0.2358
+  ],
+  [
+   6.79,
+   0.7935
+  ],
+  [
+   7.39,
+   1.7864
+  ],
+  [
+   7.7,
+   2.6847
+  ],
+  [
+   8.03,
+   4.0283
+  ],
+  [
+   8.39,
+   6.0361
+  ],
+  [
+   8.77,
+   9.0661
+  ],
+  [
+   9.2,
+   13.5735
+  ],
+  [
+   9.67,
+   20.2501
+  ],
+  [
+   10.22,
+   30.0159
+  ],
+  [
+   10.87,
+   44.3003
+  ],
+  [
+   18.24,
+   194.8944
+  ],
+  [
+   21.11,
+   217.7821
+  ],
+  [
+   28.59,
+   239.9823
+  ],
+  [
+   33.4,
+   244.909
+  ]
+ ],
+ "plateaus_nm_per_s": {
+  "R_min": 0.0186,
+  "R_max": 245.0
+ },
+ "patterning_thesis_table_4_2_B0": {
+  "pitch_nm": 44.0,
+  "cd_nm": 22.0,
+  "dose_to_size_mj_cm2": 11.0,
+  "lwr_3sigma_nm_sem_biased": 6.7,
+  "lwr_uncertainty_nm": 0.3,
+  "tool": "ASML NXE3300B, NA 0.33, dipole 90X sigma 0.62/0.90",
+  "film_nm": 35.0,
+  "underlayer": "AL412 20 nm",
+  "peb": "90 C 60 s",
+  "developer": "TMAH 0.26 N",
+  "cd_sem": "Hitachi CG-5000, 500 V, 8 pA, no noise correction"
+ }
+}

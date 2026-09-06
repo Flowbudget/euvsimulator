@@ -1,0 +1,72 @@
+"""NXE1716 anchor (Vesters 2017/2019): the chain's flood response must
+reproduce the digitised DRM contrast curve, and the preset's provenance
+constants are pinned. Line-printing numbers are NOT asserted here (open
+discrepancy, log Fortsetzung 27) -- they live in the log and the docstring.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from euvsimulator.presets import (
+    NXE1716_DOSE_SCALE_CALIBRATION,
+    flood_rate,
+    load_nxe1716_anchor,
+    nxe1716_config,
+)
+
+
+def test_anchor_data_is_shipped_and_sane():
+    d = load_nxe1716_anchor()
+    fit = np.array(d["authors_mack_fit_E_R"])
+    mk = np.array(d["markers_E_R"])
+    assert fit.shape[0] >= 20 and mk.shape[0] >= 12
+    assert d["plateaus_nm_per_s"]["R_max"] == 245.0
+    assert d["patterning_thesis_table_4_2_B0"]["dose_to_size_mj_cm2"] == 11.0
+    # rates rise monotonically with dose along the authors' fit
+    assert np.all(np.diff(fit[:, 1]) >= 0)
+
+
+def test_chain_flood_curve_matches_the_authors_mack_fit():
+    """Rms deviation in log10 R over the 25 digitised fit points <= 0.06 (the
+    fit itself reaches 0.042); markers agree within a factor 3 except where a
+    marker sits on the steep flank (E 8-10 mJ/cm², where 3 % in E is 50 % in R).
+    """
+    d = load_nxe1716_anchor()
+    cfg = nxe1716_config()
+    fit = np.array(d["authors_mack_fit_E_R"])
+    model = flood_rate(cfg, fit[:, 0])
+    rms = float(np.sqrt(np.mean((np.log10(model) - np.log10(fit[:, 1])) ** 2)))
+    assert rms <= 0.06, rms
+    # plateaus
+    assert flood_rate(cfg, 1.0) == pytest.approx(0.0186, rel=0.05)
+    assert flood_rate(cfg, 30.0) == pytest.approx(245.0, rel=0.05)
+
+
+def test_calibrated_dose_scale_is_declared_not_hidden():
+    a = nxe1716_config()
+    b = nxe1716_config(calibrated_dose_scale=True)
+    assert b.peb_k == pytest.approx(a.peb_k * NXE1716_DOSE_SCALE_CALIBRATION)
+    assert NXE1716_DOSE_SCALE_CALIBRATION == pytest.approx(19.67 / 11.0)
+    # the calibrated chain's flood switch (R = R_max/2) moves from 13.5 to ~7.2 mJ/cm²
+    E = np.linspace(2.0, 30.0, 2000)
+
+    def sw(c):
+        return float(E[np.argmin(np.abs(np.log(flood_rate(c, E)) - np.log(122.5)))])
+
+    assert sw(a) == pytest.approx(13.5, abs=0.3)
+    assert sw(b) == pytest.approx(13.5 / NXE1716_DOSE_SCALE_CALIBRATION, abs=0.5)
+
+
+def test_preset_geometry_and_optics_follow_the_thesis():
+    c = nxe1716_config()
+    assert (c.period_nm, c.line_width_nm, c.na) == (44.0, 22.0, 0.33)
+    assert (c.illumination_shape, c.sigma, c.sigma_inner, c.pole_opening_deg) == (
+        "dipole",
+        0.9,
+        0.62,
+        90.0,
+    )
+    assert (c.resist_thickness_nm, c.peb_t_bake) == (35.0, 60.0)
+    assert nxe1716_config(dose_mj_cm2=5.0).dose_mj_cm2 == 5.0

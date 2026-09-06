@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added (validation anchor, 2026-09-06, plan stage B1)
+- **NXE1716 anchor** (`euvsimulator.presets.nxe1716_config`, data in `data/anchors/vesters2017_nxe1716.json`):
+  Vesters 2017 DRM contrast curve digitised (25 fit points, 16 markers, axis-calibrated) and the thesis
+  patterning row (22 nm lines / 44 nm pitch, NXE3300B dipole 90X, D2S 11.0 mJ/cm², LWR 6.7 nm 3σ biased).
+  The chain reproduces the flood curve (rms 0.04 in log10 R) with Mack plateaus from the data and (k, n)
+  fitted at fixed M_th (degenerate triple, documented).
+- **Scanner-style multipole sources**: `sigma_inner` and `pole_opening_deg` on `SimulationConfig` /
+  `aerial_from_orders` give annular-sector dipole/quasar poles (imec "dipole 90X 0.62/0.90"); legacy
+  fixed-geometry poles unchanged when `sigma_inner` is None. At 44 nm pitch, NA 0.33 every dipole point is
+  two-beam (TCC(0,±1) = 0.5 exactly); conventional σ 0.8 gives 0.47.
+- **Result, reported as found:** without a free parameter the chain prints at 19.7 mJ/cm² instead of 11.0
+  (1.79×; blur and develop time explain ≤ 2 mJ/cm² of it, open discrepancy). With the dose scale calibrated
+  (declared, `calibrated_dose_scale=True`) the photon-shot-noise LWR is 10.9 nm 3σ with the default PEB
+  blur (9.4 nm, τ from 110 °C) and 4.8 nm with a 5 nm blur, vs measured 6.7 (SEM-biased): the anchor brackets
+  the measurement and, without a measured blur for this resist at 90 °C, neither validates nor falsifies the
+  noise model (±1.6×). With molecular noise 19 nm. No parameter was tuned to the LWR. Candidate causes logged
+  (quencher contrast, unknown α, τ at 90 °C, sampler variance).
+
 ### Changed (physics, 2026-09-06, plan stage A3)
 - **Default secondary-electron blur 0 → 2.5 nm** (`DEFAULT_SE_BLUR_NM`): Thackeray et al. 2010 (JPST
   23(5) 631, Eq. 8) EUV-specific blur term inside their measured 11.5 nm total; models give 2.1–3.3

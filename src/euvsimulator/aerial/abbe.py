@@ -95,6 +95,8 @@ def aerial_from_orders(
     illumination_shape: str = "conventional",
     grid: int = 256,
     focus_nm: float = 0.0,
+    sigma_inner: float | None = None,
+    pole_opening_deg: float | None = None,
 ) -> torch.Tensor:
     """Compute partially coherent aerial image from discrete diffraction orders.
 
@@ -170,6 +172,8 @@ def aerial_from_orders(
         period_m,
         device=device,
         illumination_shape=illumination_shape,  # P1-3: pass shape to TCC
+        sigma_inner=sigma_inner,
+        pole_opening_deg=pole_opening_deg,
     )
 
     # Pre-compute defocus phase for each order (quadratic in order index)
@@ -500,6 +504,8 @@ def _compute_tcc_matrix(
     grid: int = 256,
     device: torch.device | None = None,
     illumination_shape: str = "conventional",
+    sigma_inner: float | None = None,
+    pole_opening_deg: float | None = None,
 ) -> torch.Tensor:
     """Compute the exact TCC matrix via 2D source-pupil overlap integral.
 
@@ -535,6 +541,18 @@ def _compute_tcc_matrix(
     device : torch.device, optional
     illumination_shape : str
         Source shape (default: "conventional").
+    sigma_inner : float, optional
+        Inner radius of an annular or multipole source in pupil-normalised
+        units. When given, "annular" uses it instead of the built-in 0.3*sigma,
+        and "dipole"/"dipole_x"/"dipole_y"/"quasar" become the scanner-style
+        definition: poles are sectors of the annulus sigma_inner <= r <= sigma
+        with angular full width *pole_opening_deg* (default 90 deg) centred on
+        the pole axes -- e.g. ASML/imec "dipole 90X, sigma 0.62/0.90" is
+        illumination_shape="dipole", sigma=0.90, sigma_inner=0.62,
+        pole_opening_deg=90 (Vesters 2019, Sec. 4.3.2). When None, the legacy
+        fixed-geometry poles (radius 0.2*sigma at 0.3*sigma) are used.
+    pole_opening_deg : float, optional
+        Angular full width of each pole [deg]; only used with sigma_inner.
 
     Returns
     -------
@@ -551,7 +569,34 @@ def _compute_tcc_matrix(
 
     # Build source mask for the requested illumination shape
     shape = illumination_shape.lower()
-    if shape == "annular":
+    if sigma_inner is not None and shape in ("dipole", "dipole_x", "dipole_y", "quasar"):
+        # scanner-style multipole: annular sectors (see docstring)
+        if not (0.0 <= sigma_inner < sigma):
+            raise ValueError(
+                f"sigma_inner must satisfy 0 <= sigma_inner < sigma, got {sigma_inner}"
+            )
+        opening = math.radians(90.0 if pole_opening_deg is None else pole_opening_deg)
+        if not (0.0 < opening <= math.pi):
+            raise ValueError("pole_opening_deg must be in (0, 180]")
+        theta = torch.atan2(FY, FX)
+        if shape == "quasar":
+            axes = (math.pi / 4, 3 * math.pi / 4, -math.pi / 4, -3 * math.pi / 4)
+        elif shape == "dipole_y":
+            axes = (math.pi / 2, -math.pi / 2)
+        else:
+            axes = (0.0, math.pi)
+        sector = torch.zeros_like(FX, dtype=torch.bool)
+        for ax in axes:
+            d = torch.remainder(theta - ax + math.pi, 2 * math.pi) - math.pi
+            sector |= d.abs() <= opening / 2
+        S = (sector & (r2 <= sigma**2) & (r2 >= sigma_inner**2)).to(torch.float64)
+    elif shape == "annular" and sigma_inner is not None:
+        if not (0.0 <= sigma_inner < sigma):
+            raise ValueError(
+                f"sigma_inner must satisfy 0 <= sigma_inner < sigma, got {sigma_inner}"
+            )
+        S = ((r2 <= sigma**2) & (r2 >= sigma_inner**2)).to(torch.float64)
+    elif shape == "annular":
         sigma_inner = 0.3 * sigma
         S = ((r2 <= sigma**2) & (r2 >= sigma_inner**2)).to(torch.float64)
     elif shape in ("dipole", "dipole_x"):

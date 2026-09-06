@@ -192,6 +192,12 @@ class SimulationConfig:
     na: float = 0.33
     sigma: float = 0.8
     illumination_shape: str = "conventional"
+    # Scanner-style source geometry (2026-09-06, stage B1): inner radius and
+    # pole opening angle for annular/dipole/quasar; None = legacy fixed poles.
+    # imec NXE3300B "dipole 90X, sigma 0.62/0.90" (Vesters 2019, Sec. 4.3.2):
+    # illumination_shape="dipole", sigma=0.90, sigma_inner=0.62, pole_opening_deg=90.
+    sigma_inner: float | None = None
+    pole_opening_deg: float | None = None
     ml_n_bilayers: int = 50
     ml_d_mo_nm: float = 2.8
     ml_d_si_nm: float = 4.1
@@ -1987,6 +1993,8 @@ def run_simulation(
             illumination_shape=cfg.illumination_shape,
             grid=cfg.grid,
             focus_nm=cfg.focus_nm,
+            sigma_inner=cfg.sigma_inner,
+            pole_opening_deg=cfg.pole_opening_deg,
         )
         aerial_tm = aerial_from_orders(
             orders_tm,
@@ -1998,6 +2006,8 @@ def run_simulation(
             illumination_shape=cfg.illumination_shape,
             grid=cfg.grid,
             focus_nm=cfg.focus_nm,
+            sigma_inner=cfg.sigma_inner,
+            pole_opening_deg=cfg.pole_opening_deg,
         )
         # Each polarisation is normalised to ITS OWN open-frame intensity
         # before averaging, so an absorber-free mask yields exactly 1 for
@@ -2015,6 +2025,8 @@ def run_simulation(
             illumination_shape=cfg.illumination_shape,
             grid=cfg.grid,
             focus_nm=cfg.focus_nm,
+            sigma_inner=cfg.sigma_inner,
+            pole_opening_deg=cfg.pole_opening_deg,
         )
         # Thin-mask path: the Hopkins sum is relative to unit illumination
         # of the mask (open frame -> |r_ML|²). Divide by the clear-field

@@ -2900,3 +2900,124 @@ nonCAR/HighNA als UNSOURCED markiert; Validierung se_blur_nm ≥ 0 und **Warnung
 CLI-Defaults simulate/process-window 0 → 2,5, calibrate 5 → 2,5, Hilfetext „5–10 realistic" entfernt (unbelegt);
 tests/test_se_blur_default.py (Default, Quadratursumme 9,7 nm gegen Thackeray, Spike-Nachweis bei 0 nm, linearer
 Dill-Bereich bei 2,5 nm, Warnung). Regressionstests setzen 5 nm explizit → Goldens unverändert.
+
+## 2026-09-06 (Fortsetzung 27): Stufe B1 — NXE1716-Anker (Vesters 2017/2019), Vorhersagen VOR dem Lauf
+
+**Daten (alle aus Primärquellen, nachgelesen):**
+- Vesters, De Simone, De Gendt, JPST 30(6) 675 (2017), Fig. 6 (= Dissertation Fig. 2.7): DRM-Kontrastkurve R(E) von NXE1716
+  (hoher Quencher) nach Flood-Belichtung auf dem NXE3300, PAB 110 °C/60 s, Film 40 nm, PEB 90 °C/60 s, TMAH (Paper: 0,026 N,
+  Dissertation §4.3.6: 0,26 N — vermutlich Tippfehler im Paper). Original-Mack-Fit der Autoren als gestrichelte Linie.
+  **Digitalisierung** (scratchpad/fig6_digitised.json, Overlay geprüft): Seite 6 mit 400 dpi, Gitter 486,5 px/Dekade (x) und
+  181,8 px/Dekade (y), Ankerlinien x = 1 mJ/cm² bei px 251,5, y = 0,01 nm/s bei px 974,5; schwarze Komponenten (< 70) klassifiziert
+  in Marker (19×19 px) und Fit-Striche. Fit-Linie: Plateaus 0,0186 / 245 nm/s; Marker: 1,0/0,0151 … 24,7/243.
+- Dissertation Table 4.2 (B0 = NXE1716 ohne Sensibilisator): **D2S 11,0 mJ/cm², LWR 6,7 ± 0,3 nm (3σ, CD-SEM-biased)**,
+  44 nm Pitch, 22 nm Linien, kein Reticle-Bias; §4.3.2: 35 nm Resist auf AL412, **NXE3300B Dipol 90X σ 0,62/0,90**, PEB 90 °C/60 s,
+  TMAH 0,26 N, CD-SEM CG-5000 500 V/8 pA, keine Rauschkorrektur.
+
+**Mack-Fit an die digitalisierte Fit-Linie** (Kettenform R = Mack(M), M = exp(−κ·H(E)), H = 1 − e^{−C·E}): Rmax/Rmin fest
+(245/0,0186); (κ, Mth, n) sind aus einer Flood-Kurve **degeneriert** (Korrelation −1,00/0,99): Mth 0,39 (Default) → a = 0,0721,
+n = 11,9; Mth 0,518 → 0,0513/11,0; Mth 0,7 → 0,0283/10,0; alle rms 0,04 in log₁₀R. Da Blur *vor* der Nichtlinearität wirkt,
+ist die Linienvorhersage von der Aufteilung unabhängig (bis auf die Dill-Sättigung, C·E ≤ 0,2). Gewählt: Mth 0,39, n aus Fit,
+κ aus Fit mit H(E) und C = 0,0152 → k = κ/t_eff.
+
+**Beleuchtung:** neue Sektor-Quelle (abbe.py: sigma_inner, pole_opening_deg) für Dipol 90X. Befund: bei 44 nm Pitch, NA 0,33
+liegen die ±1. Ordnungen bei ±0,93 — jede Dipol-Quellpunkt ist Zweistrahl → TCC(0,±1) = 0,5/0,5 exakt, identisch mit der
+Legacy-Dipolgeometrie (in Fokus unterscheidet sich nur die Defokus-Empfindlichkeit); konventionell σ 0,8: 0,4655 (NILS 3,13
+statt 3,52).
+
+**Preset NXE1716 (kein freier Parameter für D2S):** Mack 245/0,0186/n_fit/0,39; κ_fit; C 0,0152 (LBNL, nicht NXE-spezifisch);
+B 4,44 (generische PHS-Zusammensetzung); D 4,2 (Kang, 90 °C = Vesters' PEB); τ 10,5 (110-°C-Wert, bei 90 °C unbekannt);
+SE 2,5; G₀ 0,2, Q 0 (Quencher steckt effektiv in κ/Mth); Film 35 nm; Entwicklung 30 s (imec-Zeit unbekannt).
+
+**Vorab festgelegte Vorhersagen:**
+- P1 D2S (22 nm CD, Dipol 90X) ohne freien Parameter: **12,5 ± 3,5 mJ/cm²** (gemessen 11,0). Begründung: Kante bei I ≈ 0,5,
+  35 nm in 30 s verlangt R ≥ 1,2 nm/s → E_lokal ≈ 7 → ≈ 14, Blur senkt es.
+- P2 LWR (nur Photonen, 3 Seeds × 2 Real. × 1024 Zeilen) bei der Ketten-D2S: **3σ = 8–13 nm** gegen gemessen 6,7 (biased).
+  Erfolgskriterium des Plans: ≤ 1,3× = 8,7 nm. Meine Erwartung: knapp verfehlt (Fortsetzung 23: 1,66× beim Default-Resist).
+- P3 Fallback (ein Parameter κ auf D2S = 11 kalibriert): LWR ändert sich um < 15 % gegenüber P2.
+- P4 NILS am Druckpunkt (nach Entwicklung): 2,5–3,5.
+
+**B1-Ergebnis (scratchpad/b1_nxe1716.py):** Fit κ = 5,19, n = 12,8 (rms 0,042) → k = 0,496 s⁻¹ bei 90 °C (bei C 0,0152, τ 10,5).
+
+| | Vorhersage | Messung (Kette) | Status |
+|---|---|---|---|
+| P1 D2S ohne freien Parameter | 12,5 ± 3,5 | **19,7 mJ/cm²** (gemessen 11,0; bei 11,0 druckt nichts, CD = Pitch) | **falsifiziert**, Faktor 1,79 |
+| P2 LWR bei Ketten-D2S 19,7 | 3σ 8–13 | 3σ 6,40 (5,81/6,43/6,96) | unter Band — aber bei 1,8× zu hoher Dosis, nicht vergleichbar |
+| P3 κ ×1,79 → D2S 10,7; LWR | Änderung < 15 % | 3σ **9,05 (Mittel)** / 5,7 (Median); Seeds 5,74/5,19/**16,2** | Mittel +41 % (Ausreißer Seed 11), Median −10 % |
+| P4 NILS am Druckpunkt | 2,5–3,5 | 2,92 | hält |
+
+Bewertung: Die Null-Parameter-Vorhersage der Druckdosis scheitert um 1,8×. Naheliegende Ursache: der Blur. Bei P = 44 nm
+dämpft σ_tot = 9,7 nm die Säuremodulation um exp(−2π²σ²/P²) = 0,38; die Space-Mitte sieht damit nur ≈ 0,69 der Flood-
+äquivalenten Dosis → Schaltpunkt 12,7 mJ/cm² der DRM-Kurve wird erst bei ≈ 18 mJ/cm² erreicht (beobachtet 19,7). Weitere
+Kandidaten: τ bei 90 °C (unbekannt, bestimmt t_eff und damit σ), Quencher (in der Flood-Kurve nur effektiv enthalten;
+in Linien wirkt er kontrastverstärkend), Entwicklungszeit (imec unbekannt). Diagnoseläufe folgen (keine Fits).
+LWR am kalibrierten Punkt: 3 Seeds à n_eff ≈ 8 reichen nicht (Seed 11 zeigt 5,4 nm 1σ — vermutlich Linienabriss);
+Lauf mit 6 Seeds × 2 Real. × 2048 Zeilen, mit/ohne molekulares Rauschen, gestartet (b1_lwr_stats.py).
+
+**D2S-Diagnose (keine Fits; scratchpad/b1_d2s_diag.out), Luftbild normiert: I_max 0,63, I_min 0,004 (Space-Mitte sieht 0,63·D):**
+
+| Variante | D2S (mJ/cm²) |
+|---|---|
+| Basis σ 9,4 ⊕ 2,5, 30 s | 19,7 |
+| σ_PEB 7 / 5 / 3 | 18,5 / 17,9 / 17,5 |
+| Entwicklung 60 s | 18,2 |
+| SE-Blur 0 | 19,5 |
+| σ 3 + 60 s / σ 5 + 60 s / σ 3 + 120 s | 15,9 / 16,3 / 14,1 |
+
+Der Blur erklärt also nur ≈ 2 mJ/cm² der Lücke; selbst σ 3 nm mit 120 s Entwicklung bleibt bei 14,1 (1,28×). Kern des Problems:
+bei D = 11 sieht die Space-Mitte lokal 6,9 mJ/cm², wo die DRM-Flood-Kurve 0,8 nm/s liefert — 35 nm in 30 s brauchen ≥ 1,2 nm/s
+(E ≥ 7,4). Die Flood-Dosisskala der DRM-Messung und die Druckdosis des Patterning-Experiments sind mit unserer Kette um
+1,3–1,8× inkonsistent, unabhängig vom Blur. Kandidaten, die die Kette nicht enthält: Quencher-Kontrastwirkung in Linien (in der
+Flood-Kurve nur effektiv), Unterschied DRM-Film (40 nm auf SiO₂) vs. 35 nm auf AL412, Entwicklungszeit/-rezept von imec
+(unbekannt), Definition der Scanner-Dosis. **Nicht** durch Nachjustieren zu schließen — dokumentiert als offene Diskrepanz;
+für die LWR-Prüfung gilt der Ein-Parameter-Fallback (κ ×1,79) des Plans.
+
+**LWR-Statistik am kalibrierten Punkt (b1_lwr_stats.py: 6 Seeds × 2 Realisationen × 2048 Zeilen, D2S 10,69, k ×1,79):**
+
+| Rauschmodell | LWR 1σ (Mittel ± sem) | 3σ | gemessen (3σ, SEM-biased) | Verhältnis |
+|---|---|---|---|---|
+| nur Photonen | 3,63 ± 0,39 (2,4–4,6) | **10,9 nm** | 6,7 ± 0,3 | **1,6×** |
+| Photonen + molekular (G₀ 0,2) | 6,34 ± 0,45 | 19,0 nm | 6,7 | 2,8× |
+
+Feldlängen-Check (1024/2048/4096 Zeilen, 2 Seeds): 3,2/3,8 · 2,9/3,7 · 5,0/3,2 — kein Trend, aber Streuung ±25 % pro Lauf;
+die 1024-Zeilen-Werte 1,7–1,9 aus P3 waren der untere Ausläufer. NILS am Druckpunkt 2,92 (P4 hält).
+
+**Bewertung nach vorregistriertem Kriterium (≤ 1,3×): verfehlt.** Die Kette überschätzt die LWR von NXE1716 um ≥ 1,6× (die
+Messung ist SEM-biased, der wahre Wert liegt noch tiefer). Das ist dieselbe Richtung und Größe wie der Vesters-Vergleich mit dem
+Default-Resist (Fortsetzung 23: 1,24–1,66×). Was der Kette an diesem Anker fehlt bzw. unbelegt ist:
+1. **Quencher** — NXE1716 ist der Hoch-Quencher-Resist; in der Kette nur effektiv über κ/Mth der Flood-Kurve. In Linien
+   verstärkt der Quencher den Kontrast des latenten Bilds (Mack/Biafore/Smith 2011, Quenching-Studie) und senkt die LWR.
+   Ohne Q-Beladung von NXE1716 (unveröffentlicht) nicht modellierbar.
+2. **Absorption α_B** — Dissertation Fig. 4.1 (nur grafisch); wir nehmen 4,44 µm⁻¹. Höheres α → mehr absorbierte Photonen →
+   weniger Rauschen (∝ α^{−1/2}); Fig. 4.4 gibt Säuren pro absorbiertem Photon für B0 (grafisch) — beides für B2 digitalisieren.
+3. **τ bei 90 °C** unbekannt (Blur 9,4 nm aus 110-°C-τ), **Entwicklungszeit** imec unbekannt.
+4. Molekulares Rauschen des Samplers (V4b, Fortsetzung 25) nicht verstanden — mit G₀ 0,2 wäre die Kette 2,8× daneben.
+Keine Parameteranpassung vorgenommen. Preset `presets.nxe1716_config()` mit deklarierter Dosisskalen-Kalibrierung
+(`calibrated_dose_scale=True`, ×1,79) und die digitalisierte Kurve als Paketdaten (`data/anchors/vesters2017_nxe1716.json`);
+`tests/test_nxe1716_anchor.py` prüft nur die Flood-Kurven-Reproduktion (rms ≤ 0,06) und die Provenienz, nicht das Drucken.
+
+**LWR-Sensitivität am kalibrierten Punkt (b1_lwr_sens.py, 3 Seeds × 2 Real. × 2048 Zeilen, feste Dosis 10,69 — CD verschiebt sich):**
+
+| Variante | LWR 1σ | CD |
+|---|---|---|
+| Basis (σ_PEB 9,4) | 3,49 (3,79/4,19/2,50) | 22,0 |
+| σ_PEB 5 nm | **1,37** (1,34/1,49/1,29) | 19,9 |
+| dill_B 6,5 µm⁻¹ | 3,73 | 25,7 (unterbelichtet) |
+| Entwicklung 60 s | 2,14 | 17,8 (überbelichtet) |
+
+Der PEB-Blur ist der dominante Hebel: mit σ 5 nm fällt die LWR um 2,5× (Kantensteigung bei P = 44 steigt mit der Modulation
+0,38 → 0,75 stärker als das Rauschen zunimmt). Die 9,4 nm stammen aus D (Kang, 90 °C) und τ = 10,5 s (Yamamoto, 110 °C);
+τ bei 90 °C ist unbekannt. **Das B1-Urteil hängt damit an einem unbelegten Parameter** — mit σ ≈ 5–7 nm läge die Kette
+innerhalb des 1,3×-Kriteriums; das ist keine Bestätigung, sondern die Aussage, dass die LWR-Vorhersage ohne gemessenen
+Blur des Resists nicht schärfer als ±2× ist. Nachlauf bei angepasster D2S für σ 5 folgt.
+
+**Nachlauf σ_PEB = 5 nm bei eigener D2S (b1_sigma5.py, 6 Seeds × 2 Real. × 2048 Zeilen):** unkalibriert D2S 17,9 (Faktor 1,63
+statt 1,79 — der Blur erklärt auch hier nur ≈ 2 mJ/cm²); kalibriert D2S 10,77; **LWR 1σ 1,60 ± 0,13 → 3σ 4,8 nm** gegen 6,7 gemessen
+(0,71×; SEM-biased, unbiased vermutlich 5–6 → nahe dran).
+
+**Revidiertes B1-Urteil:** Die Photonen-LWR der Kette am NXE1716-Anker liegt je nach PEB-Blur zwischen 4,8 nm (σ 5) und 10,9 nm
+(σ 9,4) 3σ und klammert die Messung (6,7 biased) ein. Der Blur bei 90 °C ist für diesen Resist nicht belegt (τ nur bei 110 °C).
+Damit ist das Rauschmodell an diesem Anker **weder validiert noch falsifiziert** — die Vorhersage ist ohne gemessenen Blur nicht
+schärfer als ±1,6×. Die Dosisskalen-Diskrepanz (1,6–1,8×) bleibt unabhängig davon bestehen und ist der belastbarere Befund.
+Konsequenz für B2: erst den Blur (bzw. τ(90 °C)) und α_B/Säureausbeute (Dissertation Fig. 4.1/4.4) resistspezifisch belegen,
+dann erneut vorhersagen; kein Parameter wurde an die LWR angepasst.

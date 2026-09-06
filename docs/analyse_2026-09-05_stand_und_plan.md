@@ -96,11 +96,15 @@ A3 ✅ (2026-09-06) Default 2,5 nm (Thackeray 2010, EUV-spezifischer Term in gem
    Dill-Sättigung, LWR = 0) → Warnung eingebaut. Preflight: D2S +0,2/+1,2 %.
 
 **Stufe B — Einzelquellen-Anker NXE1716 (der Weg zur ersten echten Validierung)**
-B1 Preset „NXE1716": Mack aus Vesters' DRM-Kurve (digitalisiert, im Katalog), Dill B aus generischer PHS-Zusammensetzung,
-   PEB 90 °C/60 s (Vesters Table 2.1), Film aus Table 2.1; **ein** freier Parameter C an D2S = 11 mJ/cm² kalibriert
-   (transparent als Kalibrierung deklariert), dann LWR 2,23 nm (1σ, biased) als *Vorhersage* — trifft die Kette
-   innerhalb 1,3× ist das die erste echte Validierung; verfehlt sie, ist das Rauschmodell falsifiziert.
-B2 Falls B1 scheitert: Multiplizitätsmodell (3.3) als Kandidat prüfen.
+B1 ✅ durchgeführt (2026-09-06, Fortsetzung 27) — **Kriterium verfehlt.** DRM-Kurve vollständig digitalisiert, Dipol-90X-Quelle
+   eingebaut, Preset `presets.nxe1716_config()`. Ohne freien Parameter: D2S 19,7 statt 11,0 (1,79×; Blur/Entwicklungszeit
+   erklären ≤ 2 mJ/cm²). Mit deklarierter Dosisskalen-Kalibrierung: LWR 10,9 nm 3σ (nur Photonen) gegen 6,7 gemessen (1,6×);
+   mit molekularem Rauschen 19 nm; mit σ_PEB 5 nm (τ(90 °C) unbekannt) 4,8 nm → Messung eingeklammert, Rauschmodell hier
+   **weder validiert noch falsifiziert** (±1,6× ohne gemessenen Blur). Kandidaten: Quencher-Kontrast (NXE1716 =
+   Hoch-Quencher, Q unbekannt), α_B und Säureausbeute B0 (Dissertation Fig. 4.1/4.4, nur grafisch), τ bei 90 °C, imec-Entwicklungszeit.
+B2 Nächste Schritte: (a) Fig. 4.1/4.4 digitalisieren (α_B, Säuren pro Photon für B0) → C·G₀ und α resistspezifisch;
+   (b) Quencher-Modell mit Q-Beladung als Parameter am Anker prüfen (Preflight: LWR fällt mit Q?); (c) Sampler-Varianz
+   (V4b) gegen analytische Poisson-Erwartung; (d) Multiplizitätsmodell (3.3).
 
 **Stufe C — Physikvervollständigung mit Quelle**
 C1 Temperaturmodell k(T) aus Yamamoto Fig. 4 (Ea aus Steigung), τ(T) aus Fig.-3-Plateaus bei 80–140 °C; Test: Fig.-3-Kurven
