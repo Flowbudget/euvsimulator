@@ -2846,3 +2846,57 @@ als die naive Zählstatistik erwartet (Säuren ≈ absorbierte Photonen im Blur-
 Binomial-Sampler weniger Varianz liefert als Poisson-Zählen der Säuren, ist **nicht verstanden** — kein Code geändert.
 Offen für Stufe C (Multiplizität/Rauschmodell): Sampler gegen eine analytische Poisson-Erwartung auf einem uniformen
 Feld prüfen (Varianz der Säurezahl pro Voxel und nach Blur), bevor exposure_stochasticity als Default diskutiert wird.
+
+## 2026-09-06 (Fortsetzung 26): Stufe A3 — Sekundärelektronen-Blur-Default (Vorhersagen VOR dem Lauf)
+
+**Quellen (alle PDFs im Katalog, Zahlen nachgeprüft):**
+- Thackeray et al. (Dow), JPST 23(5) 631 (2010), Abschnitt 4/Gl. (8): EUV-Gesamtblur 11,5 nm (gemessen, 28-nm-Linien) =
+  9,7 (Latentbild-RD) ⊕ 4,3 (Rg) ⊕ **2,5 (EUV-spezifisch)** ⊕ 3,7 (unerklärt). Die 2,5 nm sind der „average radius of the
+  simulated acid distribution" (Monte Carlo, 5000 Absorptionsereignisse, Best-fit-Parameter: IP 9,75 eV, Reaktionsradius
+  1,3 nm, PAG-Anregung 5,5 eV) — modellabgeleitet, als Blurterm in Quadratur benutzt. Als mittlerer Radius entspräche das
+  σ ≈ 2,0 (2D) bzw. 1,6 nm (3D); Thackeray setzt ihn direkt als Blurlänge ein.
+- Mack, Biafore, Smith 2011 (JM3 10, 033019), S. 385 f.: „electron blur radius" 2,1–3,3 nm je nach Annahmen (Modell).
+- Kozawa/Tagawa, JPST 24(2) 137 (2011): Thermalisierungsdistanz 3–7 nm (mittlerer Elektron–Kation-Abstand, kein σ),
+  optimal 3 nm für 11 nm HP (Theorie).
+- Fallica 2016 / Kazazis (aus früherer Runde): kein SE-Blur-Wert. **Keine direkte Messung von σ_SE gefunden** — der Wert
+  ist in allen Quellen modellabgeleitet; Thackerays 2,5 nm ist der einzige, der in einer *gemessenen* Zerlegung steht.
+- Der Preset-Wert 5 nm (RESIST_PRESETS „CAR") und die CLI-Hilfe „5–10 realistic" sind unbelegt.
+
+**Vorschlag:** se_blur_nm-Default 0,0 → **2,5 nm** (Thackeray), Presets: CAR 2,5, nonCAR/HighNA unverändert bis Quelle;
+CLI-Hilfe korrigiert. Unser PEB-Blur 9,4 nm (√(2·D·t_eff)) neben Thackerays 9,3/9,7 nm Säure-RD: Gesamtblur der Kette
+√(9,4² + 2,5²) = 9,73 nm gegen Thackerays 11,5 (der Rg-Term 4,3 und der unerklärte Rest fehlen bei uns — bewusst, keine Quelle
+für ein Rg-Modell).
+
+**Vorab festgelegte Vorhersagen (se_blur 0 → 2,5 nm, Defaults sonst wie nach A2):**
+- V1 D2S deterministisch: Modulationsverlust exp(−2π²(9,73² − 9,4²)/P²) = 3 % (P = 64) bzw. 6 % (P = 44) →
+  D2S P = 64: 1,312 → **1,31–1,34**; P = 44: 1,718 → **1,73–1,79**.
+- V2 Photonen-LWR P = 44, 3 Seeds × 2 Real. × 1024 Zeilen (Referenz preflight_C: 9,77): Rauschen −3 % durch Glättung,
+  Steigung −6 % → **innerhalb ±6 % von 9,77**.
+- V3 aerial_threshold-Default (symmetrische Linie, Schwelle 0,5): Blur verschiebt eine symmetrische Kante nicht →
+  **|ΔCD| < 0,1 nm**; NILS sinkt um ≈ 3 % (P = 64).
+Falsifikation: V1 > +8 % oder V2 > ±10 % → Blur wirkt anders als Modulationsargument; dann Ursache suchen, nicht Default setzen.
+
+**Preflight-Ergebnis A3 (scratchpad/preflight_se.py):**
+
+| | Vorhersage | Messung | Status |
+|---|---|---|---|
+| V1 D2S P = 64, 0 → 2,5 nm | +0…+2 % | 1,297 → 1,299 (+0,2 %) | hält |
+| V1 D2S P = 44, 0 → 2,5 nm | +1…+4 % | 1,649 → 1,668 (+1,2 %) | hält |
+| V2 Photonen-LWR P = 44 bei 2,5 nm | ±6 % von 9,77 (Referenz war 5 nm) | 9,10 (7,06/10,20/10,04) | −7 %, mit 3 Seeds à ±20 % unentscheidbar |
+| V2 bei 0 nm | — | **LWR = 0,000** | **Modellversagen bei se_blur 0** |
+| V3 aerial_threshold | ΔCD < 0,1 nm, NILS −3 % | CD und NILS exakt gleich | Blur wird dort **gar nicht angewandt** |
+
+Anmerkung zu V1: die absoluten Bänder (1,31–1,34 / 1,73–1,79) bezogen sich irrtümlich auf die 5-nm-Referenz aus
+preflight_C; die *relativen* Vorhersagen halten. Befund V2/0 nm: `photon_deposition_shot_noise` ist bei se_blur 0 weißes
+Poisson-Rauschen pro Gitterpixel — auf 0,172 nm Gitter 0,007 Photonen/Pixel, > 99 % leere Pixel und Einzelspitzen von
+≈ 250 mJ/cm²; dort sättigt 1 − e^{−C·E}, die mittlere Säure bricht auf < 50 % des Mean-Field-Werts ein, die Linie druckt
+nicht (keine Kante → LWR 0). Der SE-PSF ist genau das, was das Rauschen gitterinvariant macht — der alte Default 0 war für
+den stochastischen full_chem-Pfad physikalisch falsch, nicht nur „ideal". V3: `_cd_via_aerial_threshold` bekommt das
+rohe Luftbild; se_blur_nm wirkt nur im full_chem-Pfad (dokumentiert, nicht geändert — das Schwellenmodell ist bewusst
+resistfrei).
+
+**Umgesetzt:** `DEFAULT_SE_BLUR_NM = 2.5` (Thackeray-Term, Provenienz und Grenzen im Kommentar), Preset CAR 5 → 2,5,
+nonCAR/HighNA als UNSOURCED markiert; Validierung se_blur_nm ≥ 0 und **Warnung** bei enable_stochastic mit se_blur 0;
+CLI-Defaults simulate/process-window 0 → 2,5, calibrate 5 → 2,5, Hilfetext „5–10 realistic" entfernt (unbelegt);
+tests/test_se_blur_default.py (Default, Quadratursumme 9,7 nm gegen Thackeray, Spike-Nachweis bei 0 nm, linearer
+Dill-Bereich bei 2,5 nm, Warnung). Regressionstests setzen 5 nm explizit → Goldens unverändert.

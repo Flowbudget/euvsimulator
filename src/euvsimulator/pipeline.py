@@ -13,6 +13,7 @@ Resist presets (typical SE blur sigma for different resist types):
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 from typing import Optional
 
@@ -65,6 +66,22 @@ DEFAULT_RESIST_DENSITY_G_CM3 = 1.20
 # tests/test_absorption_coefficient.py
 DEFAULT_DILL_B_PER_UM = 4.44
 
+# Secondary-electron blur sigma [nm] of the default resist chain. Thackeray,
+# Wagner, Kang et al. (Dow), J. Photopolym. Sci. Technol. 23(5) 631 (2010),
+# Sec. 4 / Eq. (8): the measured EUV total blur of 11.5 nm decomposes as
+# 9.7 nm latent-image reaction-diffusion (+) 4.3 nm polymer radius of gyration
+# (+) 2.5 nm EUV-specific term (+) 3.7 nm unexplained, in quadrature. The
+# 2.5 nm is the mean radius of their Monte-Carlo acid cloud per absorbed
+# photon (IP 9.75 eV, PAG reaction radius 1.3 nm) and is used by them as a
+# blur length; Mack, Biafore & Smith 2011 (JM3 10, 033019) put the electron
+# blur radius at 2.1-3.3 nm from a different model. No DIRECT measurement of
+# the SE blur alone was found (log Fortsetzung 26); this is the one value that
+# sits inside a measured decomposition. It is the sigma of the 2D Gaussian
+# that gaussian_se_blur applies to the dose map and to each photon-deposition
+# realisation (resist/stochastic.py); it is NOT applied by the
+# aerial_threshold model, which thresholds the aerial image directly.
+DEFAULT_SE_BLUR_NM = 2.5
+
 
 def acids_per_absorbed_photon(cfg: "SimulationConfig") -> float:
     """Acids generated per ABSORBED EUV photon in the low-dose limit implied by
@@ -85,10 +102,13 @@ def acids_per_absorbed_photon(cfg: "SimulationConfig") -> float:
     return cfg.dill_C * cfg.pag_density_per_nm3 / (photons_per_nm2_per_mjcm2 * alpha_per_nm)
 
 
+# Secondary-electron blur sigma [nm] per resist family. Only "CAR" is sourced
+# (see SimulationConfig.se_blur_nm); "nonCAR" and "HighNA" are unsourced
+# placeholders kept for CLI compatibility (2026-09-06, log Fortsetzung 26).
 RESIST_PRESETS = {
-    "CAR": 5.0,  # Chemically Amplified Resist (typical EUV)
-    "nonCAR": 2.5,  # Non-chemically amplified / metal resist
-    "HighNA": 3.0,  # High-NA EUV (thinner resist)
+    "CAR": DEFAULT_SE_BLUR_NM,  # Thackeray et al. 2010 EUV-specific blur term
+    "nonCAR": 2.5,  # UNSOURCED placeholder (metal-oxide resists; Inpria-YA fit gives 3.3)
+    "HighNA": 3.0,  # UNSOURCED placeholder
 }
 
 
@@ -220,7 +240,13 @@ class SimulationConfig:
     # resist_threshold_norm below is the one the aerial_threshold model uses.)
     resist_model: str = "aerial_threshold"
     resist_threshold_norm: float = 0.5
-    se_blur_nm: float = 0.0
+    # Secondary-electron blur sigma [nm], see DEFAULT_SE_BLUR_NM (Thackeray
+    # 2010). Until 2026-09-06 the default was 0.0, which in the stochastic
+    # full_chem path means white Poisson noise per grid pixel: on a 0.17 nm
+    # grid that is 0.007 photons per pixel, single-photon spikes of ~250 mJ/cm²
+    # saturate the Dill law and the line does not print at all (LWR = 0,
+    # log Fortsetzung 26). The SE PSF is what makes the noise grid-invariant.
+    se_blur_nm: float = DEFAULT_SE_BLUR_NM
     focus_nm: float = 0.0
     grid: int = 256
     device: str = "auto"
@@ -964,8 +990,9 @@ class SimulationConfig:
     #   stochastic_ler_grid_y    = 4096
     #   stochastic_ler_estimator = "large_n"
     #
-    # Note: the software default se_blur_nm=0.0 is technically valid
-    # (white noise -> N_eff = N) but is NOT the scientific reference.
+    # Note: se_blur_nm=0.0 (the default until 2026-09-06) is white per-pixel
+    # noise -> N_eff = N, grid-dependent and, through the Dill saturation,
+    # physically wrong for the full_chem chain (see se_blur_nm); it warns.
     # The reference configuration was used for the internal LER audits
     # (N_eff ~= 59, LER ~= 0.07 nm at 40 mJ/cm2); it is a reference for
     # internal scientific validation, NOT yet experimentally validated.
@@ -1058,6 +1085,15 @@ class SimulationConfig:
             raise ValueError("peb_k must be > 0")
         if self.peb_acid_lifetime_s is not None and self.peb_acid_lifetime_s <= 0:
             raise ValueError("peb_acid_lifetime_s must be > 0 or None")
+        if self.se_blur_nm < 0:
+            raise ValueError("se_blur_nm must be >= 0")
+        if self.enable_stochastic and self.resist_model == "full_chem" and self.se_blur_nm == 0:
+            warnings.warn(
+                "se_blur_nm = 0 with enable_stochastic: photon shot noise is then white per "
+                "grid pixel (grid-dependent) and single-photon spikes saturate the Dill law; "
+                "use the SE-PSF (default 2.5 nm, Thackeray 2010).",
+                stacklevel=2,
+            )
         if self.peb_t_bake <= 0:
             raise ValueError("peb_t_bake must be > 0")
         if self.mack_R_max <= self.mack_R_min:

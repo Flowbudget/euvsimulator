@@ -98,7 +98,13 @@ def simulate(
     material: str = typer.Option("Ta", "--material", "-m", help="Absorber material"),
     threshold: float = typer.Option(0.5, "--threshold", "-t", help="Resist threshold"),
     se_blur: float = typer.Option(
-        0.0, "--se-blur", help="Secondary-electron blur sigma [nm]; 0 = ideal, 5-10 realistic CAR"
+        2.5,
+        "--se-blur",
+        help=(
+            "Secondary-electron blur sigma [nm]; default 2.5 = Thackeray et al. 2010 EUV-specific "
+            "blur term (models: 2.1-3.3, Mack 2011); 0 = none (white per-pixel photon noise, "
+            "not recommended with --stochastic)"
+        ),
     ),
     resist_preset: Optional[str] = typer.Option(
         None, "--resist-preset", help="Resist preset: CAR (5nm), nonCAR (2.5nm), HighNA (3nm)"
@@ -409,7 +415,9 @@ def process_window(
     na: float = typer.Option(0.33, "--na", help="Numerical aperture"),
     sigma: float = typer.Option(0.8, "--sigma", help="Partial coherence factor"),
     grid: int = typer.Option(256, "--grid", help="Grid size"),
-    se_blur: float = typer.Option(0.0, "--se-blur", help="Secondary-electron blur sigma [nm]"),
+    se_blur: float = typer.Option(
+        2.5, "--se-blur", help="Secondary-electron blur sigma [nm] (default: Thackeray 2010)"
+    ),
     resist_model: str = typer.Option("aerial_threshold", "--resist-model", help="Resist model"),
 ):
     """Compute a process window (Bossung plot) over dose × focus.
@@ -723,7 +731,7 @@ def calibrate(
     cd: float = typer.Option(32.0, "--cd", help="Nominal line width of the measured FEM [nm]"),
     grid: int = typer.Option(128, "--grid", help="Simulation grid for the fit"),
     se_blur: float = typer.Option(
-        5.0, "--se-blur", help="Secondary-electron blur sigma [nm] held fixed during the fit"
+        2.5, "--se-blur", help="Secondary-electron blur sigma [nm] held fixed during the fit"
     ),
 ):
     """Calibrate resist-model parameters to measured wafer CD data.

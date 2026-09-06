@@ -90,8 +90,10 @@ A2 ✅ (2026-09-06) — anders gelöst als hier geplant: nicht G₀, sondern **C
    G₀ 0,2 (LBNL-Zahlen implizieren ≈ 0,22 für MET-2D). Preflight: D2S +2,7/+2,9 %, Photonen-LWR bei D2S ±3 %, Anker halten.
    Die Vorhersage „D2S ∝ 1/C" aus dem Plan war falsch gedacht — sie galt nur bei festem k. Offen: molekulares Rauschen
    (exposure_stochasticity) statistisch sauber messen (Log Fortsetzung 25, V4).
-A3 Sekundärelektronen-Blur-Default aus Quellen (2,5–3 nm statt 0/5); Preflight gegen Thackeray-Zerlegung (Gesamtblur
-   10,6–11,8 nm = Säure 9,3 ⊕ Elektronen 2,5–4,3).
+A3 ✅ (2026-09-06) Default 2,5 nm (Thackeray 2010, EUV-spezifischer Term in gemessener Zerlegung; keine direkte
+   σ_SE-Messung gefunden, Modelle 2,1–3,3). Kettenblur 9,4 ⊕ 2,5 = 9,7 nm gegen Thackerays 11,5 (Rg-Term 4,3 und
+   unerklärte 3,7 fehlen bewusst). Nebenbefund: se_blur 0 war im stochastischen Pfad Modellversagen (weißes Pixelrauschen,
+   Dill-Sättigung, LWR = 0) → Warnung eingebaut. Preflight: D2S +0,2/+1,2 %.
 
 **Stufe B — Einzelquellen-Anker NXE1716 (der Weg zur ersten echten Validierung)**
 B1 Preset „NXE1716": Mack aus Vesters' DRM-Kurve (digitalisiert, im Katalog), Dill B aus generischer PHS-Zusammensetzung,

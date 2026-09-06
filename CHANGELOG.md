@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed (physics, 2026-09-06, plan stage A3)
+- **Default secondary-electron blur 0 → 2.5 nm** (`DEFAULT_SE_BLUR_NM`): Thackeray et al. 2010 (JPST
+  23(5) 631, Eq. 8) EUV-specific blur term inside their measured 11.5 nm total; models give 2.1–3.3
+  (Mack 2011). No direct measurement of the SE blur alone exists; documented as such. Chain total
+  blur is now 9.4 (acid) ⊕ 2.5 = 9.7 nm (no radius-of-gyration term). Preset `CAR` 5 → 2.5,
+  `nonCAR`/`HighNA` marked unsourced; CLI `--se-blur` defaults follow (simulate, process window,
+  calibrate), the unsourced "5–10 realistic" help text is gone.
+- **Finding:** with `se_blur_nm = 0` the stochastic full_chem chain was physically broken, not
+  "ideal": white per-pixel Poisson noise on a 0.17 nm grid (0.007 photons/pixel) saturates the
+  Dill law on single-photon spikes and the line does not print (LWR = 0). A `UserWarning` now fires
+  for `enable_stochastic` with zero blur; `se_blur_nm < 0` is rejected. The aerial_threshold model
+  never applied the SE blur and still does not (it thresholds the aerial image directly).
+
 ### Changed (physics, 2026-09-06, plan stage A2)
 - **Default Dill C 0.08997 → 0.0152 cm²/mJ; default deprotection rate k 1.4 → 7.87 s⁻¹.** The old C
   was a PROLITH fit (Yamamoto 2011 / Sekiguchi 2011) that lumps PEB kinetics into the exposure
