@@ -3633,3 +3633,12 @@ Zitat), `references/`. **Entfernt:** `keyword_context.txt` (gescrapter PMC-Vollt
 `fulltext.txt`/`number_lines.txt` (SPIE-Volltext) von der Platte gelöscht. **Verbleibendes Risiko:** die Git-Historie enthält noch das
 PDF (e39fd44…bca6d67) und den SPIE-Volltext (14d1dea…b0bd346). Solange das Repo privat ist, sieht das niemand; vor einer
 Veröffentlichung ist eine Historien-Bereinigung (git filter-repo, Force-Push, alle Klone neu) nötig — Entscheidung des Nutzers.
+
+**Historie bereinigt (2026-09-06, auf Freigabe des Nutzers):** Backup-Bundle `/Users/flo/euvsimulator-backup/euvsimulator-before-
+history-rewrite-2026-09-06.bundle` (26 MB, verifiziert), dann `git filter-repo --invert-paths` über acht Pfade: Mack-Buch-PDF,
+Develioglu-2023-SPIE-PDF, drei Textextrakte, PMC-Volltext-HTML, ScienceDirect-Abstract-HTML, eScholarship-Wayback-HTML. 195 Commits
+neu geschrieben, Tags v1.x/v2.0.0/v2.1.0 mitgezogen, Force-Push von Branches und Tags. Verifikation: keine Referenz mehr auf einen
+der Pfade in `git log --all`. **Alle Commit-Hashes vor diesem Zeitpunkt sind damit ungültig** (Log- und Memory-Verweise wie
+a1bab02, aca89b4 zeigen auf die alte Historie; Inhalte identisch). Die eigenen Lehrbuch-PDFs (Commit „Add EUV Lithography
+textbooks", eigenes Material) blieben in der Historie. Hinweis: GitHub hält verwaiste Objekte eine Weile im Cache; vor einer
+Veröffentlichung ggf. GitHub-Support um Bereinigung bitten.
