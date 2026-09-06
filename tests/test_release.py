@@ -94,7 +94,9 @@ def test_pyproject_has_urls():
     path = PROJECT_ROOT / "pyproject.toml"
     data = tomllib.loads(path.read_text())
     urls = data.get("project", {}).get("urls", {})
-    expected_keys = ["Homepage", "Repository", "Documentation", "Issues"]
+    # No "Documentation" key on purpose: there is no hosted documentation site, and a
+    # URL that points nowhere would be a false claim in the package metadata.
+    expected_keys = ["Homepage", "Repository", "Issues"]
     for key in expected_keys:
         assert key in urls, f"Missing [project.urls] key: {key}"
 
