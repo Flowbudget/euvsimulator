@@ -4,7 +4,7 @@ authors:
 - family-names: "Scheide"
   given-names: "Florian"
 title: "euvsimulator: Open Source EUV Lithography Simulator"
-version: 2.1.0
+version: 2.2.0
 date-released: 2026-09-06
 url: "https://github.com/Flowbudget/euvsimulator"
 repository-code: "https://github.com/Flowbudget/euvsimulator"

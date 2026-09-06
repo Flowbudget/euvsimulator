@@ -128,7 +128,7 @@ where it does not, is tabulated in [docs/physics.md](docs/physics.md) §6; the d
 @software{euvsimulator2026,
   author  = {Florian Scheide},
   title   = {euvsimulator: Open Source EUV Lithography Simulator},
-  version = {2.1.0},
+  version = {2.2.0},
   year    = {2026},
   url     = {https://github.com/Flowbudget/euvsimulator},
   license = {Apache-2.0}

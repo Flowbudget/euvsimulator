@@ -3631,7 +3631,7 @@ from" (nur Contributor Covenant mit Attribution, eigene reference_model-Notiz), 
 Bilder), Dashboard (Chart.js MIT per CDN, kein vendored JS, keine Fonts), CXRO-CSV (frei, attribuiert), Anker-JSON (eigene Zahlen +
 Zitat), `references/`. **Entfernt:** `keyword_context.txt` (gescrapter PMC-Volltext), zuvor das Mack-Buch-PDF; die ungetrackten
 `fulltext.txt`/`number_lines.txt` (SPIE-Volltext) von der Platte gelöscht. **Verbleibendes Risiko:** die Git-Historie enthält noch das
-PDF (e39fd44…bca6d67) und den SPIE-Volltext (14d1dea…b0bd346). Solange das Repo privat ist, sieht das niemand; vor einer
+PDF und den SPIE-Volltext (Commit-Bereiche der alten Historie, hier nicht mehr genannt). Solange das Repo privat ist, sieht das niemand; vor einer
 Veröffentlichung ist eine Historien-Bereinigung (git filter-repo, Force-Push, alle Klone neu) nötig — Entscheidung des Nutzers.
 
 **Historie bereinigt (2026-09-06, auf Freigabe des Nutzers):** Backup-Bundle `/Users/flo/euvsimulator-backup/euvsimulator-before-
@@ -3684,3 +3684,10 @@ die Dateien innerhalb einer Version ändern; Prozessfenster-Schleife nutzt `data
 Im Browser geprüft: Stochastik-Job mit Meldungen „realisation 1…3 of 3", Abbruch bei 3 von 40, Prozessfenster 4×3 mit
 Teilmatrix, Bänder-Job (Grid 32, 64 Zeilen) 7,7 s, Deep-Link-Start, Job-Link. Der Laptop-Grenzfall: alle GUI-Tests laufen mit
 Grid 32–128 und ≤ 512 Zeilen.
+
+## 2026-09-06 (Fortsetzung 47): Release 2.2.0
+Version 2.2.0 (pyproject, `__init__`, CITATION.cff, README-BibTeX), CHANGELOG-Abschnitt aus [Unreleased], Tag v2.2.0,
+GitHub-Release. Inhalt: die Browser-GUI der Fortsetzungen 45–46; keine Physikänderung. Vor der Veröffentlichung des
+Repositoriums geprüft: GitHub liefert die Commits der bereinigten alten Historie (Buch-PDF, SPIE-Volltext) per SHA noch aus;
+die SHA-Nennungen aus Fortsetzung 44 wurden deshalb aus dem Log entfernt. Schaltung auf public erst nach Entscheidung des
+Nutzers zum Support-Purge (siehe README-/Log-Hinweis Fortsetzung 44).

@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [2.2.0] — 2026-09-06
+
+Browser GUI rebuilt in four stages; no physics change (the pipeline only gained an optional
+progress/cancel hook). See the stage notes below.
+
 ### Added — browser GUI, stages 3 and 4 (jobs, process window, bands, estimate)
 - Background jobs (`api/jobs.py`): `POST /jobs` starts a simulation, a process window or the
   structural bands in a worker thread; `GET /jobs/{id}` reports progress, message, partial
