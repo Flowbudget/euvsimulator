@@ -3376,3 +3376,165 @@ Bewertung nach Vorregistrierung: P1/P3 praktisch unverändert (Photonenterm hat 
   Kandidaten mit Beleg-Pfad: Blur bei 90 °C (C1-Temperaturmodell aus Yamamoto Fig. 3 + NIST τ 38 s mit Quencher), n₀ und a für
   NXE1716 (unbekannt), und die Eikonal-Front ohne Krümmungsterm (zackig auf Zellskala).
 Keine Parameter wurden an Messwerte angepasst; `development_stochasticity` und `ler_passband_nm` bleiben per Default aus.
+
+## 2026-09-06 (Fortsetzung 37): C1 — Temperaturmodell k(T), τ(T) aus Yamamoto 2011 Fig. 3/4 (Vorhersagen VOR der Digitalisierung)
+
+Quelle: Yamamoto et al., JPST 24(4) 405 (2011), Fig. 3: Schutzgrad P(t) bei 80/90/100/110/120/130/140 °C nach 1,4 mJ/cm² Flood,
+Polymer A (35 %); Fig. 4: Arrhenius von Kdp mit **zwei Bereichen** (tief: reaktionskontrolliert, hoch: diffusionskontrolliert,
+Byers–Petersen); Table 1: Ea 27,8 „kcal/mol" für 35 % (Text) vs. „kJ/mol" (Table 2 der PROLITH-Parameter) — die Einheitenfrage
+aus Fortsetzung 15. Gl. (1) des Papers enthält K_loss (Säureverlust) und Ordnung m.
+Vorgehen: Fig. 3 per Farbclusterung je Temperatur digitalisieren, je Kurve unser Kettengesetz P(t) = exp(−k·H₀·τ·(1 − e^{−t/τ}))
+fitten (H₀ = 1 − e^{−C·1,4} fest, C = 0,0152 → k·H₀ und τ je T), dann Arrhenius für k und τ.
+
+**Vorhersagen:**
+- V1 Einheitenfrage: Anfangssteigungen k·H₀ von 80 → 110 °C wachsen um Faktor **≥ 5** (kcal-Lesart: Ea 116 kJ/mol → k(80)/k(110)
+  ≈ 0,09) und nicht nur um 1,7 (kJ-Lesart). Aus der Vorschau: 80 °C erreicht P ≈ 0,4 erst nach 150 s, 110 °C P ≈ 0,18 in 20 s.
+- V2 τ(T) fällt mit T (Säureverlust thermisch aktiviert): τ(90 °C) = **20–45 s** (τ(110 °C) = 10,5), verträglich mit NIST 38 s
+  bei 90 °C (JSR-Resist) innerhalb Faktor 2; τ(130–140 °C) < 6 s.
+- V3 Plateaus P∞ = exp(−k·H₀·τ) fallen monoton mit T (0,4 → 0,05); die Fits liefern rms ≤ 0,03 je Kurve.
+- V4 Folge für 90-°C-Presets: t_eff(90) = τ(1 − e^{−60/τ}) = 18–40 s → Blur √(2·4,2·t_eff) = **12–18 nm** ohne Quencher — der
+  NXE1716-Anker würde damit bei 11 mJ/cm² *nicht* drucken; das wäre der belegte Beweis, dass D = 4,2 nm²/s (Kang, quencherfrei)
+  in Linien mit Quencher nicht als freie Diffusion wirkt (NIST: Diffusionslänge 36 → 14 nm mit Quencher).
+
+**Ergebnis Digitalisierung Fig. 3 (7 Kurven × ≈ 106 Stützstellen bis 111 s, Farbclusterung, Overlay geprüft; scratchpad/
+yam_fig3_digitised.json) und Fits des Kettengesetzes je Temperatur (H₀ = 0,02105 bei C 0,0152):**
+
+| T (°C) | k·H₀ (s⁻¹) | k (s⁻¹) | τ (s) | P∞ | rms |
+|---|---|---|---|---|---|
+| 80 | 0,0142 | 0,67 | 69,0 | 0,376 | 0,010 |
+| 90 | 0,0439 | 2,09 | **35,2** | 0,213 | 0,012 |
+| 100 | 0,0978 | 4,65 | 16,3 | 0,202 | 0,014 |
+| 110 | 0,2305 | **10,95** | **7,5** | 0,176 | 0,014 |
+| 120 | 0,502 | 23,8 | 4,1 | 0,128 | 0,021 |
+| 130 | 0,439 | 20,9 | 6,2 | 0,065 | 0,029 |
+| 140 | 0,624 | 29,6 | 5,1 | 0,041 | 0,019 |
+
+Arrhenius k: 80–110 °C **Ea = 103 kJ/mol = 24,7 kcal/mol** (Yamamoto Table 1: 27,8 kcal/mol → **die kcal-Lesart ist richtig**,
+Fortsetzung 15 aufgelöst), 110–140 °C 38 kJ/mol (diffusionskontrolliert, Byers–Petersen — wie im Paper beschrieben).
+τ: 80–110 °C „Ea" −83 kJ/mol (τ fällt steil), 110–140 °C −10 kJ/mol (τ ≈ 4–6 s, Plateau).
+- V1 hält (k(80)/k(110) = 0,06, Faktor 16 statt ≥ 5). V2 hält: **τ(90 °C) = 35 s**, NIST (JSR-Resist) 38 s — zwei Resists, zwei
+  Methoden, 8 % Abstand. V3 hält (P∞ monoton bis auf 100/110: 0,202/0,176; rms ≤ 0,03).
+- Nebenbefund 110 °C: Vollkurven-Fit k·H₀ 0,2305, τ 7,5 statt der 5-Punkt-Lesung (0,166, 10,5). Produkt k·τ·H₀ = 1,73 identisch
+  (P∞, Fig.-5-Schwelle unverändert), aber t_eff 7,5 statt 10,5 s → **Default-Blur 9,4 → 7,9 nm**. Preflight vor Übernahme.
+- V4 ist durch Fortsetzung 29 schon belegt: mit τ ≈ 38 s (Blur 15,9 nm) druckt NXE1716 bei 11 mJ/cm² nicht (D2S 23,5) —
+  D = 4,2 nm²/s als freie Diffusion über t_eff(90 °C) ist in Linien mit Quencher falsch; NIST misst mit Quencher 14 statt 36 nm.
+Fig. 4 (Arrhenius-Punkte) wurde nicht weiter digitalisiert: die Fig.-3-Fits liefern Kdp(T) in unserer eigenen Modellform.
+
+**Preflight 110-°C-Verfeinerung (k 10,95, τ 7,5 statt 7,87/10,5), Default-Resist, vorab:** D2S P = 64: 1,297 → **1,27–1,30** (Blur
+−15 % → Modulation +1,5 %); P = 44: 1,649 → **1,58–1,64**; Photonen-LWR P = 44 bei eigener D2S (3 Seeds × 2 × 1024): **−5…−20 %**
+gegenüber 9,1 (weniger Glättung, aber steilere Kante: bei P = 44 dominiert die Steigung). Yamamoto-Anker: P(60) 0,176, Schwelle
+unverändert ±1 %.
+
+**Preflight-Ergebnis 110-°C-Verfeinerung (c1_preflight.py):**
+
+| | Vorhersage | alt (7,87 / 10,5) | neu (10,95 / 7,54) | Status |
+|---|---|---|---|---|
+| P(60 s, 1,4) / Schwelle | ±1 % | 0,1765 / 0,764 | 0,1776 / 0,766 | hält |
+| D2S P = 64 | 1,27–1,30 | 1,299 | 1,301 (+0,2 %) | am Bandrand (praktisch unverändert) |
+| D2S P = 44 | 1,58–1,64 | 1,668 | 1,602 (−4 %) | hält |
+| Photonen-LWR P = 44 | −5…−20 % | 9,10 | 8,52 (−6 %) | hält |
+
+**Übernommen:** peb_k 10,95 s⁻¹, peb_acid_lifetime_s 7,54 s (Vollkurven-Fit statt 5-Punkt-Lesung; gleiche Quelle, gleiches Produkt,
+Default-Blur 9,4 → 7,9 nm), CLI-Defaults, `peb_temperature_c` (80–140 °C, log-linear in 1/T zwischen den gemessenen Temperaturen,
+Warnung bei Klammerung) und `--peb-temperature`. Datensatz `data/anchors/yamamoto2011_fig3_polymerA.json` (7 Kurven + Fits).
+Tests: `tests/test_peb_temperature.py` (Tabelle reproduziert, τ(90) vs NIST innerhalb 15 %, alle sieben Kurven rms ≤ 0,03,
+k·H₀-Erhalt bei anderem C, Klammer-Warnung). Goldens werden neu abgeleitet (t_eff 10,47 → 7,54 s; Regressionstests setzen
+σ_PEB = 7 explizit, nur die Deprotektion ändert sich um 0,4 %).
+Goldens neu (derive_goldens.py, TEST_DOSE 1,1, σ_PEB 7 explizit): LER 3,4549120045 (vorher 3,4895922982), LWR 6,5152989645, n_eff 32,12,
+l_int 16,10, ρ-Trunkierung 145, Legacy 0,8741763497 / 1,6958567854 — Verschiebung ≈ 1 %, wie erwartet (nur t_eff-Effekt auf die
+Deprotektion). Fünf-Punkt-Test der Fig.-3-Kurve auf die digitalisierten Werte umgestellt (die Handlesung 0,60 bei 5 s war 0,1 zu hoch).
+
+## 2026-09-06 (Fortsetzung 38): C2 — PEB als gekoppelte Reaktions-Diffusion mit gleichzeitiger Neutralisation (Vorhersagen VOR dem Lauf)
+
+Befund aus C1/B2: Unsere PEB-Stufe diffundiert die Säure erst vollständig (σ = √(2·D·t_eff)) und neutralisiert danach
+(geschlossene Form). Real laufen Diffusion, Verlust, Neutralisation und Deprotektion gleichzeitig; Säure, die in die
+quencherreiche Linie diffundiert, wird dort sofort verbraucht — die wirksame Reichweite der Deprotektion ist viel kürzer als die
+freie Diffusionslänge (NIST/Kang 2009: 36 → 14 nm mit Quencher). Genau das fehlt der Kette (NXE1716 mit τ(90 °C) undruckbar).
+**Modell (Kang/Prabhu, NIST, SPIE 7273 Gl. in §2; Mack 2011 Quenching):** ∂H/∂t = D_H∇²H − k_T·H − k_Q·H·Q; ∂Q/∂t = D_Q∇²Q − k_Q·H·Q;
+∂M/∂t = −k_P·H·M. Alle Parameter mit Quelle: D_H 4,2 nm²/s (Kang 90 °C), k_T = 1/τ(T) (Yamamoto/NIST), k_Q 12,6–15 nm³/s (Osaka/Mack),
+k_P (aus k·H₀ der Fig.-3-Fits bzw. NIST 1,6 nm³/s), D_Q (Osaka: = D_H; NIST fittet D_Q nicht separat).
+**Anker mit null freien Parametern: NIST Table 2** (Bilayer, PEB 90 °C/900 s, PAG 2 Massen-% oben = 0,035 nm⁻³ (TPS-Triflat 412 g/mol,
+1,2 g/cm³), Quencher 60 mol % rel. PAG, alle PAG konvertiert (150 mJ/cm² DUV), Löslichkeitsschwelle Deprotektion 0,14):
+gemessene Diffusionslängen **76 / 56 / 36 / 23 nm** (kein Q / Q oben / Q unten / Q beidseitig), NISTs eigene Modellvorhersage
+79 / 59 / 30 / 23.
+**Vorhersagen:** P1 1D-Rechnung mit NISTs Parametern (kP 1,6, kT 0,026, DH 4,2, DQ = DH, kQ 12,6) trifft die vier Längen innerhalb
+**±20 %** (NISTs Fit: ±17 % beim dritten Fall). P2 Ohne Quencher-Term (unser bisheriges Bild) sind Fall 2–4 identisch mit Fall 1 →
+das alte Modell kann die Tabelle nicht reproduzieren. P3 Nach Einbau in die Kette: NXE1716 (q 0,13, τ 35 s, D 4,2) druckt bei
+< 20 mJ/cm² (statt „nicht"), D2S bleibt aber > 11.
+
+**1D-Nachrechnung NIST Table 2 (scratchpad/c2_nist_bilayer.py, explizit, dx 0,5 nm, 900 s):** Erste Fassung mit *unserem* Verlustgesetz
+(k_T·H, erster Ordnung) ergab 25/12/6/2 nm — Faktor 3–14 zu kurz: **NISTs Trapping ist k_T·H·φ**, also Verlust durch bereits
+deprotektierte Stellen (Gl. 2 im Paper), nicht erster Ordnung in der Zeit. Mit den exakten NIST-Gleichungen (Gl. 1–3) und k_Q = 12,6:
+**83 / 68,5 / 11 / 4 nm** gegen gemessen 76 / 56 / 36 / 23 (NIST-Modell 79 / 59 / 30 / 23). Fälle 1–2 (P1 ±20 %: 1,09 / 1,22 —
+Fall 2 knapp außerhalb) passen, Fälle 3–4 mit Quencher im Zielfilm sind 3–6× zu kurz → **k_Q = 12,6–15 nm³/s ist um eine
+Größenordnung zu groß**; NIST nennt k_Q in Table 1 nicht. P2 hält (ohne Quencherterm wären alle Fälle gleich). Folge: k_Q wird
+als *ein* Parameter an Fall 3 bestimmt und Fall 4 als Vorhersage geprüft (vorregistriert: k_Q ≈ 1–2 nm³/s, Fall 4 dann ±25 %).
+Das betrifft auch Macks 15 nm³/s und Osakas 12,6 (beides Modellannahmen, keine Messungen) — und unsere Quencher-Fits (B2), die
+mit „vollständiger Neutralisation" rechneten.
+
+**k_Q-Scan (NIST-Gleichungen, D_Q = D_H, ein Parameter an Fall 3, Fall 4 als Vorhersage):**
+
+| k_Q (nm³/s) | Fall 1 | Fall 2 | Fall 3 | Fall 4 |
+|---|---|---|---|---|
+| gemessen | 76 | 56 | 36 | 23 |
+| 0,5 | 83 | 73 | 43,5 | 38,5 |
+| **1,0** | 83 | 68,5 | **33,5** | **27,5** |
+| **1,5** | 83 | 66 | **28,5** | **22,0** |
+| 2,0 | 83 | 64,5 | 25 | 18,5 |
+| 12,6 (Osaka) / 15 (Mack) | 83 | 68,5 | 11 / 10 | 4 / 3 |
+
+**k_Q(90 °C) ≈ 1,0–1,5 nm³/s** (JSR-Resist, NIST 2009): Fall 3 und 4 innerhalb ±20 %, Vorhersage für Fall 4 hält (vorregistriert ±25 %).
+Fall 2 bleibt +22 % (Quencher in der Säureschicht) — Modellgrenze, nicht nachjustiert. Immobiler Quencher (D_Q = 0) ändert wenig
+(26,5 / 21,5). **Unser Default k_Q = 15 nm³/s (Mack 2011, Modellannahme) ist damit um eine Größenordnung zu groß** — der einzige
+messbasierte Wert liegt bei ≈ 1,2 nm³/s. Konsequenz für die Kette: (i) Neutralisation ist bei PEB-Bedingungen *nicht* vollständig
+(k_Q·G₀·t_eff ≈ 1,2·0,2·7,5 = 1,8 statt 26), (ii) der Quencher-Fit B2 (q₁₇₁₆ ≈ 0,13) beruhte auf vollständiger Neutralisation und
+ist neu zu bewerten, (iii) das Trapping k_T·H·φ (Verlust nur an deprotektierten Stellen) ist ein anderes Gesetz als unser τ.
+
+**Modellvergleich auf Yamamoto Fig. 3 (beide Gesetze, je 2 Parameter pro Temperatur):** NIST-Trapping k_T·H·φ rms 0,012–0,027,
+erster Ordnung (τ) rms 0,010–0,029 — **Flood-Daten unterscheiden die Gesetze nicht** (φ ist dort räumlich uniform). Der Bilayer
+unterscheidet sie um Faktor 3 (25 vs 83 nm). Entscheidung C2: neues PEB-Modell `reaction_diffusion` mit NISTs Gl. 1–3 (Trapping an
+deprotektierten Stellen, gleichzeitige Neutralisation und Deprotektion, Diffusion von H und Q), Parameter je Temperatur aus den
+Fig.-3-Refits (k_P·H₀, k_T; 110 °C: 0,188 s⁻¹, 0,208 s⁻¹; 90 °C: 0,037, 0,053 — NIST JSR bei 90 °C: k_T 0,026, Faktor 2 zwischen
+Resists), k_Q 1,2 nm³/s (NIST-Bilayer), D_H 4,2, D_Q = D_H (Annahme, Osaka/NIST). Default bleibt das analytische Modell (Goldens);
+Umschaltung per Config. Test mit null freien Parametern: NIST Table 2 durch die Kettenfunktion (Fall 3/4 ±25 %).
+
+**C2 umgesetzt (Kernfunktion):** `resist/peb.reaction_diffusion_pde` — NIST Gl. 1–3 in relativen Konzentrationen, Operator-Splitting
+(exakte Gauß-Diffusion per FFT lateral + z, dann exakte Neutralisation zweiter Ordnung, Trapping k_T·h·φ, Deprotektion), Schrittweite
+so, dass σ_Schritt ≥ 3 Zellen. `tests/test_reaction_diffusion_pde.py`: **NIST Table 2 durch die Kettenfunktion: alle vier Fälle
+innerhalb der vorregistrierten Toleranzen** (76/56/36/23; k_Q 1,2 an Fall 3, Fall 4 als Vorhersage), Quencher verkürzt die Reichweite
+um > 40 %, uniformer Flood reduziert auf die ODE (Vergleich mit feiner expliziter Integration, 2·10⁻³).
+
+**C2 in der Kette:** `peb_model="reaction_diffusion"` (Config, beide Pfade über `_peb_step`), `peb_k_trap_per_s` (110 °C: 0,2076),
+`peb_D_quencher` (None = D), `peb_temperature_c` setzt für dieses Modell (k, k_trap) aus der NIST-Gesetz-Tabelle
+(`kinetics.yamamoto_polymer_a_kinetics_nist_law`). Default bleibt „analytical" (Goldens). Die Neutralisationskonstante wird in einem
+eigenen Schritt behandelt (Default 15 → 1,2 betrifft auch den analytischen Pfad mit Quencher).
+
+**Vorhersagen Kette (vor dem Lauf), Default-Resist bei 110 °C, deterministisch:** P1 reaction_diffusion vs analytical bei gleichem
+k·H₀-Produkt: D2S P = 64 innerhalb ±5 % (uniforme Flood-Äquivalenz beider Gesetze; im Muster Trapping nur in deprotektierten
+Spaces → etwas mehr Reichweite → D2S eher niedriger). P2 NXE1716-Preset (q₁₇₁₆ 0,13, k_Q 1,2, k_trap(90 °C) 0,053, D 4,2, k aus
+DRM-Refit mit NIST-Gesetz): druckt bei **< 20 mJ/cm²** (mit τ-Gesetz und τ(90 °C) 35 s: undruckbar); D2S bleibt > 11.
+Nebenbefund beim Umstellen der Defaults: die Anker-Presets (NXE1716, MET-2D) hatten τ nicht explizit gesetzt; mit dem C1-Default 7,54 s
+verschob sich die NXE1716-Flood-Kurve (Schaltpunkt 19,6 statt 13,5) — die Presets pinnen jetzt τ = 10,5 s (der Wert ihres Fits).
+Regel daraus: ein Preset, das aus einem Fit stammt, muss *alle* Größen des Fits explizit tragen, nicht nur die gefitteten.
+
+**C2-Preflight-Ergebnis (c2_preflight.py; Laufzeit ≈ 45 min allein auf dem M1, das PDE-Modell braucht bei grid 256 ≈ 900 Schritte):**
+
+| | Vorhersage | analytisch | reaction_diffusion | Status |
+|---|---|---|---|---|
+| P1 D2S P = 64 (Default-Resist, 110 °C) | ±5 % | 1,296 | **0,672** (−48 %) | **falsifiziert** |
+| P1 D2S P = 44 | ±5 % | 1,597 | **0,838** (−48 %) | **falsifiziert** |
+| P2 NXE1716 ohne Quencher (k 0,131, n 16,7 aus DRM-Refit mit NIST-Gesetz, rms 0,046) | D2S < 20 | 19,7 (τ-Gesetz) | 21,4 | falsifiziert (knapp) |
+| P2 NXE1716 mit q 0,148, k_Q 1,2 | – | – | 39,7 | nicht fair: Flood-Refit ohne Quencher, Muster mit Quencher (Doppelzählung) |
+
+Deutung: Beim NIST-Gesetz verliert Säure nur an deprotektierten Stellen; in schwach belichteten Bereichen (kleines φ) lebt sie
+über die ganze Bake-Zeit und deprotektiert weiter, beim τ-Gesetz ist sie nach 7,5 s weg. Auf der Flood-Kurve (φ uniform, 1,4 mJ/cm²)
+sind beide Gesetze ununterscheidbar (Fortsetzung 38), im Muster halbiert das NIST-Gesetz die Druckdosis. **Welches Gesetz für
+Polymer A gilt, ist mit Yamamotos Daten nicht entscheidbar**; der NIST-Bilayer (JSR-Resist) spricht für das NIST-Gesetz. Deshalb:
+`reaction_diffusion` bleibt validierte Option, Default „analytical" (Goldens, Rechenzeit ×6), die Sensitivitätsverdopplung ist
+als *falsifizierbare Differenz* dokumentiert — eine einzige strukturierte Messung an Polymer A (Bilayer oder Dosis-zu-Maß) würde
+sie entscheiden. NXE1716: das PDE-Modell ändert die 1,8×-Dosisdiskrepanz nicht (21,4 vs 19,7); ein konsistenter Quencher-Fit
+(Flood *mit* Quencher im PDE-Modell, k_Q 1,2) steht aus und ist mit ≈ 1 h Laufzeit pro Fit auf dieser Maschine zu planen.
+Suite C1/C2: 934 bestanden + 1 Konvergenzschranke (`test_stochastic_consistency`, 0,0866 nm gegen 0,5 px = 0,0859): der Zählrausch-Rest
+bei ρ = 2000 skaliert mit 1/√(ρ·V_Blur), V_Blur ist mit dem C1-Blur (9,4 → 7,9 nm) um 0,59 kleiner → Schranke 0,75 px (Invarianten
+unverändert), Modul danach 5/5. Notebooks wurden mit den C1-Defaults neu ausgeführt (vor dem k_Q-Default; nur Notebooks mit Quencher
+> 0 wären betroffen — keine). Laufzeitregel (M1, 8 GB): ein schwerer Lauf zur Zeit, Preflights klein.

@@ -153,7 +153,7 @@ def simulate(
         ),
     ),
     peb_k: float = typer.Option(
-        7.87,
+        10.947,
         "--peb-k",
         help=(
             "Deprotection rate constant [s⁻¹] at the PEB temperature, per unit relative acid; "
@@ -162,11 +162,20 @@ def simulate(
         ),
     ),
     peb_acid_lifetime: Optional[float] = typer.Option(
-        10.5,
+        7.54,
         "--peb-acid-lifetime",
         help=(
             "Average acid lifetime [s] during PEB (first-order acid loss, Yamamoto 2011 Eq. 1); "
             "0 disables the loss"
+        ),
+    ),
+    peb_temperature: Optional[float] = typer.Option(
+        None,
+        "--peb-temperature",
+        help=(
+            "PEB temperature [°C], 80-140: replaces --peb-k and --peb-acid-lifetime by Yamamoto "
+            "2011 Polymer A's measured kinetics at that temperature (Fig. 3 fits, "
+            "resist/kinetics.py); unset = explicit values"
         ),
     ),
     peb_t_bake: float = typer.Option(60.0, "--peb-t-bake", help="Bake time [s]"),
@@ -293,6 +302,7 @@ def simulate(
             peb_t_bake=peb_t_bake,
             peb_sigma_diff=peb_sigma_diff,
             peb_acid_lifetime_s=(peb_acid_lifetime if peb_acid_lifetime else None),
+            peb_temperature_c=peb_temperature,
             # Mack development parameters
             mack_R_max=mack_R_max,
             mack_R_min=mack_R_min,
@@ -820,7 +830,7 @@ def calibrate(
         # Default initial guess for typical EUV CAR resist
         initial_params = {
             "dill_C": 0.0152,  # LBNL MET-2D, direct measurement (see pipeline.py dill_C comment)
-            "peb_k": 7.87,  # Yamamoto 2011 Fig. 3/4 rate / acid fraction (see pipeline.py peb_k)
+            "peb_k": 10.947,  # Yamamoto 2011 Fig. 3 full-curve fit (see pipeline.py peb_k)
             "peb_t_bake": 60.0,
             # Anderson et al. 2009 (OSTI 961531): measured EUV deprotection blur, "Reference"
             # formulations cluster 17-35nm

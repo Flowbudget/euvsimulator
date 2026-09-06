@@ -384,6 +384,91 @@ def _reaction_limited_quench(
     return torch.clamp(h_final, min=0.0), torch.clamp(q_final, min=0.0)
 
 
+def reaction_diffusion_pde(
+    acid: torch.Tensor,
+    quencher: torch.Tensor | float,
+    inhibitor: torch.Tensor,
+    *,
+    D: float,
+    k: float,
+    k_trap: float,
+    quench_rate: float,
+    t_bake: float,
+    dx: float,
+    pag_density: float,
+    dz: float | None = None,
+    D_quencher: float | None = None,
+    dt: float | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """PEB as the coupled reaction-diffusion system of Kang et al. (NIST) 2009.
+
+    Kang, Prabhu, Wu, Lin, Choi, Chandhok, Younkin, Yueh, Proc. SPIE 7273,
+    72733U (2009), Eqs. (1)-(3), in this chain's relative concentrations
+    h = H/G0, q = Q/G0 and remaining protection M = 1 - phi:
+
+        dphi/dt = k * h * (1 - phi)                 (deprotection, k = k_P*G0)
+        dh/dt   = D grad^2 h - k_trap * h * phi - (k_Q*G0) * h * q
+        dq/dt   = D_Q grad^2 q - (k_Q*G0) * h * q
+
+    Diffusion, acid trapping BY DEPROTECTED SITES, neutralisation and
+    deprotection proceed concurrently. This differs from
+    :func:`reaction_diffusion_with_quenching` in two ways that matter for
+    patterns: acid diffusing into a base-rich or still-protected region is
+    consumed there (the NIST bilayer shows a 36 -> 14 nm reduction of the
+    diffusion length by the quencher), and the acid loss is not first-order
+    in time but proportional to the local deprotection (the same flood data
+    are fitted equally well by both laws, log Fortsetzung 38).
+
+    Numerics: operator splitting per step ``dt`` -- exact Gaussian diffusion
+    (lateral FFT blur, sigma = sqrt(2 D dt); z blur when ``dz`` is given),
+    then the local reactions with an exact second-order neutralisation step
+    (:func:`_reaction_limited_quench`) followed by the trapping and
+    deprotection updates. ``dt`` defaults to the largest step whose
+    diffusion sigma is >= 3 grid cells, capped at t_bake / 20.
+
+    Returns (h, q, M) after the bake.
+    """
+    from euvsimulator.resist.exposure import gaussian_se_blur
+
+    if pag_density is None or pag_density <= 0.0:
+        raise ValueError("pag_density (G0, nm^-3) is required")
+    rate_rel = float(quench_rate) * float(pag_density)  # k_Q*G0 [1/s]
+    D_q = D if D_quencher is None else D_quencher
+    if dt is None:
+        d_max = max(D, D_q, 1e-30)
+        dt = min(t_bake / 20.0, (3.0 * dx) ** 2 / (2.0 * d_max)) if d_max > 0 else t_bake / 20.0
+    n_steps = max(1, int(math.ceil(t_bake / dt)))
+    dt = t_bake / n_steps
+
+    h = acid.clone()
+    q = (
+        torch.full_like(h, float(quencher))
+        if not isinstance(quencher, torch.Tensor)
+        else quencher.clone()
+    )
+    M = inhibitor.clone()
+    three_d = dz is not None and h.ndim == 3 and h.shape[0] > 1
+
+    def diffuse(f, Dv):
+        if Dv <= 0:
+            return f
+        sig = (2.0 * Dv * dt) ** 0.5
+        f = gaussian_se_blur(f, sigma=sig, dx=dx)
+        if three_d:
+            f = _gaussian_blur_z(f, sigma_nm=float(sig), dz=dz)
+        return f
+
+    for _ in range(n_steps):
+        h = diffuse(h, D)
+        if rate_rel > 0:
+            q = diffuse(q, D_q)
+            h, q = _reaction_limited_quench(h, q, rate_rel, dt)
+        phi = 1.0 - M
+        h = h * torch.exp(-k_trap * phi * dt)
+        M = M * torch.exp(-k * h * dt)
+    return h, q, M
+
+
 def _gaussian_blur_z(field: torch.Tensor, sigma_nm: float, dz: float) -> torch.Tensor:
     """Gaussian blur along the first (depth) axis of an ``(N, H, W)`` tensor.
 

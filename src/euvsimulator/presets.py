@@ -177,6 +177,9 @@ def nxe1716_config(
         mack_M_th=0.39,
         mack_n=NXE1716_MACK_N,
         peb_k=k,
+        # the DRM fits above assumed the pre-C1 lifetime of 10.5 s; pinned here so
+        # that the preset does not drift with the chain's default (C1: 7.54 s)
+        peb_acid_lifetime_s=10.5,
         peb_t_bake=60.0,
         resist_thickness_nm=35.0,
         develop_time_s=30.0,
@@ -240,6 +243,7 @@ def met2d_config(*, blur_metric: str = "contact", **overrides) -> SimulationConf
         mack_n=18.96,
         dill_B=5.21,
         peb_sigma_diff=sigma,
+        peb_acid_lifetime_s=10.5,  # dose-scale calibration of the log was done with this value
         peb_t_bake=90.0,
         resist_thickness_nm=80.0,
         develop_time_s=45.0,

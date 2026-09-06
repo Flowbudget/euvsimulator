@@ -124,9 +124,15 @@ B4 Nächste Schritte mit Beleg-Pfad: (a) C1 vorziehen — k(T), τ(T) aus Yamamo
    (Mack 2010 KPZ-ν) nur mit Quelle für den Koeffizienten.
 
 **Stufe C — Physikvervollständigung mit Quelle**
-C1 Temperaturmodell k(T) aus Yamamoto Fig. 4 (Ea aus Steigung), τ(T) aus Fig.-3-Plateaus bei 80–140 °C; Test: Fig.-3-Kurven
-   bei 90/100/120 °C. D(T) nur, wenn Kangs Unsicherheit tragbar wird (sonst dokumentiert).
-C2 Photon-Säure-Multiplizität (Mack 2011): Preflight LWR-Änderung bei fester Mittelwertkette.
+C1 ✅ (2026-09-06, Fortsetzung 37): Fig. 3 komplett digitalisiert, k(T)/τ(T) je Temperatur gefittet (rms ≤ 0,03), zwei
+   Arrhenius-Bereiche wie im Paper, kcal-Lesart bestätigt, τ(90 °C) 35 s ≈ NIST 38 s; `peb_temperature_c`; 110-°C-Defaults
+   aus der Vollkurve (k 10,95, τ 7,54). D(T) bleibt offen (Kang: eine Temperatur). Folge: freie Diffusion mit τ(90 °C) macht
+   NXE1716 undruckbar → quenchergesteuerte effektive Diffusion fehlt (Kandidat C2).
+C2 ✅ teilweise (2026-09-06, Fortsetzung 38): PDE-PEB nach NIST (Trapping an deprotektierten Stellen, gleichzeitige Neutralisation)
+   als `peb_model="reaction_diffusion"`, Null-Parameter-Anker NIST-Bilayer bestanden, k_Q 15 → 1,2 (einzig messbasiert). Aber: im
+   Muster halbiert es die Druckdosis des Default-Resists; Flood-Daten entscheiden das Gesetz nicht → Default bleibt analytisch,
+   Differenz als offene, falsifizierbare Frage dokumentiert. Quencher-Fit B2 mit k_Q 1,2 im PDE-Modell neu (≈ 1 h/Fit auf M1).
+C2b Photon-Säure-Multiplizität (Mack 2011): Preflight LWR-Änderung bei fester Mittelwertkette (ursprünglicher C2-Punkt, offen).
 C3 Neutralisationsrate bei PEB: Mack 2011 k_Q als beratend markieren; Test gegen Sekiguchi mit Nachreaktionszeit-Hypothese
    (erklärt +28 %?).
 

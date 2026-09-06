@@ -282,8 +282,9 @@
 > instead of 6 (`tests/test_acid_yield.py`). Two caveats remain:
 > this is a very sensitive 2011 research resist (dose-to-size ≈ 1.3 mJ/cm² at 64 nm pitch), so
 > its sensitivity and LWR are not those of a production resist and should not be compared with
-> the literature without a resist-specific calibration (`euv calibrate`); and the default PEB blur (9.4 nm = sqrt(2·D·t_eff) with D = 4.2 nm²/s measured by Kang 2010 at
-> 90 °C for the same polymer class, and the acid's effective lifetime) is inside the 7.5–12 nm band of
+> the literature without a resist-specific calibration (`euv calibrate`); and the default PEB blur (7.9 nm = sqrt(2·D·t_eff) with D = 4.2 nm²/s measured by Kang 2010 at
+> 90 °C for the same polymer class, and the acid's effective lifetime from the full 110 °C curve of
+> Yamamoto Fig. 3; `peb_temperature_c` selects the measured kinetics at 80–140 °C) is inside the 7.5–12 nm band of
 > directly measured blur lengths of named EUV resists but is not a measurement on this resist at its
 > 110 °C PEB. Two named-resist anchors exist (`euvsimulator.presets`, data under `data/anchors/`):
 > NXE1716 (Vesters 2017/2019: digitised dissolution curve + 22 nm lines on an NXE3300B) and MET-2D /

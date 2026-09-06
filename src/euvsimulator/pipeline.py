@@ -37,6 +37,7 @@ from euvsimulator.resist.exposure import (
     sample_pag_quencher_acid,
 )
 from euvsimulator.resist.peb import (
+    reaction_diffusion_pde,
     reaction_diffusion_with_quenching,
 )
 from euvsimulator.resist.stochastic import (
@@ -601,7 +602,40 @@ class SimulationConfig:
     # degree of freedom -- the same measurement, split differently. Chain
     # after the change: P(60 s) = 0.177 (Fig. 3: 0.18), threshold 0.764 mJ/cm²
     # (Fig. 5: ≈ 0.8), tests/test_yamamoto_anchor.py.
-    peb_k: float = 7.87
+    # UPDATE (2026-09-06, C1, log Fortsetzung 37): 7.87 -> 10.95 s⁻¹ together with
+    # tau 10.5 -> 7.54 s. Both now come from the fit of this chain's law to the
+    # complete digitised 110 °C curve of Fig. 3 (≈ 106 points, rms 0.014)
+    # instead of five hand-read points: k·H0 = 0.2305 s⁻¹, tau = 7.54 s, same
+    # product k·H0·tau = 1.73 (P∞ 0.176, Fig. 5 threshold 0.766 -- unchanged),
+    # shorter effective time (default PEB blur 9.4 -> 7.9 nm). Preflight:
+    # dose-to-size P = 64 +0.2 %, P = 44 -4 %, photon LWR at P = 44 -6 %.
+    # The same fits at 80-140 C are available through peb_temperature_c.
+    peb_k: float = 10.947
+    # PEB temperature [°C] (2026-09-06, plan stage C1). When set, peb_k and
+    # peb_acid_lifetime_s are REPLACED by Yamamoto 2011 Polymer A's measured
+    # kinetics at that temperature (resist/kinetics.py: per-temperature fits
+    # of Fig. 3, 80-140 C, log-linear in 1/T, clamped with a warning). None
+    # keeps the explicit peb_k / peb_acid_lifetime_s (the 110 C values).
+    # peb_D is not temperature-scaled (Kang 2010: one temperature).
+    peb_temperature_c: float | None = None
+    # PEB model (2026-09-06, plan stage C2): "analytical" = diffuse-then-quench
+    # closed form (resist/peb.reaction_diffusion_with_quenching; the goldens);
+    # "reaction_diffusion" = concurrent diffusion, trapping by deprotected
+    # sites, neutralisation and deprotection (Kang/NIST 2009 Eqs. 1-3,
+    # resist/peb.reaction_diffusion_pde), validated on the NIST bilayer
+    # diffusion lengths (tests/test_reaction_diffusion_pde.py). With the
+    # latter, peb_acid_lifetime_s is not used; the acid loss is
+    # peb_k_trap_per_s * h * phi, and peb_k should be the NIST-law value
+    # (8.93 s^-1 at 110 C; peb_temperature_c sets both consistently).
+    peb_model: str = "analytical"
+    # Trapping rate constant [1/s] of the reaction_diffusion model at the
+    # default 110 C PEB: fit of the Kang/NIST law to Yamamoto's Fig. 3 curve
+    # (log Fortsetzung 38; NIST measure 0.026 at 90 C on a JSR resist, this
+    # table gives 0.053 at 90 C for Polymer A).
+    peb_k_trap_per_s: float = 0.2076
+    # Quencher diffusivity [nm^2/s] for the reaction_diffusion model; None = same
+    # as the acid (Osaka 2025 assumption; NIST do not fit it separately).
+    peb_D_quencher: float | None = None
     # Average acid lifetime τ [s] during the PEB (first-order acid loss;
     # Yamamoto et al. 2011 Eq. 1 "τ", Kang et al. 2010 "trapping"). 10.5 s
     # follows from the Fig. 3 plateau at 110 °C: M∞ = exp(−Kdp·H0·τ) = 0.17
@@ -611,7 +645,9 @@ class SimulationConfig:
     # (resist.peb.effective_reaction_time). Consequence: the default resist
     # is a very sensitive 2011 research resist (dose-to-size ≈ 1.3 mJ/cm² at
     # 64 nm pitch, σ_PEB 7 nm) -- a property of the source, not a target.
-    peb_acid_lifetime_s: float | None = 10.5
+    peb_acid_lifetime_s: float | None = (
+        7.54  # 110 C full-curve fit (C1); was 10.5 (5-point reading)
+    )
     peb_t_bake: float = 60.0  # Bake time [s]
     # Analytical diffusion sigma [nm], optional direct override of peb_D+peb_t_bake -- see
     # note above
@@ -1094,9 +1130,17 @@ class SimulationConfig:
     # Initial quencher (base) number density [nm^-3]; 0 = the quencher-free chemistry of the
     # Yamamoto 2011 parameter set -- see note above (Mack 2011 Table I would be 0.05)
     quencher_density_per_nm3: float = 0.0
-    acid_base_quench_rate_nm3_per_s: float = (
-        15.0  # Acid-base quenching rate constant [nm^3/s] -- same source/table
-    )
+    # Acid-base quenching rate constant k_Q [nm^3/s]. UPDATE 2026-09-06 (C2, log
+    # Fortsetzung 38): 15 -> 1.2. Mack 2011's 15 nm^3/s (Table I) is a model
+    # assumption, as is Osaka 2025's 12.6 (0.5 nm radius); the only
+    # measurement-based value comes from the NIST bilayer diffusion lengths
+    # (Kang et al. 2009, Table 2: 76/56/36/23 nm): with their own kinetics
+    # (kP 1.6, kT 0.026, DH 4.2) the concurrent reaction-diffusion model
+    # reproduces the two quencher-in-target-layer cases only for k_Q ~ 1.0-1.5
+    # (tests/test_reaction_diffusion_pde.py); 12.6-15 gives 11/4 nm. With
+    # 1.2 the neutralisation during a 60 s PEB is NOT complete
+    # (k_Q*G0*t ~ 1.8 at G0 = 0.2), which the analytical closed form handles.
+    acid_base_quench_rate_nm3_per_s: float = 1.2
 
     # Mask-3D / RCWA parameters (Phase 4)
     use_rcwa: bool = False  # Use full RCWA instead of thin-mask analytic
@@ -1116,6 +1160,30 @@ class SimulationConfig:
             raise ValueError("peb_k must be > 0")
         if self.peb_acid_lifetime_s is not None and self.peb_acid_lifetime_s <= 0:
             raise ValueError("peb_acid_lifetime_s must be > 0 or None")
+        if self.peb_temperature_c is not None:
+            from euvsimulator.resist.kinetics import yamamoto_polymer_a_kinetics
+
+            if not (80.0 <= self.peb_temperature_c <= 140.0):
+                warnings.warn(
+                    f"peb_temperature_c = {self.peb_temperature_c} is outside the measured "
+                    "80-140 C of Yamamoto 2011 Fig. 3; kinetics clamped to the nearest end.",
+                    stacklevel=2,
+                )
+            k, tau = yamamoto_polymer_a_kinetics(self.peb_temperature_c, self.dill_C)
+            self.peb_k = k
+            self.peb_acid_lifetime_s = tau
+            if self.peb_model == "reaction_diffusion":
+                from euvsimulator.resist.kinetics import yamamoto_polymer_a_kinetics_nist_law
+
+                self.peb_k, self.peb_k_trap_per_s = yamamoto_polymer_a_kinetics_nist_law(
+                    self.peb_temperature_c, self.dill_C
+                )
+        if self.peb_model not in ("analytical", "reaction_diffusion"):
+            raise ValueError(
+                f"peb_model must be 'analytical' or 'reaction_diffusion', got {self.peb_model!r}"
+            )
+        if self.peb_k_trap_per_s < 0:
+            raise ValueError("peb_k_trap_per_s must be >= 0")
         if self.se_blur_nm < 0:
             raise ValueError("se_blur_nm must be >= 0")
         if self.enable_stochastic and self.resist_model == "full_chem" and self.se_blur_nm == 0:
@@ -1262,6 +1330,39 @@ def _cd_via_aerial_threshold(
             cd_nm = best_width_px * dx_nm
 
     return cd_nm, dev_2d, nils_val
+
+
+def _peb_step(acid_3d, quencher_arg, cfg, dx_nm, dz_nm):
+    """The PEB of the chain for both models (see SimulationConfig.peb_model)."""
+    if cfg.peb_model == "reaction_diffusion":
+        return reaction_diffusion_pde(
+            acid_3d,
+            quencher_arg,
+            torch.ones_like(acid_3d),
+            D=cfg.peb_D,
+            k=cfg.peb_k,
+            k_trap=cfg.peb_k_trap_per_s,
+            quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+            t_bake=cfg.peb_t_bake,
+            dx=dx_nm,
+            pag_density=cfg.pag_density_per_nm3,
+            dz=dz_nm,
+            D_quencher=cfg.peb_D_quencher,
+        )
+    return reaction_diffusion_with_quenching(
+        acid_3d,
+        quencher_arg,
+        torch.ones_like(acid_3d),
+        D=cfg.peb_D,
+        k=cfg.peb_k,
+        quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+        t_bake=cfg.peb_t_bake,
+        acid_lifetime_s=cfg.peb_acid_lifetime_s,
+        sigma_diff=cfg.peb_sigma_diff,
+        dx=dx_nm,
+        pag_density=cfg.pag_density_per_nm3,  # k_Q [nm^3/s] -> k_Q*G0 [1/s]
+        dz=dz_nm,
+    )
 
 
 def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False, rate_multiplier=None):
@@ -1422,20 +1523,7 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
             # photon-shot-noise-only chain: same mean-field quencher as the
             # deterministic path (uniform q0), same PEB step
             quencher_arg = q0_rel
-        _, _, inhib_3d = reaction_diffusion_with_quenching(
-            acid_3d,
-            quencher_arg,
-            torch.ones_like(acid_3d),
-            D=cfg.peb_D,
-            k=cfg.peb_k,
-            quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
-            t_bake=cfg.peb_t_bake,
-            acid_lifetime_s=cfg.peb_acid_lifetime_s,
-            sigma_diff=cfg.peb_sigma_diff,
-            dx=dx_nm,
-            pag_density=cfg.pag_density_per_nm3,  # k_Q [nm^3/s] -> k_Q*G0 [1/s]
-            dz=dz_nm,
-        )
+        _, _, inhib_3d = _peb_step(acid_3d, quencher_arg, cfg, dx_nm, dz_nm)
         del acid_3d
         rate_mult = None
         if dev_seed is not None:
@@ -1541,20 +1629,10 @@ def _cd_via_full_chem(
     # chain (see SimulationConfig's PAG/quencher note): q0 = ρ_Q/ρ_PAG in
     # the relative units of the acid field (0 by default).
     q0_rel = cfg.quencher_density_per_nm3 / cfg.pag_density_per_nm3
-    _, _, inhib_3d = reaction_diffusion_with_quenching(
-        acid_3d,
-        q0_rel,  # uniform loading as a float (no full-field allocation)
-        inhib_in_3d,
-        D=cfg.peb_D,
-        k=cfg.peb_k,
-        quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
-        t_bake=cfg.peb_t_bake,
-        acid_lifetime_s=cfg.peb_acid_lifetime_s,
-        sigma_diff=cfg.peb_sigma_diff,
-        dx=dx_nm,
-        pag_density=cfg.pag_density_per_nm3,
-        dz=dz_nm,  # isotropic diffusion: same sigma along z (Neumann at the surfaces)
-    )
+    del inhib_in_3d
+    # uniform loading as a float (no full-field allocation); isotropic
+    # diffusion with the same sigma along z (Neumann at the surfaces)
+    _, _, inhib_3d = _peb_step(acid_3d, q0_rel, cfg, dx_nm, dz_nm)
 
     # Continuous Mack development, time-integrated through the resist depth.
     mack = MackModel(R_max=cfg.mack_R_max, R_min=cfg.mack_R_min, n=cfg.mack_n, M_th=cfg.mack_M_th)

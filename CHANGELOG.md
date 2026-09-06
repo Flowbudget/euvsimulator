@@ -5,6 +5,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added (physics, 2026-09-06, plan stage C2) — concurrent reaction-diffusion PEB
+- **`peb_model="reaction_diffusion"`** (`resist/peb.reaction_diffusion_pde`): the PEB as the coupled
+  system of Kang et al. (NIST) 2009, Eqs. 1–3 — diffusion of acid and base, acid trapping by
+  deprotected sites (k_trap·h·φ), neutralisation and deprotection all concurrent (operator splitting,
+  exact Gaussian diffusion per step). Validated with zero free parameters on the NIST bilayer
+  diffusion lengths (76/56/36/23 nm for four quencher layouts, `tests/test_reaction_diffusion_pde.py`);
+  the chain's previous diffuse-then-quench form with first-order acid loss gives 25/12/6/2 nm there.
+  The same Yamamoto Fig. 3 flood curves are fitted equally well by both laws (per-temperature
+  parameters of the NIST law in the anchor data; `peb_temperature_c` selects them for this model).
+  Default stays `"analytical"` (goldens); the concurrent model costs ~6× per PEB.
+- **Quench-rate default 15 → 1.2 nm³/s**: Mack 2011's 15 and Osaka 2025's 12.6 are model assumptions;
+  the NIST bilayer cases with quencher in the receiving layer are reproduced only for k_Q ≈ 1.0–1.5.
+  Consequence: neutralisation during a 60 s PEB is incomplete (k_Q·G0·t ≈ 1.8), and the B2 two-curve
+  quencher fit (which assumed complete neutralisation) needs re-evaluation.
+- Also: `peb_k_trap_per_s` (0.2076 at 110 °C from the Fig. 3 refit), `peb_D_quencher`.
+
+### Changed (physics, 2026-09-06, plan stage C1) — PEB temperature model
+- **All seven Fig. 3 curves of Yamamoto 2011 (80–140 °C) digitised** and fitted with the chain's own
+  deprotection law (`data/anchors/yamamoto2011_fig3_polymerA.json`, `resist/kinetics.py`): k and the
+  acid lifetime τ per temperature, log-linear in 1/T in between. Findings: two Arrhenius regions as the
+  paper states (103 kJ/mol below 110 °C, 38 kJ/mol above — the kcal reading of Table 1 is confirmed,
+  resolving the unit question of log Fortsetzung 15); **τ(90 °C) = 35 s** against 38 s measured by
+  Kang/NIST 2009 on a different EUV resist.
+- **Defaults refined from the full 110 °C curve:** `peb_k` 7.87 → 10.95 s⁻¹, `peb_acid_lifetime_s`
+  10.5 → 7.54 s (same product, Fig. 3/5 anchors unchanged; default PEB blur 9.4 → 7.9 nm; preflight:
+  dose-to-size −4 % at 44 nm pitch, photon LWR −6 %). New `peb_temperature_c` (config) and
+  `--peb-temperature` (CLI) select the measured kinetics at any PEB temperature in 80–140 °C.
+- Consequence recorded for the NXE1716 anchor: with the sourced 90 °C lifetime (35–38 s) the free-
+  diffusion blur √(2·D·t_eff) would be 15–16 nm and the lines would not print at 11 mJ/cm² — the
+  quencher-controlled effective diffusion (NIST: 36 → 14 nm with quencher) is not captured by a
+  subtractive quencher; open, log Fortsetzung 37.
+
 ### Added (numerics and metrology, 2026-09-06, plan stages B3.4 / B3.5)
 - **`development_model="eikonal3d"`**: the fast-sweeping Eikonal solver can couple the rows through a
   third (y) Godunov term (Zhao 2005, d = 3; Jacobi in y, Gauss–Seidel in z/x, periodic in y). Invariants

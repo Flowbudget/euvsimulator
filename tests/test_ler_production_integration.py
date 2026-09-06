@@ -68,6 +68,9 @@ TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg
 # 2026-09-05 (a): Dill B computed from the resist composition (4.44 µm⁻¹ instead
 # of Yamamoto's 1.06): LEGACY 0.3398195917 / 0.5112461853, LARGE_N_LER
 # 1.4022154241, N_EFF 32.2051, L_INT_NM 16.0550, RHO_TRUNC 126 at 4.0 mJ/cm².
+# 2026-09-06 (d): stage C1 -- peb_k 7.87 -> 10.95, tau 10.5 -> 7.54 (full-curve fit of the
+# 110 C Fig. 3 data, same product); goldens re-derived: LER 3.490 -> 3.455 at the fixed
+# operating point.
 # 2026-09-06 (c): stage A2 -- dill_C 0.08997 -> 0.0152 (LBNL direct measurement), peb_k
 # 1.4 -> 7.87 (same Yamamoto rate k*H); goldens re-derived (derive_goldens.py), LER at the
 # fixed 1.1 mJ/cm² operating point 2.735 -> 3.490 because dose-to-size moved +2.7 %.
@@ -76,12 +79,12 @@ TEST_SIGMA = 7.0  # nm PEB blur for the regression operating point (see _car_cfg
 # operating point moved to TEST_DOSE = 1.1 (CD 36.61 nm, NILS 3.87). Fewer
 # photons -> higher shot-noise goldens. Phase 2b values (Dill B 1.06, 4.0 mJ/cm²):
 # LEGACY 0.8469136421 / 1.4741479568, LARGE_N_LER 2.3891057997, N_EFF 30.2642.
-GOLDEN_LEGACY_LER = 0.8785620416
-GOLDEN_LEGACY_LWR = 1.7051756192
-GOLDEN_LARGE_N_LER = 3.4895922982
-GOLDEN_N_EFF = 32.1843
-GOLDEN_L_INT_NM = 16.0734
-GOLDEN_RHO_TRUNC = 144
+GOLDEN_LEGACY_LER = 0.8741763497
+GOLDEN_LEGACY_LWR = 1.6958567854
+GOLDEN_LARGE_N_LER = 3.4549120045
+GOLDEN_N_EFF = 32.1241
+GOLDEN_L_INT_NM = 16.1041
+GOLDEN_RHO_TRUNC = 145
 
 
 def _car_cfg(**kw):
