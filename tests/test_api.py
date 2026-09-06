@@ -68,7 +68,7 @@ class TestSimulate:
             "config": {
                 "aerial": {"na": 0.55, "illumination_shape": "dipole"},
                 "mask": {"pitch_nm": 32.0, "cd_nm": 14.0, "absorber_material": "Au"},
-                "resist": {"resist_type": "MOR", "dose_mJ_cm2": 30.0},
+                "resist": {"thickness_nm": 30.0, "dose_mJ_cm2": 30.0},
             }
         }
         resp = client.post("/simulate", json=payload)
@@ -76,7 +76,7 @@ class TestSimulate:
         body = resp.json()
         assert body["config"]["aerial"]["na"] == 0.55
         assert body["config"]["mask"]["pitch_nm"] == 32.0
-        assert body["config"]["resist"]["resist_type"] == "MOR"
+        assert body["config"]["resist"]["thickness_nm"] == 30.0
 
     def test_invalid_na_rejected(self, client: TestClient) -> None:
         resp = client.post("/simulate", json={"config": {"aerial": {"na": 99.0}}})

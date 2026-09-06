@@ -131,7 +131,7 @@ class SimulationResult:
     aerial_image : (G, G) float64
         Computed aerial image intensity.
     resist_profile : (G, G) float64
-        Developed resist profile (0 = developed, 1 = remaining).
+        Developed resist profile (1 = developed through the film, 0 = resist remaining).
     cd_nm : float
         Critical dimension [nm] (0 if not measurable).
     nils_value : float

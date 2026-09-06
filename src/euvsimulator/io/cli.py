@@ -649,11 +649,13 @@ def serve(
     port: int = typer.Option(8000, "--port", "-p", help="Listen port"),
     reload: bool = typer.Option(False, "--reload", "-r", help="Auto-reload on changes"),
 ):
-    """Start the REST API server."""
+    """Start the browser GUI and REST API server."""
     import uvicorn
 
-    typer.echo(f"\U0001f680 Starting euvsimulator API server on http://{host}:{port}")
-    typer.echo(f"   Docs: http://{host}:{port}/docs")
+    shown = "localhost" if host in ("0.0.0.0", "::") else host
+    typer.echo(f"\U0001f680 euvsimulator server on http://{shown}:{port}")
+    typer.echo(f"   GUI:  http://{shown}:{port}/")
+    typer.echo(f"   Docs: http://{shown}:{port}/docs")
     uvicorn.run(
         "euvsimulator.api.main:app",
         host=host,

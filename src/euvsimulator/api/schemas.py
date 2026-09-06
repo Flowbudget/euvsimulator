@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ──────────────────────────────────────────────
 # Health
@@ -28,41 +28,68 @@ class HealthResponse(BaseModel):
 
 
 class AerialImageConfig(BaseModel):
-    """Parameters for aerial-image formation."""
+    """Parameters for aerial-image formation.
 
-    na: float = Field(0.33, ge=0.1, le=0.7, description="Numerical aperture")
-    reduction_ratio: str = Field("4x", description="Projection reduction (4x or 8x)")
-    illumination_sigma: float = Field(0.8, ge=0.0, le=1.0, description="Coherence factor σ")
+    Every field maps onto a ``pipeline.SimulationConfig`` field; bounds are
+    physical, not cosmetic (NA < 1 in vacuum, source inside the pupil).
+    """
+
+    @model_validator(mode="after")
+    def _inner_inside_outer(self) -> "AerialImageConfig":
+        if self.inner_sigma is not None and self.inner_sigma >= self.illumination_sigma:
+            raise ValueError("inner_sigma must be smaller than illumination_sigma")
+        return self
+
+    na: float = Field(0.33, gt=0.0, lt=1.0, description="Numerical aperture (0 < NA < 1)")
+    illumination_sigma: float = Field(
+        0.8, gt=0.0, le=1.0, description="Outer partial-coherence factor σ (source inside pupil)"
+    )
     illumination_shape: str = Field(
-        "conventional", description="Source shape (conventional, annular, dipole, quasar)"
+        "conventional",
+        description="Source shape: conventional, annular, dipole, dipole_y or quasar",
     )
-    inner_sigma: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annular inner σ")
-    outer_sigma: Optional[float] = Field(None, ge=0.0, le=1.0, description="Annular outer σ")
-    zernike_coeffs: Optional[List[float]] = Field(
-        None, description="Fringe Zernike coefficients (Noll-indexed)"
+    inner_sigma: Optional[float] = Field(
+        None,
+        ge=0.0,
+        lt=1.0,
+        description=(
+            "Inner σ for annular / scanner-style multipole sources (must be < outer σ); "
+            "None = the built-in geometry of the chosen shape"
+        ),
     )
-    focus_nm: float = Field(0.0, ge=-500, le=500, description="Defocus [nm]")
+    pole_opening_deg: Optional[float] = Field(
+        None,
+        gt=0.0,
+        le=180.0,
+        description="Pole opening angle [deg] for dipole/quasar with inner_sigma set (default 90)",
+    )
+    focus_nm: float = Field(0.0, description="Defocus [nm]")
 
 
 class MaskConfig(BaseModel):
     """Parameters for the reflective EUV mask and multilayer mirror."""
 
-    layout: str = Field(
-        "linespace", description="Layout type: linespace, contact_array, or gds_path"
-    )
-    pitch_nm: float = Field(40.0, gt=0, description="Feature pitch [nm]")
-    cd_nm: float = Field(18.0, gt=0, description="Critical dimension [nm]")
+    @model_validator(mode="after")
+    def _cd_inside_pitch(self) -> "MaskConfig":
+        if self.cd_nm >= self.pitch_nm:
+            raise ValueError(f"cd_nm {self.cd_nm} must be smaller than pitch_nm {self.pitch_nm}")
+        return self
+
+    pitch_nm: float = Field(64.0, gt=0, description="Feature pitch [nm]")
+    cd_nm: float = Field(32.0, gt=0, description="Target line width [nm] (must be < pitch)")
     absorber_material: str = Field("Ta", description="Absorber element symbol")
-    absorber_height_nm: float = Field(50.0, gt=0, description="Absorber height [nm]")
+    absorber_height_nm: float = Field(60.0, gt=0, description="Absorber height [nm]")
     capping_material: str = Field("Ru", description="Capping layer element symbol")
     capping_height_nm: float = Field(2.5, gt=0, description="Capping layer height [nm]")
-    multilayer_pairs: int = Field(40, ge=1, description="Number of Mo/Si bilayer pairs")
-    gds_path: Optional[str] = Field(None, description="Path to GDSII file (when layout=gds_path)")
+    multilayer_pairs: int = Field(50, ge=0, description="Number of Mo/Si bilayer pairs")
     # Multilayer parameters
     ml_d_mo_nm: float = Field(2.8, gt=0, description="Mo layer thickness [nm]")
     ml_d_si_nm: float = Field(4.1, gt=0, description="Si layer thickness [nm]")
     ml_gamma: Optional[float] = Field(
-        None, ge=0.2, le=0.6, description="Mo fraction gamma = d_Mo/(d_Mo+d_Si)"
+        None,
+        gt=0.0,
+        lt=1.0,
+        description="Mo fraction gamma = d_Mo/(d_Mo+d_Si); None = use thicknesses",
     )
     ml_grading_linear_nm: float = Field(0.0, ge=0, description="Linear period grading [nm]")
     ml_grading_parabolic_nm: float = Field(0.0, ge=0, description="Parabolic period grading [nm]")
@@ -70,15 +97,11 @@ class MaskConfig(BaseModel):
 
 
 class ResistConfig(BaseModel):
-    """Parameters for the resist model."""
+    """Parameters for the resist model (all forwarded to the pipeline)."""
 
-    resist_type: str = Field("CAR", description="Resist type: CAR or MOR")
-    thickness_nm: float = Field(30.0, gt=0, description="Resist thickness [nm]")
-    acid_diffusion_length_nm: float = Field(
-        5.0, ge=0, description="Acid diffusion length (CAR) [nm]"
-    )
+    thickness_nm: float = Field(50.0, gt=0, description="Resist film thickness [nm]")
     development_time_s: float = Field(30.0, gt=0, description="Development time [s]")
-    dose_mJ_cm2: float = Field(20.0, gt=0, description="Exposure dose [mJ/cm²]")
+    dose_mJ_cm2: float = Field(20.0, gt=0, description="Exposure dose at the wafer [mJ/cm²]")
     resist_model: str = Field(
         "aerial_threshold",
         description=(
@@ -87,10 +110,11 @@ class ResistConfig(BaseModel):
     )
     threshold_norm: float = Field(
         0.5,
-        ge=0.0,
-        le=1.0,
+        gt=0.0,
+        lt=1.0,
         description=(
-            "Normalised intensity threshold for aerial_threshold model (0-1 fraction of max)"
+            "Normalised intensity threshold for the aerial_threshold model (fraction of the "
+            "clear-field mean at the 20 mJ/cm² reference dose)"
         ),
     )
 

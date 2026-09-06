@@ -39,7 +39,7 @@ pip install git+https://github.com/Flowbudget/euvsimulator.git
 euv simulate --period 64 --cd 32 --dose 1.3 --resist-model full_chem   # default resist
 euv process-window --period 64 --cd 32                                   # Bossung, DoF, EL
 euv calibrate wafer.csv --period 44 --cd 22 --bands                      # fit your own FEM
-euv serve                                                                # web dashboard
+euv serve                                                                # browser GUI + REST API
 ```
 
 ```python
@@ -114,8 +114,8 @@ where it does not, is tabulated in [docs/physics.md](docs/physics.md) §6; the d
 ## License and third-party material
 
 Apache 2.0 — see [LICENSE](LICENSE). All runtime dependencies are OSI-licensed (numpy, scipy,
-torch, matplotlib, fastapi, uvicorn, pydantic, typer, httpx, gdstk); the optional dashboard loads
-Chart.js (MIT) from a CDN. CXRO scattering-factor tables are redistributed unmodified with
+torch, matplotlib, fastapi, uvicorn, pydantic, typer, httpx, gdstk); the browser GUI has no
+external assets. CXRO scattering-factor tables are redistributed unmodified with
 attribution; anchor data are digitised numbers with their citations. See [NOTICE](NOTICE).
 
 ## Contributing and support

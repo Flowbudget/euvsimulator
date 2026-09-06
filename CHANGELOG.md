@@ -5,7 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed — browser GUI, stage 1 (clean-up)
+- One page instead of two (`/`; the old `/simulate` page redirects there); the leftover
+  "OpEnUV" name is gone.
+- No external assets: the profile plot is inline SVG, Chart.js and its CDN load are removed
+  (NOTICE/README updated). The page works offline.
+- `POST /simulate` is a sync endpoint, so FastAPI runs the pipeline in its threadpool and the
+  server stays responsive during long runs.
+- API schema: every field maps onto a `pipeline.SimulationConfig` field (resist thickness,
+  development time, inner σ and pole opening are now forwarded instead of silently ignored);
+  fields the pipeline never read (`reduction_ratio`, `zernike_coeffs`, `outer_sigma`, `layout`,
+  `gds_path`, `resist_type`, `acid_diffusion_length_nm`) are removed; defaults mirror the
+  pipeline (pitch 64, CD 32, absorber 60 nm, 50 bilayers); bounds are physical only
+  (0 < NA < 1, CD < pitch, inner σ < outer σ). The pipeline device is no longer pinned to CPU.
+- The threshold line in the plot is the intensity the CD was extracted at
+  (`raw.threshold_intensity`), not 0.5 × max.
+- GUI sliders are conveniences; number fields accept any physically valid value.
 
 ## [2.1.0] — 2026-09-06
 

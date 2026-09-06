@@ -25,9 +25,6 @@ These tabulated atomic scattering factors (Henke, Gullikson, Davis, At.
 Data Nucl. Data Tables 54, 181 (1993)) are made publicly available by CXRO
 for research use and are redistributed here unmodified, with attribution.
 
-The optional web dashboard (euvsimulator/api/static) loads Chart.js from the
-jsDelivr CDN at run time; Chart.js is MIT-licensed (https://www.chartjs.org).
-
 The anchor data files under euvsimulator/data/anchors are numerical values
 digitised by the authors of this project from figures and tables of the
 cited publications (Vesters 2017/2019, Yamamoto 2011, Anderson & Naulleau
