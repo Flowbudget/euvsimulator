@@ -3021,3 +3021,6 @@ Damit ist das Rauschmodell an diesem Anker **weder validiert noch falsifiziert**
 schärfer als ±1,6×. Die Dosisskalen-Diskrepanz (1,6–1,8×) bleibt unabhängig davon bestehen und ist der belastbarere Befund.
 Konsequenz für B2: erst den Blur (bzw. τ(90 °C)) und α_B/Säureausbeute (Dissertation Fig. 4.1/4.4) resistspezifisch belegen,
 dann erneut vorhersagen; kein Parameter wurde an die LWR angepasst.
+
+**2026-09-06, Nutzer:** Anfrage an Danilo De Simone (imec) abgeschickt (Entwurf: mack fits/email_draft_vesters_imec.md; Bitten:
+Mack-Fit-Parameter NXE1716/1717, Quencherbeladung, Entwicklungszeit, Blur/Säureausbeute bei 90 °C). Antwort ausstehend.
