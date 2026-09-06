@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Verified (2026-09-06, plan stage C2b)
+- The sampled exposure chain already carries the photon-to-acid multiplicity: acid counts in blocks
+  larger than the SE blur are compound-Poisson with Var/E = 1 + m (measured 1.91 vs 2.0 for m = 1.0
+  acids per absorbed photon; 0.96 vs 1.0 without photon noise). Pinned in `tests/test_acid_multiplicity.py`;
+  the plan's item 3.3 ("multiplicity missing") is withdrawn.
+
 ### Added (physics, 2026-09-06, plan stage C2) — concurrent reaction-diffusion PEB
 - **`peb_model="reaction_diffusion"`** (`resist/peb.reaction_diffusion_pde`): the PEB as the coupled
   system of Kang et al. (NIST) 2009, Eqs. 1–3 — diffusion of acid and base, acid trapping by

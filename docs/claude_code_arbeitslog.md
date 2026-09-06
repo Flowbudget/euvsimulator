@@ -3560,3 +3560,22 @@ Schranke 2. **V3: D2S (PDE, Quencher, grid 128) = 18,97 mJ/cm²** (vorhergesagt 
 bei 1,7×, unabhängig vom PEB-Gesetz. **V4:** 11 s pro Lauf bei grid 128, Preflight gesamt 95 s — das PDE-Modell ist bei grid 128
 praktikabel, bei grid 256 (dt ∝ dx²) ≈ 8× teurer. Umsetzung: zweiter Konstantensatz `NXE1716_QUENCHER_FIT_PDE` im Preset
 (`explicit_quencher=True, peb_model="reaction_diffusion"`), Flood-Helfer `flood_rate_pde`, Test auf beide Kurven.
+
+## 2026-09-06 (Fortsetzung 40): C2b — Photon-Säure-Multiplizität (Analyse und Vorhersage VOR dem Lauf)
+
+Plan-Punkt 3.3 behauptete: „die Bündelung mehrerer Säuren pro Photon (zusammengesetzter Poisson-Prozess, Mack 2011) wird nicht
+abgebildet". Analyse: Die Kette sampelt Photonen (Poisson je Voxel), verteilt jede Photonenenergie mit dem SE-PSF und konvertiert
+PAG binomial mit p = 1 − e^{−C·E_lokal}. Bedingt auf das Photonenfeld ist die Säurezahl A binomial mit Var ≈ E (p klein); über die
+Photonen gemittelt gilt Var(A) = Var(E[A|N]) + E[Var(A|N)] = m²·N + m·N = N·m·(m + 1) — exakt die Varianz eines zusammengesetzten
+Poisson-Prozesses mit Poisson-verteilter Multiplizität (Mittel m Säuren pro absorbiertem Photon). Räumlich sind die Säuren eines
+Photons innerhalb des PSF-Radius gebündelt. **Die Multiplizität ist also implizit enthalten**, sofern die Verteilung der Säuren pro
+Photon Poisson-artig ist; abweichen könnte nur eine nicht-Poisson-Verteilung (Mack 2011 Table 3: Cmax, r_e, γ).
+**Vorhersage (Sampler, uniforme Dosis, Blöcke ≫ PSF):** Fano-Faktor Var(A)/E(A) der Säurezahl pro Block = **1 + m mit m = 1,0**
+(Defaults: C 0,0152, G₀ 0,2, α 4,44 → 1,0 Säure/absorb. Photon an der Oberfläche) → **2,0 ± 0,2**; ohne Photonenrauschen (Mean-Field-
+Dosis) 1,0. Trifft das zu, schließt C2b ohne Codeänderung; sonst fehlt Varianz.
+
+**Ergebnis C2b:** Fano-Faktor der Säurezahl pro 21,8-nm-Block: mit Photonenrauschen **1,913** (Vorhersage 2,0 ± 0,2), mit Mean-Field-Dosis
+0,955 (Vorhersage 1,0). Beide halten → die Photon-Säure-Multiplizität (Poisson-artig, Mittel m = 1,0 Säuren pro absorbiertem Photon)
+ist in der Kette bereits enthalten; Plan-Punkt 3.3 war ein Irrtum der Analyse vom 2026-09-05. Kein Code geändert; als Test gepinnt
+(`tests/test_acid_multiplicity.py`). Offen bleibt nur eine *nicht*-Poisson-Verteilung der Säuren pro Photon (Mack 2011 Table 3, γ),
+für die keine Messung vorliegt.

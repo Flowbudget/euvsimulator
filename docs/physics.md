@@ -30,7 +30,8 @@ Dill ABC with Beer–Lambert attenuation through the film and acid = G0·(1 − 
 | SE blur σ | 2.5 nm | Thackeray 2010 EUV-specific term inside a measured 11.5 nm decomposition; models 2.1–3.3 (Mack 2011); no direct measurement exists | sourced (model-derived) |
 
 Photon shot noise: Poisson deposition of absorbed photons per voxel, spread by the SE point spread
-function (grid-invariant only with a non-zero SE blur — with 0 the Dill law saturates on single-photon
+function; with PAG sampling the acid count is compound-Poisson (Var/E = 1 + acids per photon,
+`tests/test_acid_multiplicity.py`) (grid-invariant only with a non-zero SE blur — with 0 the Dill law saturates on single-photon
 spikes and nothing prints). Optional PAG/quencher counting statistics (`exposure_stochasticity`).
 
 ## 3. Post-exposure bake
