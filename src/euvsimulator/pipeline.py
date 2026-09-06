@@ -27,6 +27,7 @@ from euvsimulator.optics.multilayer import mo_si_stack
 from euvsimulator.optics.tmm import reflectivity
 from euvsimulator.resist.develop import (
     MackModel,
+    dissolution_cell_noise,
     edge_positions_from_arrival,
     eikonal_development,
     surface_advancement_level_set,
@@ -81,6 +82,14 @@ DEFAULT_DILL_B_PER_UM = 4.44
 # realisation (resist/stochastic.py); it is NOT applied by the
 # aerial_threshold model, which thresholds the aerial image directly.
 DEFAULT_SE_BLUR_NM = 2.5
+
+# Blocked (acid-labile) polymer sites per nm^3 of the default resist: 35 %
+# protection (Yamamoto 2011, Polymer A) of the monomer-unit density that
+# DEFAULT_RESIST_COMPOSITION / DEFAULT_RESIST_DENSITY_G_CM3 give (155.2 g/mol
+# per unit -> 4.66 units/nm^3) = 1.63 nm^-3. Cross-check: Jin 2025 (Osaka)
+# states 2.26 nm^-3 for 54.6 % t-BOC PHS (this arithmetic gives 2.54). Used by
+# the development-noise model (resist/develop.dissolution_cell_noise).
+DEFAULT_BLOCKED_SITE_DENSITY_PER_NM3 = 1.63
 
 
 def acids_per_absorbed_photon(cfg: "SimulationConfig") -> float:
@@ -1004,19 +1013,26 @@ class SimulationConfig:
     # internal scientific validation, NOT yet experimentally validated.
     stochastic_ler_grid_y: int = 4096  # Requested Y dimension of the stochastic LER field
     stochastic_ler_estimator: str = "large_n"  # "large_n" | "legacy"
-    # development_stochasticity -- DISABLED 2026-09-04 (audit A6): the
-    # event-based model (resist/develop.py::stochastic_development, kept as
-    # a standalone, experimental function) drove its Poisson event rate with
-    # (depth − thickness)/thickness, a quantity bounded by ONE depth layer
-    # (dz = thickness/(n_develop_layers − 1)), so its output depended on a
-    # numerical parameter: LWR 1.44 nm at N=21 vs 0.17 nm at N=41 for the
-    # same physics, and its "strength" (15, previously 20, 1.0) was a fitted
-    # event-rate knob with no physical unit or source. Setting True raises
-    # NotImplementedError rather than silently changing meaning. A physical
-    # development-noise model (e.g. Mack 2009/2010, "Stochastic modeling of
-    # photoresist development") would need dimensioned parameters and a
-    # grid-independence test before it can go here.
-    development_stochasticity: bool = False  # True -> NotImplementedError (see note)
+    # development_stochasticity -- history: the former event-based model
+    # (resist/develop.py::stochastic_development, still a standalone function)
+    # was disabled 2026-09-04 (audit A6) because its output depended on the
+    # numerical layer count and its "strength" was a fitted, unit-less knob.
+    # Since 2026-09-06 (plan stage B3, log Fortsetzung 32/33) True enables the
+    # derived model resist/develop.py::dissolution_cell_noise: the development
+    # rate of each dissolution cell fluctuates with the Poisson statistics of
+    # the blocked polymer units it contains (Mack 2010 "Ultimate limits" Eq. 36
+    # -> Mack 2010 "Stochastic development" KPZ roughening). Its only physical
+    # parameter is blocked_site_density_per_nm3; dissolution_cell_nm is a
+    # discretisation length (noise power per volume is cell-size independent,
+    # tests/test_dissolution_cell_noise.py). Applies to the stochastic chain
+    # only (the deterministic chain is the mean field). Preflight at the MET-2D
+    # anchor: photon+PAG LER 1.97 -> 3.5-3.6 nm 3sigma, i.e. a ~3 nm floor.
+    development_stochasticity: bool = False
+    blocked_site_density_per_nm3: float = DEFAULT_BLOCKED_SITE_DENSITY_PER_NM3
+    # Dissolution cell edge [nm] for the noise above; 4.3 nm = polymer radius of
+    # gyration of Thackeray et al. 2010 (JPST 23(5) 631), a physical anchor for
+    # the size of the unit that dissolves as a whole.
+    dissolution_cell_nm: float = 4.3
 
     # PAG / quencher / acid-base quenching -- ONE chemistry for both chains.
     #
@@ -1114,13 +1130,10 @@ class SimulationConfig:
                 raise ValueError("enable_stochastic=True requires resist_model='full_chem'")
             if self.stochastic_n_realisations < 1:
                 raise ValueError("stochastic_n_realisations must be >= 1")
-        if self.development_stochasticity:
-            raise NotImplementedError(
-                "development_stochasticity=True is disabled (2026-09-04): the former "
-                "event-based model depended on the numerical layer count and used a "
-                "fitted, unit-less event-rate knob -- see SimulationConfig."
-                "development_stochasticity and docs/audit_2026-09-04_vollpruefung.md A6."
-            )
+        if self.blocked_site_density_per_nm3 <= 0:
+            raise ValueError("blocked_site_density_per_nm3 must be > 0")
+        if self.dissolution_cell_nm <= 0:
+            raise ValueError("dissolution_cell_nm must be > 0")
         # Chemistry densities (used by both chains, see the PAG/quencher note)
         if self.pag_density_per_nm3 <= 0:
             raise ValueError("pag_density_per_nm3 must be > 0")
@@ -1237,7 +1250,7 @@ def _cd_via_aerial_threshold(
     return cd_nm, dev_2d, nils_val
 
 
-def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False):
+def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False, rate_multiplier=None):
     """Developed depth map [nm] per the configured development model.
 
     With ``return_arrival=True`` also returns the bottom-layer arrival-time
@@ -1246,9 +1259,17 @@ def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False):
     """
     if cfg.development_model == "eikonal":
         depth, T = eikonal_development(
-            inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s, return_arrival=True
+            inhib_3d,
+            mack,
+            dx=dx_nm,
+            dz=dz_nm,
+            t_develop=cfg.develop_time_s,
+            return_arrival=True,
+            rate_multiplier=rate_multiplier,
         )
         return (depth, T[-1]) if return_arrival else depth
+    if rate_multiplier is not None:
+        raise NotImplementedError("development_stochasticity requires development_model='eikonal'")
     depth = surface_advancement_level_set(
         inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
     )
@@ -1308,6 +1329,15 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
     thickness_um = cfg.resist_thickness_nm / 1000.0
     alpha = cfg.dill_A + cfg.dill_B  # [1/um]
     z_um = torch.linspace(0.0, thickness_um, n_layers, device=d_eff.device)
+    # development noise: one seed per realisation, drawn BEFORE any tiling
+    # decision so that the field (anchored to absolute rows) is identical for
+    # every tiling; nothing is drawn when the option is off, so the photon/PAG
+    # streams of the existing goldens are unchanged.
+    dev_seed = (
+        int(torch.randint(0, 2**62, (1,), generator=rng, device="cpu"))
+        if cfg.development_stochasticity
+        else None
+    )
     if n_tiles == 1:
         halo = 0
         tile_gens = [rng]
@@ -1386,8 +1416,20 @@ def _noisy_depth_map(d_eff, cfg, *, n_layers, dx_nm, dz_nm, q0_rel, mack, rng, t
             dz=dz_nm,
         )
         del acid_3d
-        depth = _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg)
-        del inhib_3d
+        rate_mult = None
+        if dev_seed is not None:
+            rate_mult = dissolution_cell_noise(
+                inhib_3d,
+                mack,
+                blocked_density_per_nm3=cfg.blocked_site_density_per_nm3,
+                cell_nm=cfg.dissolution_cell_nm,
+                dx=dx_nm,
+                dz=dz_nm,
+                row_index=rows,
+                seed=dev_seed,
+            )
+        depth = _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, rate_multiplier=rate_mult)
+        del inhib_3d, rate_mult
         n_int = y1 - y0
         depth_parts.append(depth[halo : halo + n_int])
     return torch.cat(depth_parts, dim=0)
@@ -1600,8 +1642,8 @@ def _cd_via_full_chem(
             # the unmodified thickness would never fire for a fully
             # cleared pixel -- found and fixed 2026-09-03 alongside the
             # threshold/intensity pairing bug in this same block.
-            # (The former development_stochasticity branch was removed
-            # 2026-09-04, see SimulationConfig.development_stochasticity.)
+            # (development_stochasticity acts inside _noisy_depth_map on the
+            # development rate; the edge extraction is the same.)
             developed = depth_map_noisy
             edge_threshold = cfg.resist_thickness_nm - 1e-6
             edge_intensity = depth_map_noisy
@@ -1639,8 +1681,7 @@ def _cd_via_full_chem(
             # field), aggregated over seeds (between-seed SE/CI).
             est = ler_estimate(
                 dev_fields,
-                # defined in the loop above; constant across realisations (depends only on
-                # cfg.development_stochasticity)
+                # defined in the loop above; constant across realisations
                 threshold=edge_threshold,
                 dx=dx_nm,
                 intensity=intensity_fields,

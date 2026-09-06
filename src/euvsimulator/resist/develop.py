@@ -416,6 +416,76 @@ def developed_depth_from_arrival(
     return depth + partial + overshoot
 
 
+def dissolution_cell_noise(
+    inhibitor_3d: torch.Tensor,
+    mack: MackModel,
+    *,
+    blocked_density_per_nm3: float,
+    cell_nm: float,
+    dx: float,
+    dz: float,
+    row_index: torch.Tensor,
+    seed: int,
+) -> torch.Tensor:
+    """Multiplicative development-rate noise from the counting statistics of
+    blocked polymer units per dissolution cell (no free parameter).
+
+    Mechanism and sources
+    ---------------------
+    Mack, "Stochastic modeling of photoresist development in two and three
+    dimensions", JM3 9, 041202 (2010): a surface-limited dissolution whose
+    local rate varies from cell to cell roughens the developing front (KPZ
+    class) and saturates at a roughness of the order of the cell noise times
+    L^alpha -- nanometres for relative rate noise of 0.1-0.3. Mack there
+    *assumed* the rate noise; here it follows from the material: a cell of
+    edge ``cell_nm`` contains n_tot = n0 * a^3 polymer sites of which a
+    fraction M is still blocked; the blocked count fluctuates (Poisson, Mack
+    2010 "LER and the ultimate limits of lithography", Eq. 36, first term),
+    so the cell's protection is M_cell = M + xi * sqrt(M / (n0 * a^3)),
+    xi ~ N(0, 1), drawn once per cell (quenched disorder). The cell then
+    dissolves at the Mack rate of ITS protection, R(M_cell); the returned
+    multiplier is R(M_cell) / R(M). The nonlinearity of R(M) is kept exact
+    on purpose -- a lognormal linearisation (tried first, log Fortsetzung 33)
+    blows up where d ln R / dM is large.
+
+    ``cell_nm`` is the size of the unit that dissolves as a whole; the
+    physical anchor is Thackeray et al. 2010's polymer radius of gyration,
+    4.3 nm (JPST 23(5) 631). Whether the result depends on it is a physics
+    question, not a numerical one, and is measured, not assumed
+    (tests/test_dissolution_cell_noise.py, log Fortsetzung 33).
+
+    Cells are anchored to ABSOLUTE indices (layer 0, row 0, column 0) and
+    each cell row draws its numbers from a generator seeded by
+    (``seed``, cell row), so the field is identical for any y-tiling or row
+    chunking of the same seed.
+
+    Parameters
+    ----------
+    inhibitor_3d : (N, H, W)
+        Remaining protection M after the PEB.
+    row_index : (H,) int tensor
+        Absolute (periodic) row index of each row of ``inhibitor_3d``.
+    """
+    N, H, W = inhibitor_3d.shape
+    ax = max(1, int(round(cell_nm / dx)))
+    az = max(1, int(round(cell_nm / dz)))
+    nz = -(-N // az)
+    nx = -(-W // ax)
+    rows = torch.as_tensor(row_index, device=inhibitor_3d.device).long()
+    cell_rows = rows // ax
+    xi = torch.empty((N, H, W), dtype=inhibitor_3d.dtype, device=inhibitor_3d.device)
+    for cr in torch.unique(cell_rows).tolist():
+        g = torch.Generator(device="cpu")
+        g.manual_seed((int(seed) * 1_000_003 + int(cr)) % (2**63 - 1))
+        coarse = torch.randn((nz, nx), generator=g, dtype=inhibitor_3d.dtype)
+        block = coarse.repeat_interleave(az, 0)[:N].repeat_interleave(ax, 1)[:, :W]
+        xi[:, cell_rows == cr, :] = block.to(inhibitor_3d.device).unsqueeze(1)
+    M = inhibitor_3d.clamp(0.0, 1.0)
+    n_tot = blocked_density_per_nm3 * cell_nm**3
+    m_cell = (M + xi * torch.sqrt(M / n_tot)).clamp(0.0, 1.0)
+    return mack.rate(m_cell) / mack.rate(M)
+
+
 def eikonal_development(
     inhibitor_3d: torch.Tensor,
     mack: MackModel,
@@ -425,6 +495,7 @@ def eikonal_development(
     n_iter: int = 6,
     return_arrival: bool = False,
     chunk_rows: int = 2048,
+    rate_multiplier: torch.Tensor | None = None,
 ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """Developed depth map [nm] from a 2D (x, z) Eikonal development front.
 
@@ -455,6 +526,9 @@ def eikonal_development(
                 n_iter=n_iter,
                 return_arrival=return_arrival,
                 chunk_rows=chunk_rows,
+                rate_multiplier=(
+                    None if rate_multiplier is None else rate_multiplier[:, y0 : y0 + chunk_rows]
+                ),
             )
             if return_arrival:
                 depths.append(out[0])
@@ -464,6 +538,8 @@ def eikonal_development(
         depth = torch.cat(depths, dim=0)
         return (depth, torch.cat(arrivals, dim=1)) if return_arrival else depth
     R = mack.rate(inhibitor_3d)
+    if rate_multiplier is not None:
+        R = R * rate_multiplier  # dissolution_cell_noise (development_stochasticity)
     T = eikonal_arrival_time(R, dx=dx, dz=dz, n_iter=n_iter)
     depth = developed_depth_from_arrival(T, t_develop, dz)
     if return_arrival:

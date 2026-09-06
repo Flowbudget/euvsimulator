@@ -1,4 +1,6 @@
-"""Development stochasticity -- disabled in the pipeline (2026-09-04, audit A6).
+"""Development stochasticity: the former event-based model (disabled 2026-09-04,
+audit A6) and the OFF-path goldens; the derived cell-noise model that the flag
+enables since 2026-09-06 is tested in tests/test_dissolution_cell_noise.py.
 
 The event-based model (``resist/develop.py::stochastic_development``) drove
 its Poisson event rate with (depth − thickness)/thickness, a quantity bounded
@@ -93,11 +95,14 @@ def _acid_large(seed, n_tiles=4):
 # ── Pipeline: the switch is refused ─────────────────────────────
 
 
-def test_development_stochasticity_is_refused():
-    with pytest.raises(NotImplementedError, match="development_stochasticity"):
-        SimulationConfig(
-            resist_model="full_chem", enable_stochastic=True, development_stochasticity=True
-        )
+def test_development_stochasticity_is_accepted_since_b3():
+    """Since 2026-09-06 the flag enables resist/develop.dissolution_cell_noise
+    (tests/test_dissolution_cell_noise.py); it no longer raises.
+    """
+    cfg = SimulationConfig(
+        resist_model="full_chem", enable_stochastic=True, development_stochasticity=True
+    )
+    assert cfg.development_stochasticity is True
 
 
 def test_removed_strength_fields_are_rejected():

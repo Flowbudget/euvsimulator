@@ -3221,3 +3221,45 @@ korreliert, KPZ-Glättung entlang y fehlt; das Ergebnis ist damit eher eine Ober
   mit a = 1 nm ähnlich oder kleiner (mehr Zellen mitteln). Falsifikation: < 2,5 nm → Zellstatistik erzeugt den Sockel nicht.
 - P2 NXE1716 (σ 9,4, Photonen 10,9 nm 3σ): Anstieg < 20 % (Quadratur eines 3–6-nm-Sockels).
 - P3 Dosisunabhängigkeit: am MET-2D-Punkt bei 1,5× Dosis fällt der Photonenanteil ∝ 1/√Dosis, der Zellanteil bleibt.
+
+**Preflight-Ergebnis Entwicklungsrauschen (b3_devnoise.py, MET-2D kalibriert, Photonen + PAG-Zählung, 3 Seeds × 2 Real. × 2048 Zeilen):**
+
+| | Vorhersage | Messung (3σ) | Status |
+|---|---|---|---|
+| P1 ohne Zellrauschen | – | 1,97 nm | Referenz |
+| P1 a = 4,3 nm | 3–6 nm | **3,60 nm** (Sockel in Quadratur 3,0) | hält |
+| P1 a = 1,0 nm | ähnlich/kleiner | 3,47 nm | hält — **zellgrößen-invariant** (Rauschleistung/Volumen ∝ 1/(n₀·m), unabhängig von a) |
+| P3 1,5× Dosis, a = 4,3 | Photonenanteil fällt, Sockel bleibt | 2,86 nm (CD 40, nicht auf Maß) | qualitativ konsistent |
+
+Befunde: (1) Die aus der Poisson-Statistik der blockierten Einheiten abgeleitete Ratenstreuung erzeugt einen Sockel von ≈ 3 nm
+3σ am MET-2D-Punkt — die Größenordnung des gemessenen Rests (unbiased ≈ 5,4 bei imec-artigem Bias; biased 6,7). (2) Das
+Ergebnis hängt nicht von der Zellgröße ab (a = 1 vs. 4,3 nm: 3,47 vs. 3,60) — der einzige physikalische Parameter ist n₀. (3) Zwei
+Mängel des Monkey-Patches: die lognormale Streuung exp(ξσ) hat Mittelwert exp(σ²/2) > 1 → CD driftet (57,8/51,0/50,8); n_eff
+springt auf ≈ 100, d. h. das Zusatzrauschen ist zellskalig weiß entlang y (Eikonal je Zeile, keine KPZ-Glättung) — Obergrenze.
+Nächste Schritte: mittelwerttreu (exp(ξσ − σ²/2)), P1 wiederholen, P2 NXE1716; dann Implementierung als
+`development_stochasticity` mit n₀ aus der Zusammensetzung und Zellgröße als numerischem Parameter mit Invarianztest.
+
+## 2026-09-06 (Fortsetzung 33): B3 — Entwicklungsrauschen implementiert (`development_stochasticity`)
+
+**Zwei Lehren aus dem Preflight vor der Implementierung:** (1) Die lognormale Linearisierung exp(ξ·σ_lnR) mit σ_lnR =
+|dlnR/dM|·M/√n explodiert dort, wo die Mack-Kurve steil ist (n = 19: σ_lnR ≈ 2,5 → Multiplikatoren e^{±5}); mittelwerttreu
+(−σ²/2) verschiebt sie die CD trotzdem (54–63 nm statt 50, Medianrate e^{−3}). Deshalb **exakte Form**: pro Zelle wird die
+Schutzfraktion selbst gestreut, M_cell = M + ξ·√(M/(n₀·a³)) (Gauß-Näherung der Poisson-Zählung, n₀·a³ ≈ 130 Plätze bei
+a = 4,3 nm), und die Zelle löst sich mit R(M_cell); Multiplikator R(M_cell)/R(M). (2) Kachelinvarianz: der Realisations-Seed
+für das Zellrauschen wird *vor* der Kachel-Entscheidung gezogen (bei n_tiles = 1 werden sonst keine Kachel-Seeds gezogen und
+der Strom verschiebt sich); Zellgitter an absoluten Indizes verankert, je Zellzeile ein eigener Generator (seed, Zellzeile) →
+bitidentisch für jede Kachelung (Test mit 1300 Zeilen, 512 vs. 10⁶). Bei ausgeschalteter Option wird nichts gezogen — alle
+Goldens unverändert.
+
+**Code:** `resist/develop.dissolution_cell_noise` (Quellen im Docstring: Mack 2010 JM3 9, 041202; Mack 2010 „Ultimate limits"
+Gl. 36; Thackeray 2010 Rg 4,3 nm), `eikonal_development(rate_multiplier=…)` (chunk-sicher), `_develop_depth(…, rate_multiplier)`,
+`_noisy_depth_map` (Seed + Feld je Kachel inkl. Halo), Config `blocked_site_density_per_nm3` (1,63 aus Zusammensetzung: 35 % von
+4,66 Einheiten/nm³; Jin 2025: 2,26 bei 54,6 %) und `dissolution_cell_nm` (4,3). Der NotImplementedError von Audit A6 ist
+ersetzt; das alte ereignisbasierte `stochastic_development` bleibt eine unbenutzte Standalone-Funktion. Nicht-Eikonal-
+Entwicklung mit Rauschen → NotImplementedError (bewusst). Tests: `tests/test_dissolution_cell_noise.py` (Dichte aus
+Zusammensetzung, Poisson-Streuung per Inversion mit linearem Ratengesetz, quenched/reproduzierbar/zellkonstant, absolute
+Zeilenverankerung, Kachelinvarianz bitgenau, deterministische Kette unbeeinflusst, Validierung).
+
+**Läufe mit dem implementierten Modell (b3_anchors_devnoise.py):** D2S/E-size werden *mit* Rauschen neu bisektiert (Mittel-CD
+über 3 Seeds), dann LER/LWR mit 6 Seeds × 2 Real. × 2048 Zeilen; Zellgröße 4,3 und 2,15 nm am MET-2D-Punkt (Abhängigkeit ist
+Physik, nicht Numerik — wird gemessen). Vorhersage (aus dem Preflight): MET-2D LER 3σ 2,5–4 nm; NXE1716 LWR < +20 %.
