@@ -283,6 +283,7 @@ def eikonal_arrival_time(
     dz: float,
     n_iter: int = 6,
     tol: float = 1e-6,
+    dy: float | None = None,
 ) -> torch.Tensor:
     """Arrival time T(x, z) of the development front, |∇T| = 1/R(x, z).
 
@@ -295,6 +296,17 @@ def eikonal_arrival_time(
     upwind discretisation, Gauss-Seidel sweeps in the four (z, x) sweep
     directions, vectorised over the un-modelled y direction (tensor rows).
     First-order accurate in the grid spacing.
+
+    With ``dy`` given (2026-09-06, plan stage B3.4) the rows are COUPLED: the
+    Godunov update carries a third, y-neighbour term (periodic in y) so the
+    front is the true 3D first arrival -- fast cells in one row can also be
+    reached from neighbouring rows, which is what smooths cell-scale rate
+    noise (resist/develop.dissolution_cell_noise) across rows. The y-term
+    uses the previous pass's neighbour values (Jacobi in y, Gauss-Seidel in
+    z and x), so more iterations are needed than for the per-row solve;
+    ``n_iter`` is an upper bound and the loop stops at ``tol``. With
+    ``dy=None`` the rows are independent and the result is bit-identical to
+    the original per-row solver.
 
     Boundary conditions: T = 0 at z = 0 (top surface, in contact with the
     developer everywhere -- a ghost node above layer 0); periodic in x (the
@@ -351,6 +363,42 @@ def eikonal_arrival_time(
         t_new = torch.where(t3 > torch.maximum(a, b), t3, torch.minimum(t1, t2))
         return torch.minimum(t_old, t_new)
 
+    if dy is not None:
+        inv_hy2 = 1.0 / dy**2
+
+    def godunov3(t_old, a, b, c, f):
+        # Three-term Godunov update (Zhao 2005, Sec. 2, d = 3): sort the
+        # neighbour values, try the 1-, 2- and 3-term solutions and keep the
+        # largest one that is consistent (T > the neighbours it uses).
+        vals = torch.stack([a, b, c], dim=0)
+        hs = torch.stack(
+            [torch.full_like(a, dz), torch.full_like(a, dx), torch.full_like(a, dy)], dim=0
+        )
+        order = torch.argsort(vals, dim=0)
+        v = torch.gather(vals, 0, order)
+        h = torch.gather(hs, 0, order)
+        v1, v2, v3 = v[0], v[1], v[2]
+        h1, h2, h3 = h[0], h[1], h[2]
+        # one term
+        t = v1 + f * h1
+        # two terms
+        i1, i2 = 1.0 / h1**2, 1.0 / h2**2
+        A = i1 + i2
+        B = -2.0 * (v1 * i1 + v2 * i2)
+        C = v1 * v1 * i1 + v2 * v2 * i2 - f * f
+        disc = (B * B - 4.0 * A * C).clamp(min=0.0)
+        t2 = (-B + torch.sqrt(disc)) / (2.0 * A)
+        t = torch.where(t > v2, torch.where(t2 > v2, t2, t), t)
+        # three terms
+        i3 = 1.0 / h3**2
+        A = i1 + i2 + i3
+        B = -2.0 * (v1 * i1 + v2 * i2 + v3 * i3)
+        C = v1 * v1 * i1 + v2 * v2 * i2 + v3 * v3 * i3 - f * f
+        disc = (B * B - 4.0 * A * C).clamp(min=0.0)
+        t3 = (-B + torch.sqrt(disc)) / (2.0 * A)
+        t = torch.where((t > v3) & (t3 > v3), t3, t)
+        return torch.minimum(t_old, t)
+
     for _ in range(n_iter):
         T_prev = T.clone()
         for z_dir in (1, -1):
@@ -363,9 +411,16 @@ def eikonal_arrival_time(
                     a = torch.minimum(up, down)
                     Tk = T[k]
                     fk = slowness[k - 1]
-                    for i in x_range:
-                        b = torch.minimum(Tk[:, (i - 1) % W], Tk[:, (i + 1) % W])
-                        Tk[:, i] = godunov(Tk[:, i], a[:, i], b, fk[:, i])
+                    if dy is None:
+                        for i in x_range:
+                            b = torch.minimum(Tk[:, (i - 1) % W], Tk[:, (i + 1) % W])
+                            Tk[:, i] = godunov(Tk[:, i], a[:, i], b, fk[:, i])
+                    else:
+                        for i in x_range:
+                            b = torch.minimum(Tk[:, (i - 1) % W], Tk[:, (i + 1) % W])
+                            col = Tk[:, i]
+                            c = torch.minimum(torch.roll(col, 1, 0), torch.roll(col, -1, 0))
+                            Tk[:, i] = godunov3(col, a[:, i], b, c, fk[:, i])
         if float((T - T_prev).abs().max()) < tol:
             break
     return T[1:]
@@ -496,6 +551,7 @@ def eikonal_development(
     return_arrival: bool = False,
     chunk_rows: int = 2048,
     rate_multiplier: torch.Tensor | None = None,
+    dy: float | None = None,
 ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """Developed depth map [nm] from a 2D (x, z) Eikonal development front.
 
@@ -514,7 +570,7 @@ def eikonal_development(
     # solver's working set (~12x the field, measured 2026-09-05) stays bounded
     # for the 61440-row LER fields. Bitwise identical to one call.
     N, H, W = inhibitor_3d.shape
-    if H > chunk_rows:
+    if H > chunk_rows and dy is None:
         depths, arrivals = [], []
         for y0 in range(0, H, chunk_rows):
             out = eikonal_development(
@@ -529,6 +585,7 @@ def eikonal_development(
                 rate_multiplier=(
                     None if rate_multiplier is None else rate_multiplier[:, y0 : y0 + chunk_rows]
                 ),
+                dy=dy,
             )
             if return_arrival:
                 depths.append(out[0])
@@ -540,7 +597,7 @@ def eikonal_development(
     R = mack.rate(inhibitor_3d)
     if rate_multiplier is not None:
         R = R * rate_multiplier  # dissolution_cell_noise (development_stochasticity)
-    T = eikonal_arrival_time(R, dx=dx, dz=dz, n_iter=n_iter)
+    T = eikonal_arrival_time(R, dx=dx, dz=dz, n_iter=n_iter, dy=dy)
     depth = developed_depth_from_arrival(T, t_develop, dz)
     if return_arrival:
         return depth, T

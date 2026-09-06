@@ -5,6 +5,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added (numerics and metrology, 2026-09-06, plan stages B3.4 / B3.5)
+- **`development_model="eikonal3d"`**: the fast-sweeping Eikonal solver can couple the rows through a
+  third (y) Godunov term (Zhao 2005, d = 3; Jacobi in y, Gauss–Seidel in z/x, periodic in y). Invariants
+  tested: uniform rate exact, y-uniform fields bit-identical to the per-row solver, y-varying fields never
+  later than per-row, exact tiling invariance with cell noise (coupling reach ≤ n_iter rows < halo).
+  Finding at the MET-2D anchor with cell noise: the coupling does not lower the LER (5.14 vs 5.04 nm 3σ),
+  it shortens the correlation and softens the cell-size dependence (a⁻⁰·⁵ instead of a⁻¹), at 8–9× the
+  cost. Default stays `"eikonal"`.
+- **`ler_passband_nm`**: metrology passband (p_min, p_max) applied to edge and width profiles before the
+  roughness statistics (`resist/stochastic.bandlimit_along_rows`). Measurements are band-limited
+  (Anderson & Naulleau 2008: 10–834 nm; imec biased CD-SEM protocol, Vesters 2019: 5.38 nm y-pixels →
+  ≈ 10.8–5500 nm); the simulated field is not, and the dissolution-cell noise puts most of its power at
+  periods of a few nm. The anchor presets carry their source's band; the default (None) keeps the full
+  band and all goldens. In-band anchor results (log Fortsetzung 36): MET-2D 4.3 nm 3σ with dissolution
+  noise (2.0 photons + PAG) vs 6.7 measured SEM-biased; NXE1716 13.2 nm vs 6.7 (5.1–5.7 bias-corrected) —
+  the thin-film / 22 nm half-pitch anchor stays over-predicted, dominated by the 110 °C-derived blur.
+
+### Added (physics, 2026-09-06, plan stage B3) — development noise
+- **`development_stochasticity=True` now enables a derived dissolution-noise model**
+  (`resist/develop.dissolution_cell_noise`) instead of raising: each dissolution cell of edge
+  `dissolution_cell_nm` (4.3 nm, Thackeray 2010 polymer radius of gyration) contains
+  `blocked_site_density_per_nm3 · a³` polymer sites (1.63 nm⁻³ from the default composition,
+  35 % protection); the blocked count fluctuates by Poisson statistics (Mack 2010, *LER and the
+  ultimate limits of lithography*, Eq. 36) and the cell dissolves at the Mack rate of its own
+  protection, which roughens the front (Mack 2010, JM3 9, 041202, KPZ class). No fitted knob.
+  Quenched per cell, anchored to absolute indices, bit-identical under any y-tiling or row
+  chunking; nothing is drawn when the option is off (all goldens unchanged). Stochastic chain
+  only; the deterministic chain stays the mean field. Non-Eikonal development with the option
+  raises `NotImplementedError`.
+- **Result at the anchors:** MET-2D (XP 5271, 50 nm 1:1, dose calibrated) LER 3σ rises from
+  0.73 (photons) / 1.97 (+ PAG counting) to **4.96 nm** with the dissolution noise, against 6.7 nm
+  measured (SEM-biased, Anderson & Naulleau 2008) — the missing "intrinsic" floor is largely the
+  counting statistics of the dissolving polymer. Caveat measured, not assumed: the result scales
+  roughly with 1/cell size (2.15 nm → 10.2 nm 3σ), so the dissolution-unit size is a physical
+  parameter of this model; and the per-row Eikonal solver has no y-coupling, so the added roughness
+  is cell-scale white along y (n_eff 120–350). Log Fortsetzung 34.
+- Tests: `tests/test_dissolution_cell_noise.py` (density from composition, Poisson scatter by
+  inversion, quenched/reproducible/cell-constant, absolute-row anchoring, bit-exact tiling
+  invariance, deterministic chain unaffected, validation).
+
 ### Added (validation anchors, 2026-09-06, plan stage B2)
 - **Explicit quencher for NXE1716** (`presets.NXE1716_QUENCHER_FIT`, `nxe1716_config(explicit_quencher=True)`,
   `presets.flood_rate_quenched`): the NXE1717 curve (half the quencher) was digitised too; a joint fit with

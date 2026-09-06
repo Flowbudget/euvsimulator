@@ -181,6 +181,8 @@ def nxe1716_config(
         resist_thickness_nm=35.0,
         develop_time_s=30.0,
         dose_mj_cm2=11.0,
+        # imec biased CD-SEM protocol (thesis Sec. 5.3): 5.38 nm y-pixels, 5.5 um images
+        ler_passband_nm=(10.8, 5500.0),
     )
     return replace(cfg, **overrides) if overrides else cfg
 
@@ -242,5 +244,7 @@ def met2d_config(*, blur_metric: str = "contact", **overrides) -> SimulationConf
         resist_thickness_nm=80.0,
         develop_time_s=45.0,
         dose_mj_cm2=12.5,
+        # Anderson & Naulleau 2008, Sec. III C: LER passband 10-834 nm periods
+        ler_passband_nm=(10.0, 834.0),
     )
     return replace(cfg, **overrides) if overrides else cfg

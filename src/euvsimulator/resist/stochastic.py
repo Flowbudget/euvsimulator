@@ -687,6 +687,7 @@ def ler_estimate(
     estimator: str = "large_n",
     rho_truncation: int | None = None,
     seed_count: int | None = None,
+    passband_nm: tuple[float, float] | None = None,
 ) -> LEREstimate:
     """Correlation-aware LER estimator (STEP 5.1).
 
@@ -741,6 +742,9 @@ def ler_estimate(
             ler_per_real.append(float("nan"))
             continue
         lf, rf = left[finite], right[finite]
+        if passband_nm is not None:
+            lf = bandlimit_along_rows(lf, dx, passband_nm)
+            rf = bandlimit_along_rows(rf, dx, passband_nm)
 
         # per-edge autocorrelation (pooled over edges for "both")
         kmax = min(rho_truncation, n_rows - 1)
@@ -850,11 +854,39 @@ def ler_estimate(
 # ──────────────────────────────────────────────
 
 
+def bandlimit_along_rows(x: torch.Tensor, dx: float, passband_nm: tuple[float, float] | None):
+    """Keep only the spatial periods p_min <= p <= p_max of a row sequence.
+
+    Roughness measurements are band-limited by the metrology (pixel size,
+    image height, noise cut-off): Anderson & Naulleau 2008 evaluate periods
+    10-834 nm, imec's CD-SEM protocol in Vesters 2019 has 5.38 nm pixels in y
+    and 5.5 um images. A simulated edge on a 0.2-0.4 nm grid carries power at
+    periods no measurement sees; a fair comparison applies the same band
+    (log Fortsetzung 36). FFT along the (periodic) row axis; the mean is
+    always removed. ``None`` returns the input unchanged.
+    """
+    if passband_nm is None:
+        return x
+    p_min, p_max = passband_nm
+    n = x.shape[0]
+    if n < 4:
+        return x - x.mean()
+    spec = torch.fft.rfft(x - x.mean())
+    freq = torch.fft.rfftfreq(n, d=dx)  # cycles per nm
+    keep = torch.zeros_like(freq, dtype=torch.bool)
+    nonzero = freq > 0
+    period = torch.where(nonzero, 1.0 / freq.clamp(min=1e-30), torch.full_like(freq, float("inf")))
+    keep = nonzero & (period >= p_min) & (period <= p_max)
+    spec = torch.where(keep, spec, torch.zeros_like(spec))
+    return torch.fft.irfft(spec, n=n)
+
+
 def extract_lwr(
     developed: torch.Tensor,
     threshold: float = 0.5,
     dx: float = 1.0,
     intensity: torch.Tensor | None = None,
+    passband_nm: tuple[float, float] | None = None,
 ) -> float:
     r"""Extract line-width roughness (LWR) from a developed contour.
 
@@ -903,6 +935,9 @@ def extract_lwr(
     finite = ~torch.isnan(width)
     if finite.sum() < 3:
         return float("nan")
+    if passband_nm is not None:
+        width = bandlimit_along_rows(width[finite], dx, passband_nm)
+        finite = torch.ones_like(width, dtype=torch.bool)
 
     width_finite = width[finite]
     lwr_val = float(torch.std(width_finite, unbiased=False))

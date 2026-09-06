@@ -110,7 +110,18 @@ B2 ✅ (2026-09-06, Fortsetzungen 29/30): (b) Quencher am NXE1716/1717-Paar gefi
 B3 **Neu, höchste Priorität:** LER-Sockel. Kandidaten mit Quelle: (i) SEM-Bias der Messwerte (Anderson: unkorrigiert, S-4800 2 kV;
    Vesters: CG-5000, unkorrigiert) — Vergleich nur nach Abzug eines belegten Rauschbodens; (ii) Polymer-/Entwicklungsrauschen
    (Thackeray Rg 4,3 nm; development_stochasticity seit Audit A6 aus); (iii) Andersons „intrinsic LER floor 3–4 nm".
-   Preflight: MET-2D mit exposure_stochasticity (läuft); dann Entwicklungs-Stochastik reaktivieren und am MET-2D-Punkt messen.
+   ✅ (2026-09-06, Fortsetzungen 31–33): SEM-Bias belegt (Lorusso/Mack 2018: imec-Protokoll biased/unbiased 1,66 → NXE1716
+   unbiased ≈ 5,1–5,7 nm); PAG-Zählung bringt MET-2D nur auf 1,97 nm; **Entwicklungsrauschen aus der Zählstatistik der
+   blockierten Einheiten implementiert** (`development_stochasticity`, kein freier Parameter): MET-2D 4,96 nm 3σ gegen 6,7
+   (biased). Fortsetzungen 34–36: Zellgrößenabhängigkeit real (∝ 1/a, 3D-Löser: a⁻⁰·⁵), lateral gitterinvariant; `eikonal3d`
+   validiert, glättet aber nicht; Messband (`ler_passband_nm`, Quellen Anderson 10–834 / imec 10,8–5500 nm) eingebaut.
+   **Stand:** MET-2D 4,3 nm 3σ in-band gegen 6,7 biased / ≈ 5,4 korrigiert (erstmals richtige Größe ohne Knopf, nicht
+   validiert: Andersons Bias und a unbelegt); NXE1716 13,2 gegen 5,1–5,7 (2,4×; Photonenterm mit 110-°C-Blur allein 2×).
+B4 Nächste Schritte mit Beleg-Pfad: (a) C1 vorziehen — k(T), τ(T) aus Yamamoto Fig. 3/4 und NIST (90 °C, τ 38 s mit Quencher),
+   Blur für 90-°C-Presets belegen, NXE1716 neu; (b) Auflösungseinheit a: Quellen für Polymer-/Aggregatgröße in TMAH-Auflösung
+   (Kozawa/Jin QCM, Mack „dissolution unit"); (c) unbiased-Daten: Vesters Kap. 5/7 haben unbiased LER für MTR/xMT-Resists mit
+   Dosis und Pitch — als dritter Anker prüfbar, sobald Mack-/Blur-Daten dazu gefunden sind; (d) Krümmungsterm in der Front
+   (Mack 2010 KPZ-ν) nur mit Quelle für den Koeffizienten.
 
 **Stufe C — Physikvervollständigung mit Quelle**
 C1 Temperaturmodell k(T) aus Yamamoto Fig. 4 (Ea aus Steigung), τ(T) aus Fig.-3-Plateaus bei 80–140 °C; Test: Fig.-3-Kurven

@@ -285,10 +285,17 @@
 > the literature without a resist-specific calibration (`euv calibrate`); and the default PEB blur (9.4 nm = sqrt(2·D·t_eff) with D = 4.2 nm²/s measured by Kang 2010 at
 > 90 °C for the same polymer class, and the acid's effective lifetime) is inside the 7.5–12 nm band of
 > directly measured blur lengths of named EUV resists but is not a measurement on this resist at its
-> 110 °C PEB. Cross-check against industry data (Vesters 2019, NXE1631/NXE1716 at 22 nm half-pitch):
-> after scaling the chain's photon-shot-noise LWR to those resists' dose-to-size (√dose), it lies
-> 1.2–1.7× above their biased CD-SEM values -- a plausibility check with named residual causes, not a
-> validation (log Fortsetzung 23).
+> 110 °C PEB. Two named-resist anchors exist (`euvsimulator.presets`, data under `data/anchors/`):
+> NXE1716 (Vesters 2017/2019: digitised dissolution curve + 22 nm lines on an NXE3300B) and MET-2D /
+> XP 5271 (LBNL C and acid yield, Sekiguchi Mack set, Anderson/Naulleau blur, E-size and LER).
+> Neither validates the chain yet: the NXE1716 printing dose comes out 1.8× too high (a
+> flood-vs-pattern dose inconsistency in the source data, log Fortsetzung 29), and the LER
+> comparisons showed that photon shot noise alone is not the roughness -- at MET-2D it gives 0.7 nm
+> 3σ against 6.7 nm measured. The derived dissolution-noise model (`development_stochasticity`,
+> counting statistics of the blocked polymer units per dissolution cell, no fitted parameter) brings
+> that to 5.0 nm, but scales roughly with 1/cell size (10 nm at 2.15 nm cells) and the per-row
+> Eikonal has no y-coupling, so it stays off by default (log Fortsetzungen 30–34). Measured roughness values carry SEM bias
+> (Lorusso/Mack 2018), which the anchor data record.
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|

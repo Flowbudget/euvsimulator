@@ -3263,3 +3263,116 @@ Zeilenverankerung, Kachelinvarianz bitgenau, deterministische Kette unbeeinfluss
 **Läufe mit dem implementierten Modell (b3_anchors_devnoise.py):** D2S/E-size werden *mit* Rauschen neu bisektiert (Mittel-CD
 über 3 Seeds), dann LER/LWR mit 6 Seeds × 2 Real. × 2048 Zeilen; Zellgröße 4,3 und 2,15 nm am MET-2D-Punkt (Abhängigkeit ist
 Physik, nicht Numerik — wird gemessen). Vorhersage (aus dem Preflight): MET-2D LER 3σ 2,5–4 nm; NXE1716 LWR < +20 %.
+
+## 2026-09-06 (Fortsetzung 34): B3 — Ankerläufe mit dem implementierten Entwicklungsrauschen
+
+**MET-2D (kalibriert, Photonen + PAG-Zählung + Zellrauschen, E-size mit Rauschen neu bisektiert: 13,17, unverändert), 6 Seeds × 2 Real. × 2048 Zeilen:**
+
+| Zellgröße a | LER 1σ | 3σ | n_eff | gemessen |
+|---|---|---|---|---|
+| ohne Zellrauschen | 0,658 | 1,97 | 25 | 6,7 (biased) |
+| **4,3 nm (Rg, Thackeray)** | 1,655 ± 0,017 | **4,96 nm** | 120–155 | 6,7 (biased), ≈ 5,4 falls Bias wie bei imec |
+| 2,15 nm | 3,404 ± 0,042 | 10,21 nm | 320–350 | – |
+
+Befund: **nicht zellgrößeninvariant** — halbe Zelle, doppelte LER (≈ ∝ 1/a). In der linearen Näherung war die Rauschleistung pro
+Volumen zellunabhängig; in der exakten Form (M_cell → R(M_cell), Mack-Exponent 19) und mit der Erstankunfts-Entwicklung
+(schnellster Pfad nutzt schnelle Zellen) ist sie es nicht. Die Zellgröße ist damit ein *physikalischer* Parameter — die Größe der
+Einheit, die als Ganzes in Lösung geht — mit Quelle (Rg 4,3 nm), aber die Vorhersage trägt die Unsicherheit dieser Größe fast
+linear. Zweiter Befund: n_eff 140–340 → die Zusatzrauigkeit ist zellskalig weiß entlang y, weil der Eikonal-Löser jede y-Zeile
+unabhängig löst (keine KPZ-Glättung quer zur Zeile). Ein echter 3D-Löser (x, y, z) würde die Front über Nachbarzellen mitteln und
+sowohl die Hochfrequenzanteile als auch die Zellgrößen-Sensitivität dämpfen — Kandidat B3.4, erst nach Gitter- und NXE1716-Lauf.
+Mit a = 4,3 nm liegt die Kette bei 0,74× des biased bzw. ≈ 0,9× des bias-korrigierten Messwerts; das ist keine Validierung, weil a
+den Wert um Faktor 2 verschieben kann, aber der erste Sockel mit Herleitung statt Knopf.
+
+## 2026-09-06 (Fortsetzung 35): B3.4 — y-gekoppelter Eikonal-Löser (Vorhersagen VOR dem Lauf)
+
+Der bisherige Löser löst jede y-Zeile als eigenes (x, z)-Problem (Zhao 2005, vektorisiert über y). Mit zellskaligem Ratenrauschen
+ist das falsch: die Erstankunftsfront darf schnelle Zellen auch aus Nachbarzeilen erreichen (KPZ-Glättung quer zur Zeile).
+Umsetzung: dritter Godunov-Term (Zhao 2005, d = 3: sortierte Nachbarn, 1-/2-/3-Term-Lösung), y periodisch, Nachbarwerte aus dem
+vorigen Durchlauf (Jacobi in y, Gauss-Seidel in z, x), Abbruch bei tol; `dy=None` → bitidentisch zum alten Löser.
+Invarianten geprüft: gleichförmige Rate T = z/R exakt; y-uniformes Zufallsfeld: 3D − 2D = 0 exakt; y-variables Feld:
+max(3D − 2D) = 0, Mittel 2D − 3D = 0,097 s (mehr Wege → nie später). Option `development_model="eikonal3d"`; Default bleibt
+„eikonal" (Goldens unverändert). Kacheln: y-Kopplung endet am Kachelrand, der Halo (> 200 Zeilen) ist viel größer als die
+Kopplungslänge (Zellgröße) — Kachelabweichung wird gemessen, nicht angenommen.
+
+**Vorhersagen (MET-2D kalibriert, Photonen + PAG + Zellrauschen, 3 Seeds × 2 Real. × 1024 Zeilen):**
+- P1 a = 4,3 nm: LER 3σ **2,5–4 nm** (2D: 4,96); n_eff fällt von ≈ 140 auf < 60 (Hochfrequenzanteil geglättet).
+- P2 a = 2,15 nm: **< 6 nm** (2D: 10,2) — die Zellgrößenabhängigkeit wird schwächer (Verhältnis 2,15/4,3 unter 1,6 statt 2,06).
+- P3 ohne Zellrauschen (nur Photonen + PAG): 3D ändert die LER um < 10 % (glatte Felder).
+- P4 Kachelung 512 vs. 10⁶ Zeilen bei 1300 Zeilen (Zellrauschen, 3D): max |ΔTiefe| < 0,5 nm, LWR-Differenz < 2 %.
+Falsifikation: P1 > 4,5 nm oder P2/P1 > 1,8 → die Kopplung glättet nicht wie erwartet; dann bleibt B3 bei der 2D-Aussage.
+
+**Gitterabhängigkeit (b3_grid.py, MET-2D, a = 4,3, 3 Seeds × 2 Real. × 2048 Zeilen):** grid 512 (dx 0,195 nm) LER 1σ 1,650 →
+3σ 4,95 gegen 4,96 bei grid 256 — **lateral gitterinvariant**; die Zelle, nicht das Pixel, bestimmt das Rauschen (im Gegensatz
+zum alten ereignisbasierten Modell von Audit A6). n_eff sinkt bei feinerem Gitter (37–92 statt 120–155), weil die Korrelations-
+länge in Pixeln wächst; die LER-Zahl bleibt.
+
+**NXE1716 mit Zellrauschen (2D-Löser, kalibriert, D2S mit Rauschen 10,70 ≈ unverändert, 6 Seeds × 2 Real. × 2048 Zeilen):**
+LWR 1σ 4,99 ± 0,10 → **3σ 14,95 nm** (ohne Zellrauschen 10,9; Sockel in Quadratur 10,2 nm). Vorhersage „< +20 %" **falsifiziert**
+(+37 %). Am dünnen Film (35 nm, dz 1,75 nm), bei 22 nm HP und flacher Mack-Kurve (n 12,8) ist der Zellbeitrag dreimal so groß
+wie bei MET-2D — gegen unbiased ≈ 5,4 nm (Messung) liegt die Kette damit 2,8× zu hoch. Das ist die Kehrseite der 2D-Löser-
+Überschätzung (weißes Zellrauschen entlang y); die Entscheidung fällt mit dem 3D-Preflight (Fortsetzung 35).
+
+**P4 (3D + Zellrauschen, 1300 Zeilen, Kachel 512 vs. 10⁶):** max |ΔTiefe| < 10⁻⁴ nm, LWR identisch (< 10⁻⁴) — **kachelinvariant bis auf
+Rundung** (nicht bitgenau: die Jacobi-Durchläufe konvergieren im Halo auf leicht anderen Wegen), weil die y-Kopplung pro Jacobi-Durchlauf eine Zeile weit reicht (≤ n_iter = 24 Zeilen) und der Halo (4σ/dx + 1
+≥ 60 Zeilen) sie vollständig abdeckt. Als Test festgehalten.
+
+**Ergebnis 3D-Preflight (b3_eik3d.py, MET-2D kalibriert, 3 Seeds × 2 Real. × 1024 Zeilen):**
+
+| | Vorhersage | 2D | 3D | Status |
+|---|---|---|---|---|
+| P3 ohne Zellrauschen | Δ < 10 % | 1,88 | 1,88 (identisch) | hält |
+| P1 a = 4,3 | 2,5–4 nm | 5,04 | **5,14 nm**, n_eff 212 (2D: 59) | **falsifiziert** — keine Glättung |
+| P2 a = 2,15 | < 6 nm; P2/P1 < 1,8 | 10,2 | 7,41; **P2/P1 = 1,44** | Verhältnis hält, Absolutwert knapp nicht |
+| P4 Kachelung | Δ < 0,5 nm | – | exakt 0 | hält |
+| Rechenzeit | – | 44–49 s | 354–466 s (8–9×) | – |
+
+Deutung: Die Amplitude der Erstankunfts-Rauigkeit wird von der Zellstatistik (quenched disorder) gesetzt, nicht von der
+Lösergeometrie; die y-Kopplung verändert das Spektrum (kürzere Korrelation, n_eff 212) und mildert die Zellgrößenabhängigkeit
+(∝ a⁻⁰·⁵ statt a⁻¹), senkt die LER aber nicht. Ein Eikonal-Löser hat keinen Krümmungsterm (KPZ-ν), die Front bleibt zellskalig
+zackig. `eikonal3d` bleibt als validierte Option (Invarianten, exakte Kachelung) erhalten, Default bleibt „eikonal".
+
+**Der entscheidende Nebenbefund:** n_eff 60–340 heißt, die Zusatzrauigkeit liegt bei Perioden von wenigen nm — **außerhalb des
+Messbandes**: Anderson wertet 10–834 nm Periode aus (OSTI 950847, §III C), imec/metroLER ebenfalls bandbegrenzt (Pixel 0,8 nm,
+PSD-Rauschabzug). Unser Schätzer integriert bis 2 Pixel (0,35–0,8 nm). Vergleich Kette–Messung ist damit nicht bandgleich; ein
+messbandgleicher LER-Schätzer (Bandpass in y, Grenzen aus der jeweiligen Quelle) ist kein Physik-Knopf, sondern die
+Voraussetzung für jeden Vergleich. Nächster Schritt B3.5: Passband im Schätzer, dann beide Anker neu bewerten. Vorhersage:
+der Zellanteil fällt stark (MET-2D 5,0 → 3–4 nm, NXE1716 15 → 8–10), der Photonenanteil (Korrelation ≈ Blur) kaum.
+
+## 2026-09-06 (Fortsetzung 36): B3.5 — messbandgleicher LER/LWR-Schätzer (Vorhersagen VOR dem Lauf)
+
+Messbänder aus den Quellen: Anderson/Naulleau 2008 (OSTI 950847 §III C): Perioden **10–834 nm** (Rauschgrenze bis Bildhöhe).
+Vesters 2019 §5.3 (imec „biased"-Protokoll, Kap. 4): Rechteckscan 1024 px mit Pixel 0,88 × 5,38 nm, Bildhöhe 5,5 µm → Perioden
+**≈ 10,8–5500 nm** (Nyquist des 5,38-nm-Pixels); unbiased-Protokoll 2048 px × 0,8 nm → 1,6–1640 nm mit PSD-Rauschabzug.
+Kette: Feld 2048 Zeilen × dx 0,17–0,39 nm → Perioden 0,35–800 nm, ungefiltert. Umsetzung: `ler_passband_nm=(p_min, p_max)`
+in SimulationConfig (None = Vollband, Default; Goldens unverändert), Bandpass per FFT entlang y auf die Kantenprofile vor
+RMS/Autokorrelation (periodisches Feld, DC bleibt entfernt); Anker-Presets tragen ihr Messband.
+
+**Vorhersagen (Band Anderson für MET-2D, Band imec-biased für NXE1716; a = 4,3, 2D-Löser, 6 Seeds × 2 Real. × 2048 Zeilen):**
+- P1 MET-2D Photonen + PAG: 1,97 → **1,6–1,9 nm** (Korrelation ≈ Blur 10 nm, wenig Leistung unter 10 nm Periode).
+- P2 MET-2D + Zellrauschen: 4,96 → **3,0–4,0 nm** (Zellanteil bei 4-nm-Perioden liegt großteils unter 10 nm).
+- P3 NXE1716 Photonen: 10,9 → **9–10,5 nm**; P4 NXE1716 + Zellrauschen: 15,0 → **8–10 nm**.
+Falsifikation: P2 > 4,5 oder P4 > 11 → der Zellanteil ist nicht hochfrequent genug, dann bleibt die Überschätzung ein Modellfehler.
+
+**Ergebnis bandbegrenzt (b3_passband.py, 6 Seeds × 2 Real. × 2048 Zeilen, a = 4,3, 2D-Löser):**
+
+| | Vorhersage | Vollband | **Messband** | gemessen (biased) | unbiased-Schätzung |
+|---|---|---|---|---|---|
+| P1 MET-2D Photonen + PAG | 1,6–1,9 | 1,97 | **1,97** | 6,7 | ≈ 5,4 (falls Bias wie imec) |
+| P2 MET-2D + Zellrauschen | 3,0–4,0 | 4,96 | **4,29** | 6,7 | ≈ 5,4 |
+| P3 NXE1716 Photonen | 9–10,5 | 10,9 | **10,86** | 6,7 | 5,1–5,7 |
+| P4 NXE1716 + Zellrauschen | 8–10 | 14,95 | **13,15** | 6,7 | 5,1–5,7 |
+
+Bewertung nach Vorregistrierung: P1/P3 praktisch unverändert (Photonenterm hat keine Leistung unter 10 nm Periode — erwartet);
+**P2 knapp, P4 klar verfehlt** (Kriterium „P4 > 11 → Modellfehler bleibt"). Nur ≈ 30 % der Zellrausch-Leistung liegt unter
+10 nm Periode; in-band bleiben bei MET-2D 3,8 nm und bei NXE1716 7,4 nm (Quadratur). Stand B3 damit:
+- **MET-2D:** Kette 4,3 nm 3σ (Photonen 2,0 ⊕ Zellen 3,8) gegen 6,7 biased / ≈ 5,4 bias-korrigiert — innerhalb der Bias-
+  Unsicherheit (Andersons Bias ist nicht publiziert). Das ist das erste Mal, dass die Kette eine gemessene EUV-LER ohne
+  Rauschknopf in der richtigen Größe liefert; validiert ist es nicht, solange (i) Andersons SEM-Anteil und (ii) die
+  Auflösungseinheit a (Rg 4,3 nm) nicht unabhängig belegt sind — a verschiebt den Zellterm ∝ 1/a.
+- **NXE1716:** Kette 13,2 gegen 5,1–5,7 unbiased (2,4×). Der Photonenterm allein (10,9) ist schon 2× zu groß und hängt am
+  Blur 9,4 nm (τ von 110 °C; mit σ 5 nm: 4,8); der Zellterm addiert 7,4 nm in Quadratur. Beide Anker zusammen sagen: die
+  Zellstatistik erklärt den Sockel am dicken Film/50 nm, am dünnen Film/22 nm HP überschätzt die Kette systematisch —
+  Kandidaten mit Beleg-Pfad: Blur bei 90 °C (C1-Temperaturmodell aus Yamamoto Fig. 3 + NIST τ 38 s mit Quencher), n₀ und a für
+  NXE1716 (unbekannt), und die Eikonal-Front ohne Krümmungsterm (zackig auf Zellskala).
+Keine Parameter wurden an Messwerte angepasst; `development_stochasticity` und `ler_passband_nm` bleiben per Default aus.

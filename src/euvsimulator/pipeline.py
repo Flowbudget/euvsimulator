@@ -904,6 +904,9 @@ class SimulationConfig:
     # Eikonal solver reduces to without lateral rate variation. The column
     # model artificially keeps lines alive that lateral development would
     # erode (Fortsetzung 14): it is NOT a physical development model.
+    # "eikonal" (per-row (x, z) first arrival, Zhao 2005 fast sweeping), "eikonal3d"
+    # (rows coupled by a y-term, B3.4 2026-09-06 -- use with development_stochasticity),
+    # "column" (time-integrated per column, no lateral development)
     development_model: str = "eikonal"
     # Number of depth layers for the resolved exposure/PEB/development chain -- a NUMERICAL
     # resolution choice, not a physical parameter; matches this codebase's own n_rcwa_orders
@@ -1013,6 +1016,12 @@ class SimulationConfig:
     # internal scientific validation, NOT yet experimentally validated.
     stochastic_ler_grid_y: int = 4096  # Requested Y dimension of the stochastic LER field
     stochastic_ler_estimator: str = "large_n"  # "large_n" | "legacy"
+    # Metrology passband (p_min, p_max) [nm] applied to the edge/width profiles
+    # before the roughness statistics (resist/stochastic.bandlimit_along_rows);
+    # None = full simulated band (default, goldens). Anchors carry their
+    # source's band: Anderson & Naulleau 2008 (10, 834); imec biased CD-SEM
+    # protocol, Vesters 2019 Sec. 5.3 (10.8, 5500). Log Fortsetzung 36.
+    ler_passband_nm: tuple[float, float] | None = None
     # development_stochasticity -- history: the former event-based model
     # (resist/develop.py::stochastic_development, still a standalone function)
     # was disabled 2026-09-04 (audit A6) because its output depended on the
@@ -1130,6 +1139,10 @@ class SimulationConfig:
                 raise ValueError("enable_stochastic=True requires resist_model='full_chem'")
             if self.stochastic_n_realisations < 1:
                 raise ValueError("stochastic_n_realisations must be >= 1")
+        if self.ler_passband_nm is not None:
+            p_min, p_max = self.ler_passband_nm
+            if not (0.0 < p_min < p_max):
+                raise ValueError("ler_passband_nm must be (p_min, p_max) with 0 < p_min < p_max")
         if self.blocked_site_density_per_nm3 <= 0:
             raise ValueError("blocked_site_density_per_nm3 must be > 0")
         if self.dissolution_cell_nm <= 0:
@@ -1144,9 +1157,10 @@ class SimulationConfig:
         # LER estimator configuration (no artificial upper bound on grid_y)
         if self.stochastic_ler_grid_y < 1:
             raise ValueError("stochastic_ler_grid_y must be a positive integer")
-        if self.development_model not in ("eikonal", "column"):
+        if self.development_model not in ("eikonal", "eikonal3d", "column"):
             raise ValueError(
-                f"development_model must be 'eikonal' or 'column', got {self.development_model!r}"
+                "development_model must be 'eikonal', 'eikonal3d' or 'column', got "
+                f"{self.development_model!r}"
             )
         if self.stochastic_ler_estimator not in ("large_n", "legacy"):
             raise ValueError(
@@ -1257,7 +1271,10 @@ def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False, rate
     row field (H, W) for the Eikonal model, or ``None`` for the column model
     (which has no lateral information; its CD stays pixel-quantised).
     """
-    if cfg.development_model == "eikonal":
+    if cfg.development_model in ("eikonal", "eikonal3d"):
+        # "eikonal3d" (2026-09-06, B3.4): rows coupled through a y-term in the
+        # Godunov update -- the true 3D first arrival; needed when the rate
+        # field has cell-scale structure along y (development_stochasticity).
         depth, T = eikonal_development(
             inhib_3d,
             mack,
@@ -1266,10 +1283,14 @@ def _develop_depth(inhib_3d, mack, dx_nm, dz_nm, cfg, return_arrival=False, rate
             t_develop=cfg.develop_time_s,
             return_arrival=True,
             rate_multiplier=rate_multiplier,
+            dy=(dx_nm if cfg.development_model == "eikonal3d" else None),
+            n_iter=(24 if cfg.development_model == "eikonal3d" else 6),
         )
         return (depth, T[-1]) if return_arrival else depth
     if rate_multiplier is not None:
-        raise NotImplementedError("development_stochasticity requires development_model='eikonal'")
+        raise NotImplementedError(
+            "development_stochasticity requires development_model 'eikonal' or 'eikonal3d'"
+        )
     depth = surface_advancement_level_set(
         inhib_3d, mack, dx=dx_nm, dz=dz_nm, t_develop=cfg.develop_time_s
     )
@@ -1673,6 +1694,7 @@ def _cd_via_full_chem(
                     threshold=edge_threshold,
                     dx=dx_nm,
                     intensity=edge_intensity,
+                    passband_nm=cfg.ler_passband_nm,
                 )
             )
 
@@ -1687,6 +1709,7 @@ def _cd_via_full_chem(
                 intensity=intensity_fields,
                 edge="both",
                 estimator="large_n",
+                passband_nm=cfg.ler_passband_nm,
                 seed_count=cfg.stochastic_n_realisations,
             )
             ler_nm = est.ler_nm
