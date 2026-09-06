@@ -74,6 +74,10 @@ metrology passband of the source (`ler_passband_nm`; Anderson 10–834 nm, imec 
 ≈ 10.8–5500 nm). Measured values carry SEM bias (Lorusso/Mack 2018: ×1.2–1.7 for imec's biased
 protocol); the anchor data record bias-corrected estimates.
 
+For a user's own resist, `euv calibrate --bands` fits the chain to a wafer FEM and reports
+dose-to-size and LWR at the corners of the two undecided structural choices (acid-loss law,
+dissolution-unit size) as bands (`calibrate/bands.py`, 2.1).
+
 ## 6. Anchors and what they say
 
 | anchor | data | chain | verdict |

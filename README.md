@@ -298,6 +298,8 @@
 > Eikonal has no y-coupling, so it stays off by default (log Fortsetzungen 30–34). Measured roughness values carry SEM bias
 > (Lorusso/Mack 2018), which the anchor data record.
 > The full chain with every default's provenance and status is in [docs/physics.md](docs/physics.md).
+> With your own wafer data, `euv calibrate --bands` fits the chain and returns dose-to-size and
+> LWR as bands over the undecided model choices instead of single numbers (2.1).
 
 ### Known limitations (2.0.0)
 
@@ -348,7 +350,7 @@ indexed in [`docs/history/`](docs/history/README.md).
 294|@software{euvsimulator2026,
 295|  author       = {Flowbudget},
 296|  title        = {euvsimulator: Open Source EUV Lithography Simulator},
-297|  version      = {2.0.0},
+297|  version      = {2.1.0},
 298|  year         = {2026},
 299|  url          = {https://github.com/Flowbudget/euvsimulator},
 300|  license      = {Apache-2.0},

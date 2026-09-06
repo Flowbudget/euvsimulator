@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 _Nothing yet._
 
+## [2.1.0] — 2026-09-06
+
+### Added — calibration with structural uncertainty bands
+- **`euv calibrate --bands`** (`calibrate/bands.py`): after fitting a wafer FEM, the calibrated chain
+  is evaluated at the corners of the two structural choices no free measurement decides — the PEB
+  acid-loss law (`"analytical"` vs `"reaction_diffusion"`) and the dissolution-unit size (1 and
+  4.3 nm) — and reports dose-to-size and 3σ LWR as bands instead of single numbers. Simulated LWR
+  carries no SEM bias; the bootstrap CIs of the fitted parameters remain the statistical band.
+  Runtime ~3–5 min at grid 128 on an M1.
+- `calibrate.DEFAULT_BOUNDS` is the single source of the default fit bounds (contains the defaults;
+  test-guarded). No physics change.
+
 ## [2.0.0] — 2026-09-06
 
 **Release summary.** This version closes the physics work of September 2026: every default of the

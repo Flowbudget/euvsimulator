@@ -3600,3 +3600,9 @@ Fano(b) = 1 + m·(1 − c·σ/b)²: gemessen 1,45 (b 8 nm) … 1,88 (b 44 nm), E
 - Nebenbefund beim Lesen von `euv calibrate` für 2.1: die Default-Schranken der Anpassung enthielten den aktuellen Default nicht mehr
   (peb_k ≤ 2,0 bei Default 10,95; dill_C ≥ 0,01 bei 0,0152 knapp) — der Fit wäre an der Schranke geklemmt. Auf (0,05, 50) bzw.
   (0,005, 0,2) gesetzt. Regel: Schranken-Tests müssen die Defaults einschließen (Test folgt in 2.1).
+
+## 2026-09-06 (Fortsetzung 42): 2.1 — `euv calibrate --bands`
+`calibrate/bands.py::structural_bands`: D2S unter beiden PEB-Gesetzen (Bisektion, NaN falls nicht druckbar) und 3σ-LWR bei der
+analytischen D2S ohne/mit Zellrauschen (a = 1 und 4,3 nm), Mittel über Seeds; CLI-Flag `--bands/--no-bands`, Ausgabe im JSON unter
+`structural_bands`, Hinweis „kein SEM-Bias". Test mit grid 64/256 Zeilen (16 s). Version 2.1.0, CHANGELOG, README, physics.md.
+Keine Physikänderung. Damit ist der Abschlussplan §6 umgesetzt; weitere Physik nur nach §7 (neue Datenquelle).

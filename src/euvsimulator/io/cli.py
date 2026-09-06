@@ -735,6 +735,15 @@ def calibrate(
     method: str = typer.Option("Nelder-Mead", "--method", help="SciPy minimisation method"),
     maxiter: int = typer.Option(500, "--maxiter", help="Maximum iterations for optimiser"),
     seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for bootstrap"),
+    bands: bool = typer.Option(
+        False,
+        "--bands/--no-bands",
+        help=(
+            "After the fit, evaluate the structural uncertainty of the calibrated chain: "
+            "dose-to-size under both PEB acid-loss laws and 3-sigma LWR with/without "
+            "dissolution-cell noise (cells 1 and 4.3 nm); ~3-5 min at grid 128 (calibrate/bands.py)"
+        ),
+    ),
     period: float = typer.Option(
         64.0, "--period", help="Pattern period of the measured FEM [nm] (wafer scale)"
     ),
@@ -939,10 +948,47 @@ def calibrate(
             fitted = boot_result["fitted_on_original"][name]
             typer.echo(f"     {name}: {fitted:.4f}  [{lo:.4f}, {hi:.4f}]")
 
+    band_result = None
+    if bands:
+        from euvsimulator.calibrate.bands import structural_bands
+
+        typer.echo(
+            "\n[~] Structural uncertainty bands (both PEB laws, dissolution cells 1 / 4.3 nm)..."
+        )
+        fitted_params = dict(fit_result["fitted_params"])
+        base = dict(
+            period_nm=period,
+            line_width_nm=cd,
+            se_blur_nm=se_blur,
+            dill_C=fitted_params.get("dill_C", _defaults.dill_C),
+            peb_k=fitted_params.get("peb_k", _defaults.peb_k),
+            peb_t_bake=fitted_params.get("peb_t_bake", _defaults.peb_t_bake),
+            peb_sigma_diff=fitted_params.get("peb_sigma_diff", _defaults.peb_sigma_diff),
+            mack_R_max=fitted_params.get("mack_R_max", _defaults.mack_R_max),
+            mack_R_min=fitted_params.get("mack_R_min", _defaults.mack_R_min),
+            mack_n=fitted_params.get("mack_n", _defaults.mack_n),
+            mack_M_th=fitted_params.get("mack_M_th", _defaults.mack_M_th),
+        )
+        band_result = structural_bands(base, target_cd_nm=cd, grid=grid)
+        d2s = band_result["dose_to_size_mj_cm2"]
+        typer.echo(
+            "   dose-to-size: "
+            + ", ".join(f"{k} {v:.2f}" for k, v in d2s.items())
+            + f"  -> band {band_result['dose_to_size_band']}"
+        )
+        typer.echo(
+            "   LWR 3sigma [nm]: "
+            + ", ".join(
+                f"{k} {v:.2f}" for k, v in band_result["lwr_3sigma_nm_at_analytical_d2s"].items()
+            )
+            + f"  -> band {band_result['lwr_3sigma_band']}"
+        )
+
     # Prepare output
     output_data = {
         "fit": fit_result,
         "bootstrap": boot_result,
+        "structural_bands": band_result,
         "data_shape": {"dose": data.n_dose, "focus": data.n_focus},
     }
 
