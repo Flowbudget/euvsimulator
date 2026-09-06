@@ -122,4 +122,12 @@ attribution; anchor data are digitised numbers with their citations. See [NOTICE
 
 Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Physics changes
 follow the project rule: predict first, measure, then change the code, and keep the source of
-every number. Development is supported through [GitHub Sponsors](https://github.com/sponsors/Flowbudget).
+every number.
+
+euvsimulator is developed and tested on a single laptop. If it saves you time, you can support
+the work:
+
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub-Sponsor-ea4aaa?logo=github&logoColor=white)](https://github.com/sponsors/Flowbudget)
+[![Donate via PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=Gofter%40web.de&currency_code=EUR)
+
+PayPal donations go to **Gofter@web.de**.
