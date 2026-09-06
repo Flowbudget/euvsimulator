@@ -176,3 +176,11 @@ CI: sobald das GitHub-Limit zurückgesetzt ist (Nutzer).
 - Flare und Maskenrauheit für den MET-Anker; D(T); k_Q an einem zweiten Resist.
 - imec-Antwort: NXE1716 mit echten Werten neu rechnen, Kalibrierung ×1,79 prüfen.
 - 2.1: `euv calibrate` mit Unsicherheitsbändern (Blur, Auflösungseinheit, Verlustgesetz).
+
+## 8. Browser-GUI (2026-09-06, abgeschlossen in vier Stufen)
+
+Nicht Teil des Physikprogramms; ändert keine Physik. Stufe 1 Aufräumen (eine Seite, kein CDN,
+Threadpool), Stufe 2 Presets und Feldkatalog (API = `SimulationConfig`, Paritätstest), Stufe 3
+Hintergrundjobs mit Fortschritt/Abbruch, Speicherschätzung statt Limits, Export, Stufe 4
+Prozessfenster und Bänder in der Oberfläche, README-Screenshots per Headless-Chrome. Details:
+CHANGELOG [Unreleased] und Arbeitslog Fortsetzungen 45–46. Keine weiteren Stufen geplant.

@@ -3659,3 +3659,28 @@ Abweichungen vom Preset, blendet modellfremde Felder aus, erklärt CD = 0 / CD =
 Modell und Dataclass auf Gleichheit. Im Browser geprüft: NXE1716 kalibriert 20,35 nm bei 11 mJ/cm², Vorhersage-Preset CD = Pitch mit
 Hinweis, Override Dosis 19,7 → CD 21,9 nm (nur `{"dose_mj_cm2": 19.7}` gesendet). Nebenbefund: `test_release` verlangte noch den
 entfernten Documentation-Link (alt-rot seit dem README-Umbau) → angepasst.
+
+## 2026-09-06 (Fortsetzung 46): Browser-GUI, Stufen 3 und 4 — Jobs, Prozessfenster, Bänder, Screenshots
+**Stufe 3.** `api/jobs.py`: In-Memory-Registry, ein Worker-Thread pro Job, Zustände queued/running/done/failed/cancelled,
+Fortschritt + Meldung + Teilergebnisse, kooperativer Abbruch. Dafür ein optionaler Hook `run_simulation(cfg, progress=...)`, der
+vor jeder stochastischen Realisierung `progress(done, total)` ruft und bei `False` `SimulationCancelledError` wirft; gleicher Hook
+an `structural_bands(progress=...)` (vor jeder Ecke). Beides ohne Physikänderung (Diff geprüft: nur Signatur, Schleifenzähler,
+Hook-Aufruf). Endpunkte `POST /jobs` (simulate / process_window / bands), `GET/DELETE /jobs/{id}`, `GET /jobs/{id}/export.csv`,
+`POST /estimate`. **Speicherschätzung statt Limits** (`api/estimate.py`): Peak-RSS von `run_simulation` für elf Konfigurationen
+auf dem M1 gemessen (Kind-Prozess, `ru_maxrss`; Scratch `mem_probe.py`): aerial ≈ 55 MB unabhängig vom Grid bis 512;
+full_chem deterministisch 154 MB (Grid 128) / 433 MB (256); stochastisch Grid 128: 525 / 819 / 960 MB bei 512 / 2048 / 4096
+Zeilen; Grid 256 & 2048 Zeilen 1550 MB; 3 Realisierungen +90 MB; 41 Schichten 1866 MB. Modell: 55 MB + 330 B·Schichten·Grid²
++ 250 B·Schichten·min(Zeilen, 1024)·Grid + 170 B·Zeilen·Grid·Realisierungen; trifft die Messungen auf ±30 % (Test).
+**Stufe 4.** Prozessfenster als Job (gleiche Schleife wie `euv process-window`, DoF/EL aus `metro.process_window`), Bossung-
+Tabelle mit In-Spec-Färbung wächst während des Laufs; Bänder-Job = `structural_bands` auf der aufgelösten Konfiguration;
+CSV/JSON-Export; Deep-Links `?preset=…&task=…&f.<feld>=…&run=1` und `?job=<id>`; README-Screenshots (docs/images/, 2880×2000)
+per Headless-Chrome über den `?job=`-Link eines fertigen Jobs, weil `--virtual-time-budget` nicht auf echte Rechenzeit wartet.
+**Prüfung (auf Wunsch des Nutzers "alles noch einmal ganz genau"):** NaN-Ergebnisse (nichts druckt) werden von FastAPI als
+null serialisiert (geprüft für /simulate und einen Bänder-Job ohne druckende Ecke); Bänder-Antwort trägt `notes` als Text, nicht
+als Liste → GUI-Fehler „notes.push" behoben; EL = 0 bei nur einer druckenden Dosisspalte wird jetzt erklärt; „1σ" wurde durch
+CSS-Großschreibung zu „1Σ" → Transform entfernt; README behauptete „high-NA anamorphic" für die Abbildung → korrigiert (Pupille
+existiert als Modul, ist nicht in die Pipeline verdrahtet); Asset-Cache-Busting per Inhalts-Hash statt Paketversion, weil sich
+die Dateien innerhalb einer Version ändern; Prozessfenster-Schleife nutzt `dataclasses.replace` statt eines dict-Umwegs.
+Im Browser geprüft: Stochastik-Job mit Meldungen „realisation 1…3 of 3", Abbruch bei 3 von 40, Prozessfenster 4×3 mit
+Teilmatrix, Bänder-Job (Grid 32, 64 Zeilen) 7,7 s, Deep-Link-Start, Job-Link. Der Laptop-Grenzfall: alle GUI-Tests laufen mit
+Grid 32–128 und ≤ 512 Zeilen.

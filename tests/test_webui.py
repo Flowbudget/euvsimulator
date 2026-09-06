@@ -73,7 +73,15 @@ class TestRouting:
         resp = client.get("/static/app.js")
         assert resp.status_code == 200
         assert "javascript" in resp.headers["content-type"]
-        for fn in ("fetchHealth", "fetchMaterials", "postSimulation", "drawProfile", "buildForm"):
+        expected = (
+            "fetchHealth",
+            "fetchMaterials",
+            "startJob",
+            "pollJob",
+            "drawProfile",
+            "buildForm",
+        )
+        for fn in expected:
             assert fn in resp.text, fn
 
     def test_unknown_static_file_returns_404(self, client: TestClient) -> None:

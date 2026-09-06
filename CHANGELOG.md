@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — browser GUI, stages 3 and 4 (jobs, process window, bands, estimate)
+- Background jobs (`api/jobs.py`): `POST /jobs` starts a simulation, a process window or the
+  structural bands in a worker thread; `GET /jobs/{id}` reports progress, message, partial
+  results (the growing CD matrix) and the final result; `DELETE /jobs/{id}` cancels
+  cooperatively (before the next stochastic realisation / grid cell / bands corner);
+  `GET /jobs/{id}/export.csv` exports profiles, the Bossung matrix or the band corners.
+- `run_simulation(cfg, progress=...)`: optional hook called before each stochastic
+  realisation; returning `False` raises `SimulationCancelledError`. Same hook on
+  `calibrate.bands.structural_bands(progress=...)`. No physics change.
+- `POST /estimate`: peak-memory estimate of a configuration from a model fitted to eleven
+  measurements on an Apple M1 (`api/estimate.py`, ±30 %, test-guarded) — shown live in the GUI
+  instead of any size limit.
+- GUI: task selector (Simulation / Process window / Uncertainty bands), progress bar with
+  message and elapsed time, cancel button, live memory estimate and live physics check under
+  the Run button, LER/LWR tiles with n_eff, correlation length, passband and 95 % CI in the
+  notes, Bossung table with in-spec colouring and best cell (rendered while the job runs),
+  bands table with dose-to-size and 3σ-LWR bands, CSV/JSON export links.
+
 ### Added — browser GUI, stage 2 (presets and guidance)
 - `GET /presets`: named starting configurations with provenance text and the full
   `SimulationConfig` each resolves to — the documented default resist, the NXE1716 anchor as a

@@ -69,6 +69,89 @@ class SimulationResponse(BaseModel):
 
 
 # ──────────────────────────────────────────────
+# Background jobs and estimates
+# ──────────────────────────────────────────────
+
+
+class ProcessWindowParams(BaseModel):
+    """Dose × focus grid for ``kind="process_window"``."""
+
+    dose_start: float = Field(10.0, gt=0)
+    dose_end: float = Field(40.0, gt=0)
+    dose_steps: int = Field(7, ge=2)
+    focus_start: float = -50.0
+    focus_end: float = 50.0
+    focus_steps: int = Field(7, ge=2)
+    tolerance: float = Field(0.1, gt=0, lt=1, description="CD tolerance fraction (0.1 = ±10 %)")
+
+
+class BandsParams(BaseModel):
+    """Settings for ``kind="bands"`` (calibrate.bands.structural_bands)."""
+
+    rows: int = Field(1024, ge=1, description="Rows of the stochastic LER field per corner")
+    seeds: List[int] = Field(default_factory=lambda: [1, 2, 3])
+    dose_lo: float = Field(0.3, gt=0)
+    dose_hi: float = Field(60.0, gt=0)
+
+
+class JobRequest(BaseModel):
+    """Request body for ``POST /jobs``."""
+
+    kind: str = Field("simulate", description="simulate | process_window | bands")
+    preset: Optional[str] = Field(None, description="Preset key from GET /presets")
+    config: PipelineOverrides = Field(  # type: ignore[valid-type]
+        default_factory=PipelineOverrides, description="SimulationConfig field overrides"
+    )
+    process_window: ProcessWindowParams = Field(
+        default_factory=ProcessWindowParams  # type: ignore[arg-type]
+    )
+    bands: BandsParams = Field(default_factory=BandsParams)  # type: ignore[arg-type]
+
+
+class JobStatus(BaseModel):
+    """One background job as ``GET /jobs/{id}`` reports it."""
+
+    id: str
+    kind: str
+    request: Dict[str, Any] = Field(default_factory=dict, description="The POST /jobs body")
+    status: str = Field(..., description="queued | running | done | failed | cancelled")
+    progress: float
+    message: str
+    partial: Dict[str, Any] = Field(default_factory=dict)
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    created_at: float
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    elapsed_s: float
+    cancel_requested: bool = False
+
+
+class JobListResponse(BaseModel):
+    """Response from ``GET /jobs``."""
+
+    jobs: List[JobStatus]
+
+
+class EstimateRequest(BaseModel):
+    """Request body for ``POST /estimate``: the same preset + overrides as a job."""
+
+    preset: Optional[str] = None
+    config: PipelineOverrides = Field(default_factory=PipelineOverrides)  # type: ignore[valid-type]
+
+
+class EstimateResponse(BaseModel):
+    """Peak-memory estimate of one run (see api/estimate.py for the model)."""
+
+    memory_bytes: float
+    memory_text: str
+    relative_uncertainty: float
+    runs: int
+    note: str
+    physics_errors: List[str] = Field(default_factory=list)
+
+
+# ──────────────────────────────────────────────
 # Presets and field catalogue
 # ──────────────────────────────────────────────
 

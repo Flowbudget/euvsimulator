@@ -31,12 +31,67 @@
     <aside class="params">
       <form id="sim-form" novalidate>
 
+        <h3>Task</h3>
+        <div class="task-row" id="task-row">
+          <button type="button" data-task="simulate" class="active">Simulation</button>
+          <button type="button" data-task="process_window">Process window</button>
+          <button type="button" data-task="bands">Uncertainty bands</button>
+        </div>
+
+        <div class="task-panel hidden" id="panel-process_window">
+          <div class="param">
+            <label>Dose start / end [mJ/cm²] / steps</label>
+            <div class="param-inputs">
+              <input type="number" id="pw-dose-start" step="any" value="10" />
+              <input type="number" id="pw-dose-end" step="any" value="40" />
+              <input type="number" id="pw-dose-steps" step="1" value="7" />
+            </div>
+          </div>
+          <div class="param">
+            <label>Focus start / end [nm] / steps</label>
+            <div class="param-inputs">
+              <input type="number" id="pw-focus-start" step="any" value="-50" />
+              <input type="number" id="pw-focus-end" step="any" value="50" />
+              <input type="number" id="pw-focus-steps" step="1" value="7" />
+            </div>
+          </div>
+          <div class="param">
+            <label for="pw-tolerance">CD tolerance (fraction)</label>
+            <input type="number" id="pw-tolerance" step="0.01" value="0.1" />
+            <small>Dose × focus grid of single runs; DoF and EL from metro.process_window. The main parameters below are the base point (dose and defocus are swept).</small>
+          </div>
+        </div>
+
+        <div class="task-panel hidden" id="panel-bands">
+          <div class="param">
+            <label>Rows / seeds (comma separated)</label>
+            <div class="param-inputs param-pair">
+              <input type="number" id="bands-rows" step="1" value="1024" />
+              <input type="text" id="bands-seeds" value="1, 2, 3" />
+            </div>
+          </div>
+          <div class="param">
+            <label>Dose search range [mJ/cm²]</label>
+            <div class="param-inputs param-pair">
+              <input type="number" id="bands-dose-lo" step="any" value="0.3" />
+              <input type="number" id="bands-dose-hi" step="any" value="60" />
+            </div>
+            <small>Same as <code>euv calibrate --bands</code>: dose-to-size under both PEB acid-loss laws, 3σ LWR with photon noise alone and with dissolution-cell noise (1 and 4.3 nm). Needs the full-chemistry model; minutes at grid 128.</small>
+          </div>
+        </div>
+
         <div class="run-row">
           <button type="submit" class="btn btn-success" id="sim-submit-btn">
             <span class="spinner hidden" id="sim-spinner"></span>
-            Run simulation
+            Run
           </button>
+          <button type="button" class="btn btn-danger hidden" id="cancel-btn">Cancel</button>
           <span class="run-time" id="sim-time"></span>
+        </div>
+        <div class="estimate" id="estimate"></div>
+        <div class="progress hidden" id="progress">
+          <div class="progress-bar"><div id="progress-fill"></div></div>
+          <div class="progress-text"><span id="progress-msg"></span><span id="progress-pct"></span></div>
         </div>
 
         <div id="error-bar" class="alert alert-error error-bar hidden">
@@ -71,14 +126,14 @@
     <!-- ── Output ── -->
     <section class="output">
 
-      <div class="card">
+      <div class="card" id="profile-card">
         <div class="card-header">
           <h2>Cross section through the image</h2>
           <span class="card-note" id="plot-note"></span>
         </div>
         <div class="card-body plot-body">
           <div class="plot-placeholder" id="plot-placeholder">
-            Pick a preset, adjust what you like and press <strong>Run simulation</strong>.
+            Pick a preset, adjust what you like and press <strong>Run</strong>.
           </div>
           <svg id="plot" class="plot hidden" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet" role="img"
                aria-label="Aerial image cross section"></svg>
@@ -100,8 +155,42 @@
         <div class="tile hidden" id="tile-lwr"><span class="tile-label">LWR 1σ</span><span class="tile-value" id="r-lwr">—</span><span class="tile-unit">nm</span></div>
       </div>
 
+      <div class="card hidden" id="pw-card">
+        <div class="card-header">
+          <h2>Process window (Bossung table)</h2>
+          <span class="card-note" id="pw-note"></span>
+        </div>
+        <div class="card-body">
+          <div class="tiles" style="margin-bottom:12px">
+            <div class="tile"><span class="tile-label">Depth of focus</span><span class="tile-value" id="pw-dof">—</span><span class="tile-unit">nm</span></div>
+            <div class="tile"><span class="tile-label">Exposure latitude</span><span class="tile-value" id="pw-el">—</span><span class="tile-unit">%</span></div>
+            <div class="tile"><span class="tile-label">Target CD</span><span class="tile-value" id="pw-target">—</span><span class="tile-unit">nm</span></div>
+          </div>
+          <div class="matrix-wrap" id="pw-matrix"></div>
+          <div class="matrix-caption">CD [nm]; green = within tolerance of the target, rows = focus, columns = dose.</div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="bands-card">
+        <div class="card-header">
+          <h2>Structural uncertainty bands</h2>
+          <span class="card-note" id="bands-note"></span>
+        </div>
+        <div class="card-body">
+          <div class="tiles" style="margin-bottom:12px">
+            <div class="tile"><span class="tile-label">Dose-to-size band</span><span class="tile-value" id="bands-d2s">—</span><span class="tile-unit">mJ/cm²</span></div>
+            <div class="tile"><span class="tile-label">LWR 3σ band</span><span class="tile-value" id="bands-lwr">—</span><span class="tile-unit">nm</span></div>
+          </div>
+          <div class="matrix-wrap" id="bands-table"></div>
+          <div class="matrix-caption" id="bands-caption"></div>
+        </div>
+      </div>
+
       <div class="card hidden" id="notes-card">
-        <div class="card-header"><h2>Reading this result</h2></div>
+        <div class="card-header">
+          <h2>Reading this result</h2>
+          <span class="actions" id="export-actions"></span>
+        </div>
         <div class="card-body"><ul class="notes" id="notes"></ul></div>
       </div>
 

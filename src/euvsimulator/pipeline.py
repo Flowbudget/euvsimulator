@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import torch
 
@@ -58,6 +58,15 @@ from euvsimulator.resist.stochastic import (
 # not a physical or calibrated quantity; it was previously an unnamed
 # literal in two places.
 AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 = 20.0
+
+
+class SimulationCancelledError(RuntimeError):
+    """Raised by run_simulation when its progress hook asks it to stop."""
+
+
+# progress hook: called as progress(done, total) before each stochastic
+# realisation; returning False cancels the run (SimulationCancelledError).
+ProgressHook = Callable[[int, int], bool]
 
 # Default resist composition for the first-principles Dill B (see the dill_B
 # field): poly(hydroxystyrene) C8H8O with 35 % of the phenol sites carrying a
@@ -1559,6 +1568,7 @@ def _cd_via_full_chem(
     half: int,
     line_width_px: int,
     energy_eV: float,
+    progress: ProgressHook | None = None,
 ) -> tuple[float, torch.Tensor, float, float, float, dict[str, Any] | None]:
     """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
 
@@ -1707,7 +1717,9 @@ def _cd_via_full_chem(
         alpha_per_um = cfg.dill_A + cfg.dill_B
         thickness_um = cfg.resist_thickness_nm / 1000.0
         absorbed_fraction = 1.0 - math.exp(-alpha_per_um * thickness_um)
-        for _ in range(cfg.stochastic_n_realisations):
+        for i_real in range(cfg.stochastic_n_realisations):
+            if progress is not None and not progress(i_real, cfg.stochastic_n_realisations):
+                raise SimulationCancelledError("cancelled by the progress hook")
             d_eff = photon_deposition_shot_noise(
                 stoch_dose,
                 se_blur_nm=cfg.se_blur_nm,
@@ -1885,6 +1897,8 @@ def _find_runs_1d(x: torch.Tensor, target: int = 0) -> list:
 
 def run_simulation(
     cfg: Optional[SimulationConfig] = None,
+    *,
+    progress: ProgressHook | None = None,
     **kwargs,
 ) -> SimulationResult:
     """Run a full end-to-end EUV lithography simulation.
@@ -1893,6 +1907,9 @@ def run_simulation(
     ----------
     cfg : SimulationConfig, optional
         Simulation configuration.  Omit for defaults.
+    progress : callable, optional
+        ``progress(done, total)`` is called before each stochastic realisation;
+        returning ``False`` cancels the run with :class:`SimulationCancelledError`.
     **kwargs
         Override individual config parameters.
 
@@ -2207,7 +2224,7 @@ def run_simulation(
     line_width_px = int(round(cfg.line_width_nm / (period_m / cfg.grid * 1e9)))
     if cfg.resist_model == "full_chem":
         cd, dev, nils_val, ler_nm, lwr_nm, ler_metadata = _cd_via_full_chem(
-            aerial, cfg, period_m, half, line_width_px, energy_eV
+            aerial, cfg, period_m, half, line_width_px, energy_eV, progress=progress
         )
     else:
         cd, dev, nils_val = _cd_via_aerial_threshold(aerial, cfg, half, line_width_px)

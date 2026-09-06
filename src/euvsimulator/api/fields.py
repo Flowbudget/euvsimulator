@@ -550,14 +550,20 @@ PRESETS: Dict[str, Preset] = {
     ),
     "met2d": Preset(
         key="met2d",
-        label="MET-2D / XP 5271 anchor (Berkeley MET)",
-        summary="50 nm 1:1 lines, NA 0.30 annular σ 0.35–0.55, 80 nm film, PEB 120 °C / 90 s.",
+        label="MET-2D / XP 5271 anchor (Berkeley MET, dose scale not predicted)",
+        summary=(
+            "50 nm 1:1 lines, NA 0.30 annular σ 0.35–0.55, 80 nm film, PEB 120 °C / 90 s, at the "
+            "measured E-size 12.5 mJ/cm² — where this uncalibrated chain clears the line (CD 0)."
+        ),
         provenance=(
             "Mack parameters and Dill B from Sekiguchi 2011, Dill C from LBNL, PEB blur set "
             "directly from the measured deprotection blur (Anderson & Naulleau 2008, 23.8 nm "
             "width → σ 10.1 nm). The deprotection rate is not sourced for this resist, so the "
-            "dose scale is not predicted (measured E-size 12.5 mJ/cm²); measured LER 6.7 nm in "
-            "the 10–834 nm band, SEM bias unknown."
+            "dose scale is not predicted: the chain prints 50 nm at about 0.8 mJ/cm² (bisection, "
+            "grid 128 and 256) where the wafer needed 12.5 mJ/cm²; at the preset's 12.5 mJ/cm² "
+            "the line is fully cleared. Lower the dose to about 0.8 to see the printed line, or "
+            "calibrate (euv calibrate) before comparing roughness. Measured LER 6.7 nm in the "
+            "10–834 nm band, SEM bias unknown."
         ),
         factory=met2d_config,
     ),

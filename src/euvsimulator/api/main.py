@@ -6,7 +6,12 @@ Endpoints
 - ``GET  /health``          — Service health check
 - ``GET  /presets``         — Named starting configurations with provenance
 - ``GET  /fields``          — Every SimulationConfig field with group, label, help
-- ``POST /simulate``        — Run a full simulation pipeline (preset + overrides)
+- ``POST /simulate``        — Run a full simulation pipeline (preset + overrides), blocking
+- ``POST /jobs``            — Start a background job (simulate, process_window, bands)
+- ``GET  /jobs/{id}``       — Progress, partial and final results of a job
+- ``DELETE /jobs/{id}``     — Cancel a job (cooperative, at the next realisation/cell)
+- ``GET  /jobs/{id}/export.csv`` — Profiles / matrices of a finished job as CSV
+- ``POST /estimate``        — Peak-memory estimate of a configuration
 - ``GET  /materials``       — List available materials in the CXRO database
 - ``POST /materials/nk``    — Retrieve refractive index for a given element/energy
 
@@ -17,15 +22,17 @@ GUI's health polling keeps working while a simulation is computing.
 
 from __future__ import annotations
 
+import hashlib
 import os
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Optional, cast
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from euvsimulator import __version__
+from euvsimulator.api.estimate import estimate as estimate_run
 from euvsimulator.api.fields import (
     GROUPS,
     PRESETS,
@@ -34,9 +41,15 @@ from euvsimulator.api.fields import (
     physics_errors,
     resolve_config,
 )
+from euvsimulator.api.jobs import REGISTRY
 from euvsimulator.api.schemas import (
+    EstimateRequest,
+    EstimateResponse,
     FieldCatalogueResponse,
     HealthResponse,
+    JobListResponse,
+    JobRequest,
+    JobStatus,
     MaterialElement,
     MaterialListResponse,
     NkRequest,
@@ -45,10 +58,15 @@ from euvsimulator.api.schemas import (
     PresetListResponse,
     SimulationRequest,
     SimulationResponse,
-    SimulationResult,
+)
+from euvsimulator.api.tasks import (
+    bands_task,
+    process_window_task,
+    simulate_task,
+    simulation_payload,
 )
 from euvsimulator.materials import _ELEMENT_TABLE, get_cxro_table
-from euvsimulator.pipeline import AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2
+from euvsimulator.pipeline import SimulationConfig
 from euvsimulator.pipeline import run_simulation as run_pipeline
 
 # ──────────────────────────────────────────────
@@ -71,15 +89,25 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _asset_stamp() -> str:
+    """Short content hash of the GUI assets, used as their cache-busting query string.
+
+    A browser then never pairs a new page with a cached old stylesheet or
+    script, also between releases (the package version alone would not change
+    while the files do).
+    """
+    h = hashlib.sha256()
+    for name in ("app.js", "style.css"):
+        with open(os.path.join(STATIC_DIR, name), "rb") as fh:
+            h.update(fh.read())
+    return h.hexdigest()[:12]
+
+
 @app.get("/", include_in_schema=False)
 async def serve_gui() -> HTMLResponse:
-    """Serve the single-page browser GUI.
-
-    The asset links carry the package version as a query string so a browser
-    never pairs a new page with a cached old stylesheet or script.
-    """
+    """Serve the single-page browser GUI (asset links carry a content hash)."""
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as fh:
-        html = fh.read().replace("__VERSION__", __version__)
+        html = fh.read().replace("__VERSION__", _asset_stamp())
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
@@ -146,9 +174,25 @@ async def list_fields() -> FieldCatalogueResponse:
     return FieldCatalogueResponse(groups=GROUPS, fields=field_catalogue())  # type: ignore[arg-type]
 
 
+def _resolve_or_422(preset: Optional[str], overrides_model: Any) -> tuple[str, SimulationConfig]:
+    """Preset + overrides -> validated SimulationConfig, or HTTP 422."""
+    preset_key = preset or "default"
+    if preset_key not in PRESETS:
+        raise HTTPException(status_code=422, detail=f"unknown preset '{preset_key}'")
+    overrides = cast(BaseModel, overrides_model).model_dump(exclude_unset=True)
+    try:
+        cfg = resolve_config(preset_key, overrides)
+    except ValueError as exc:  # the dataclass's own __post_init__ checks
+        raise HTTPException(status_code=422, detail=str(exc))
+    errors = physics_errors(cfg)
+    if errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
+    return preset_key, cfg
+
+
 @app.post("/simulate", response_model=SimulationResponse, tags=["simulation"])
 def run_simulation(req: SimulationRequest) -> SimulationResponse:
-    """Execute a full EUV lithography simulation pipeline.
+    """Execute a full EUV lithography simulation pipeline (blocking call).
 
     Starts from ``preset`` (default: the pipeline defaults), applies the
     ``config`` overrides, checks the physical constraints and runs:
@@ -158,6 +202,140 @@ def run_simulation(req: SimulationRequest) -> SimulationResponse:
     4. CD extraction + NILS (+ LER/LWR with photon shot noise enabled)
 
     Sync endpoint: FastAPI executes it in the threadpool (see module docstring).
+    For long runs use ``POST /jobs`` and poll.
+    """
+    preset_key, cfg = _resolve_or_422(req.preset, req.config)
+    try:
+        result = run_pipeline(cfg)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return SimulationResponse(**simulation_payload(cfg, result, preset_key))
+
+
+# ──────────────────────────────────────────────
+# Background jobs
+# ──────────────────────────────────────────────
+
+
+@app.post("/jobs", response_model=JobStatus, status_code=202, tags=["jobs"])
+async def start_job(req: JobRequest) -> JobStatus:
+    """Start a background job and return its status (poll ``GET /jobs/{id}``).
+
+    ``kind``: ``simulate`` (one run; progress per stochastic realisation),
+    ``process_window`` (CD over the dose × focus grid in ``process_window``),
+    ``bands`` (``euv calibrate --bands`` on the resolved configuration).
+    """
+    preset_key, cfg = _resolve_or_422(req.preset, req.config)
+    request = req.model_dump(exclude_unset=True)
+    if req.kind == "simulate":
+        task = simulate_task(cfg, preset_key)
+    elif req.kind == "process_window":
+        p = req.process_window
+        doses = [
+            p.dose_start + (p.dose_end - p.dose_start) * i / (p.dose_steps - 1)
+            for i in range(p.dose_steps)
+        ]
+        focuses = [
+            p.focus_start + (p.focus_end - p.focus_start) * i / (p.focus_steps - 1)
+            for i in range(p.focus_steps)
+        ]
+        task = process_window_task(
+            cfg, preset_key, doses=doses, focuses=focuses, tolerance=p.tolerance
+        )
+    elif req.kind == "bands":
+        if cfg.resist_model != "full_chem":
+            raise HTTPException(status_code=422, detail="bands need resist_model = full_chem")
+        b = req.bands
+        task = bands_task(
+            cfg, preset_key, rows=b.rows, seeds=b.seeds, dose_lo=b.dose_lo, dose_hi=b.dose_hi
+        )
+    else:
+        raise HTTPException(status_code=422, detail=f"unknown job kind '{req.kind}'")
+    job = REGISTRY.submit(req.kind, request, task)
+    return JobStatus(**job.snapshot())
+
+
+@app.get("/jobs", response_model=JobListResponse, tags=["jobs"])
+async def list_jobs() -> JobListResponse:
+    """All jobs of this server process, oldest first (results omitted)."""
+    return JobListResponse(
+        jobs=[JobStatus(**{**j.snapshot(), "result": None, "partial": {}}) for j in REGISTRY.list()]
+    )
+
+
+@app.get("/jobs/{job_id}", response_model=JobStatus, tags=["jobs"])
+async def get_job(job_id: str) -> JobStatus:
+    """Status, progress, partial and (when done) final result of a job."""
+    job = REGISTRY.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="no such job")
+    return JobStatus(**job.snapshot())
+
+
+@app.delete("/jobs/{job_id}", response_model=JobStatus, tags=["jobs"])
+async def cancel_job(job_id: str) -> JobStatus:
+    """Ask a job to stop; it ends at the next realisation / grid cell."""
+    job = REGISTRY.cancel(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="no such job")
+    return JobStatus(**job.snapshot())
+
+
+@app.get("/jobs/{job_id}/export.csv", response_class=PlainTextResponse, tags=["jobs"])
+async def export_job_csv(job_id: str) -> PlainTextResponse:
+    """CSV of a finished job: profiles (simulate), CD matrix (process_window)
+    or the corner values (bands). Line 1 names the preset and the kind.
+    """
+    job = REGISTRY.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="no such job")
+    if job.status != "done" or job.result is None:
+        raise HTTPException(status_code=409, detail=f"job is {job.status}")
+    text = _job_csv(job.kind, job.result)
+    return PlainTextResponse(
+        text,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="euvsimulator_{job.kind}_{job_id}.csv"'
+        },
+    )
+
+
+def _job_csv(kind: str, r: Dict[str, Any]) -> str:
+    lines = [f"# euvsimulator {__version__}, kind={kind}, preset={r.get('preset')}"]
+    if kind == "simulate":
+        raw = r["raw"]
+        period = r["config"]["period_nm"]
+        n = len(raw["aerial_profile_nm"])
+        for m in r["results"]:
+            lines.append(f"# {m['metric']} = {m['value']} {m['unit']}".rstrip())
+        lines.append("position_nm,local_dose_mj_cm2,developed")
+        for i, (a, d) in enumerate(zip(raw["aerial_profile_nm"], raw["resist_profile"])):
+            x = -period / 2 + period * i / (n - 1)
+            lines.append(f"{x:.4f},{a:.6g},{d:g}")
+    elif kind == "process_window":
+        lines.append(
+            f"# target_cd_nm = {r['target_cd_nm']}, tolerance = {r['tolerance']}, "
+            f"depth_of_focus_nm = {r['depth_of_focus_nm']}, "
+            f"exposure_latitude_pct = {r['exposure_latitude_pct']}"
+        )
+        lines.append("focus_nm\\dose_mj_cm2," + ",".join(f"{d:g}" for d in r["doses"]))
+        for j, f in enumerate(r["focuses"]):
+            row = [r["cd_matrix"][i][j] for i in range(len(r["doses"]))]
+            lines.append(f"{f:g}," + ",".join("" if v is None else f"{v:.4f}" for v in row))
+    else:  # bands
+        lines.append("quantity,corner,value")
+        for k, v in r["dose_to_size_mj_cm2"].items():
+            lines.append(f"dose_to_size_mj_cm2,{k},{v}")
+        for k, v in r["lwr_3sigma_nm_at_analytical_d2s"].items():
+            lines.append(f"lwr_3sigma_nm,{k},{v}")
+    return "\n".join(lines) + "\n"
+
+
+@app.post("/estimate", response_model=EstimateResponse, tags=["jobs"])
+async def estimate_endpoint(req: EstimateRequest) -> EstimateResponse:
+    """Peak-memory estimate of one run of this configuration (no size limits,
+    just the number, ±30 %; see api/estimate.py).
     """
     preset_key = req.preset or "default"
     if preset_key not in PRESETS:
@@ -165,76 +343,9 @@ def run_simulation(req: SimulationRequest) -> SimulationResponse:
     overrides = cast(BaseModel, req.config).model_dump(exclude_unset=True)
     try:
         cfg = resolve_config(preset_key, overrides)
-    except ValueError as exc:  # the dataclass's own __post_init__ checks
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    errors = physics_errors(cfg)
-    if errors:
-        raise HTTPException(status_code=422, detail="; ".join(errors))
-
-    try:
-        result = run_pipeline(cfg)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-    aerial = result.aerial_image
-    centre = aerial.shape[0] // 2
-    i_max = float(aerial.max())
-    i_min = float(aerial.min())
-
-    results: List[SimulationResult] = [
-        SimulationResult(stage="aerial", metric="nils", value=result.nils_value, unit=""),
-        SimulationResult(stage="resist", metric="cd", value=result.cd_nm, unit="nm"),
-        SimulationResult(
-            stage="aerial",
-            metric="contrast",
-            value=(i_max - i_min) / (i_max + i_min + 1e-12) * 100,
-            unit="%",
-        ),
-    ]
-    if cfg.enable_stochastic:
-        results.append(
-            SimulationResult(stage="resist", metric="ler_1sigma", value=result.ler_nm, unit="nm")
-        )
-        results.append(
-            SimulationResult(stage="resist", metric="lwr_1sigma", value=result.lwr_nm, unit="nm")
-        )
-
-    raw: Dict[str, Any] = {
-        "aerial_profile_nm": aerial[centre, :].tolist(),
-        "aerial_shape": list(aerial.shape),
-        # 1 = developed (dissolved through the film), 0 = resist remaining
-        "resist_profile": result.resist_profile[centre, :].tolist(),
-        "absorber_reflectivity": result.absorber_reflectivity,
-        "grid": cfg.grid,
-    }
-    if cfg.resist_model == "aerial_threshold":
-        # Same expression as pipeline._cd_via_aerial_threshold, so the plotted
-        # threshold line is the one the CD was actually extracted at.
-        raw["threshold_intensity"] = (
-            cfg.resist_threshold_norm
-            * float(aerial.mean())
-            * (AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 / max(cfg.dose_mj_cm2, 1e-9))
-        )
-    if cfg.enable_stochastic and result.ler_metadata:
-        raw["ler_metadata"] = {
-            k: v for k, v in result.ler_metadata.items() if isinstance(v, (int, float, str, bool))
-        }
-
-    notes = [PRESETS[preset_key].provenance]
-    if cfg.enable_stochastic:
-        notes.append(
-            "LER/LWR are 1σ of the simulated edge/width; no SEM bias is added (measured values "
-            "from CD-SEM carry one, e.g. imec biased/unbiased ≈ 1.66)."
-        )
-
-    return SimulationResponse(
-        status="completed",
-        preset=preset_key,
-        config=config_as_dict(cfg),
-        results=results,
-        raw=raw,
-        notes=notes,
-    )
+    return EstimateResponse(**estimate_run(cfg), physics_errors=physics_errors(cfg))
 
 
 @app.get("/materials", response_model=MaterialListResponse, tags=["materials"])

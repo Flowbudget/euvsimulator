@@ -65,3 +65,6 @@ references/**/extracted_data/number_lines.txt
 
 # Ad-hoc analysis scripts
 scratch/
+
+# README screenshots of the browser GUI (rendered from the GUI itself, docs/claude_code_arbeitslog.md Fortsetzung 46)
+!docs/images/*.png

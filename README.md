@@ -54,6 +54,30 @@ The default resist is a 2011 research resist (Yamamoto et al.) and prints at abo
 1.3 mJ/cm² at 64 nm pitch — far more sensitive than a production resist. Use the presets in
 `euvsimulator.presets` (NXE1716, MET-2D) or calibrate to your own data.
 
+## Browser GUI
+
+`euv serve` starts a local server with a single-page GUI at `http://localhost:8000/` and the
+REST API (`/docs`). No external assets, works offline.
+
+![Simulation view: NXE1716 preset with photon shot noise](docs/images/gui_simulation.png)
+
+- **Presets with provenance** — the documented default resist, the NXE1716 anchor as a
+  prediction (dose-to-size 19.7 vs measured 11.0 mJ/cm²), the same anchor with the ×1.79
+  dose calibration labelled as such, and the MET-2D anchor. "Where these numbers come from"
+  is one click away, and every result carries its notes.
+- **Every parameter** — six main ones open, the other 58 `SimulationConfig` fields in
+  collapsed groups with the same help texts as the CLI. Physical limits only (NA < 1,
+  CD < pitch, …); grid, rows, seeds and realisations are unbounded, a live estimate says
+  what a run will need in memory (model fitted on an M1, ±30 %).
+- **Three tasks** — a single simulation (profile, CD, NILS, LER/LWR with n_eff and
+  correlation length), a process window (Bossung table, depth of focus, exposure latitude)
+  and the structural uncertainty bands of `euv calibrate --bands`. Runs are background jobs
+  with progress and a cancel button; results export as CSV and JSON.
+- **Links reproduce runs** — `?preset=met2d&task=process_window&f.grid=128&run=1` starts a
+  run on load, `?job=<id>` reopens a finished one.
+
+![Process window: Bossung table with in-spec cells](docs/images/gui_process_window.png)
+
 ## What is inside
 
 | Stage | Model | Notes |
@@ -61,7 +85,7 @@ The default resist is a 2011 research resist (Yamamoto et al.) and prints at abo
 | Materials | CXRO atomic scattering factors, Z = 1–92 | absorption of a resist computed from its composition |
 | Multilayer mirror | S-matrix transfer-matrix method, Névot–Croce roughness | verified against Fresnel and energy-conservation limits |
 | Mask | thin-mask Fourier series; RCWA 1D/2D optional | no flare, no mask roughness |
-| Imaging | Abbe/Hopkins partially coherent, NA 0.33 and high-NA anamorphic | conventional, annular, dipole and quasar sources incl. scanner-style sector poles |
+| Imaging | Abbe/Hopkins partially coherent, any NA < 1 with an isomorphic pupil | conventional, annular, dipole and quasar sources incl. scanner-style sector poles; an anamorphic high-NA pupil exists in `aerial/pupil.py` but is not wired into the pipeline |
 | Exposure | Dill ABC with depth attenuation; photon shot noise with secondary-electron spread; PAG counting | acid yield per absorbed photon checked against measurements |
 | Post-exposure bake | diffuse–quench–deprotect with measured kinetics at 80–140 °C; concurrent reaction-diffusion (NIST law) optional | validated on the NIST bilayer diffusion lengths |
 | Development | Mack rate, Eikonal first-arrival front, sub-pixel CD; dissolution-cell noise optional | roughness metrology passband and SEM-bias bookkeeping |

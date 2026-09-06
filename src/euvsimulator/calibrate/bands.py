@@ -20,9 +20,12 @@ measurements or add the metrology's bias (Lorusso/Mack 2018).
 from __future__ import annotations
 
 import statistics
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
-from euvsimulator.pipeline import SimulationConfig, run_simulation
+from euvsimulator.pipeline import SimulationCancelledError, SimulationConfig, run_simulation
+
+# progress(fraction, label) -> keep going?  (GUI jobs; None = no reporting)
+BandsProgress = Callable[[float, str], bool]
 
 PEB_LAWS = ("analytical", "reaction_diffusion")
 DISSOLUTION_CELLS_NM = (1.0, 4.3)
@@ -52,6 +55,7 @@ def structural_bands(
     rows: int = 1024,
     seeds: tuple[int, ...] = (1, 2, 3),
     cells_nm: tuple[float, ...] = DISSOLUTION_CELLS_NM,
+    progress: Optional[BandsProgress] = None,
 ) -> Dict[str, Any]:
     """Dose-to-size and 3-sigma LWR of the calibrated chain under both PEB laws
     and both dissolution-unit sizes.
@@ -59,7 +63,17 @@ def structural_bands(
     ``base``: SimulationConfig keyword arguments of the calibrated resist
     (period, line width, film, Mack, exposure, PEB). Returns a dict with the
     per-corner values and min/max bands; NaN where a corner does not print.
+    ``progress(fraction, label)`` is called before each corner; returning
+    ``False`` raises :class:`SimulationCancelledError`.
     """
+    n_steps = len(PEB_LAWS) + 1 + len(cells_nm)
+    step = 0
+
+    def tick(label: str) -> None:
+        nonlocal step
+        if progress is not None and not progress(step / n_steps, label):
+            raise SimulationCancelledError("cancelled by the progress hook")
+        step += 1
 
     def make(**over):
         kw = dict(base)
@@ -69,6 +83,7 @@ def structural_bands(
 
     d2s: Dict[str, float] = {}
     for law in PEB_LAWS:
+        tick(f"dose-to-size, PEB law {law}")
         d2s[law] = _dose_to_size(
             lambda dose_mj_cm2, law=law: make(peb_model=law, dose_mj_cm2=dose_mj_cm2),
             target_cd_nm,
@@ -96,8 +111,10 @@ def structural_bands(
                 vals.append(3.0 * r.lwr_nm)
             return statistics.mean(vals)
 
+        tick("LWR, photon shot noise")
         lwr["photon_shot_noise"] = lwr_at()
         for a in cells_nm:
+            tick(f"LWR, dissolution cell {a:g} nm")
             lwr[f"dissolution_cell_{a:g}_nm"] = lwr_at(
                 development_stochasticity=True, dissolution_cell_nm=a
             )
