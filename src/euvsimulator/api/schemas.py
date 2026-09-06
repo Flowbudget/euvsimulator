@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
+
+from euvsimulator.api.fields import PipelineOverrides
 
 # ──────────────────────────────────────────────
 # Health
@@ -27,111 +29,20 @@ class HealthResponse(BaseModel):
 # ──────────────────────────────────────────────
 
 
-class AerialImageConfig(BaseModel):
-    """Parameters for aerial-image formation.
+class SimulationRequest(BaseModel):
+    """Request body for ``POST /simulate``.
 
-    Every field maps onto a ``pipeline.SimulationConfig`` field; bounds are
-    physical, not cosmetic (NA < 1 in vacuum, source inside the pupil).
+    ``preset`` names a starting configuration (``GET /presets``); ``config``
+    holds any subset of ``pipeline.SimulationConfig`` fields to override
+    (``GET /fields`` lists them). Unknown field names are rejected.
     """
 
-    @model_validator(mode="after")
-    def _inner_inside_outer(self) -> "AerialImageConfig":
-        if self.inner_sigma is not None and self.inner_sigma >= self.illumination_sigma:
-            raise ValueError("inner_sigma must be smaller than illumination_sigma")
-        return self
-
-    na: float = Field(0.33, gt=0.0, lt=1.0, description="Numerical aperture (0 < NA < 1)")
-    illumination_sigma: float = Field(
-        0.8, gt=0.0, le=1.0, description="Outer partial-coherence factor σ (source inside pupil)"
+    preset: Optional[str] = Field(
+        None, description="Preset key from GET /presets; None = the pipeline defaults"
     )
-    illumination_shape: str = Field(
-        "conventional",
-        description="Source shape: conventional, annular, dipole, dipole_y or quasar",
-    )
-    inner_sigma: Optional[float] = Field(
-        None,
-        ge=0.0,
-        lt=1.0,
-        description=(
-            "Inner σ for annular / scanner-style multipole sources (must be < outer σ); "
-            "None = the built-in geometry of the chosen shape"
-        ),
-    )
-    pole_opening_deg: Optional[float] = Field(
-        None,
-        gt=0.0,
-        le=180.0,
-        description="Pole opening angle [deg] for dipole/quasar with inner_sigma set (default 90)",
-    )
-    focus_nm: float = Field(0.0, description="Defocus [nm]")
-
-
-class MaskConfig(BaseModel):
-    """Parameters for the reflective EUV mask and multilayer mirror."""
-
-    @model_validator(mode="after")
-    def _cd_inside_pitch(self) -> "MaskConfig":
-        if self.cd_nm >= self.pitch_nm:
-            raise ValueError(f"cd_nm {self.cd_nm} must be smaller than pitch_nm {self.pitch_nm}")
-        return self
-
-    pitch_nm: float = Field(64.0, gt=0, description="Feature pitch [nm]")
-    cd_nm: float = Field(32.0, gt=0, description="Target line width [nm] (must be < pitch)")
-    absorber_material: str = Field("Ta", description="Absorber element symbol")
-    absorber_height_nm: float = Field(60.0, gt=0, description="Absorber height [nm]")
-    capping_material: str = Field("Ru", description="Capping layer element symbol")
-    capping_height_nm: float = Field(2.5, gt=0, description="Capping layer height [nm]")
-    multilayer_pairs: int = Field(50, ge=0, description="Number of Mo/Si bilayer pairs")
-    # Multilayer parameters
-    ml_d_mo_nm: float = Field(2.8, gt=0, description="Mo layer thickness [nm]")
-    ml_d_si_nm: float = Field(4.1, gt=0, description="Si layer thickness [nm]")
-    ml_gamma: Optional[float] = Field(
-        None,
-        gt=0.0,
-        lt=1.0,
-        description="Mo fraction gamma = d_Mo/(d_Mo+d_Si); None = use thicknesses",
-    )
-    ml_grading_linear_nm: float = Field(0.0, ge=0, description="Linear period grading [nm]")
-    ml_grading_parabolic_nm: float = Field(0.0, ge=0, description="Parabolic period grading [nm]")
-    ml_roughness_nm: float = Field(0.0, ge=0, description="RMS interface roughness [nm]")
-
-
-class ResistConfig(BaseModel):
-    """Parameters for the resist model (all forwarded to the pipeline)."""
-
-    thickness_nm: float = Field(50.0, gt=0, description="Resist film thickness [nm]")
-    development_time_s: float = Field(30.0, gt=0, description="Development time [s]")
-    dose_mJ_cm2: float = Field(20.0, gt=0, description="Exposure dose at the wafer [mJ/cm²]")
-    resist_model: str = Field(
-        "aerial_threshold",
-        description=(
-            "Resist model: 'aerial_threshold' (fast, robust) or 'full_chem' (Dill + PEB + develop)"
-        ),
-    )
-    threshold_norm: float = Field(
-        0.5,
-        gt=0.0,
-        lt=1.0,
-        description=(
-            "Normalised intensity threshold for the aerial_threshold model (fraction of the "
-            "clear-field mean at the 20 mJ/cm² reference dose)"
-        ),
-    )
-
-
-class SimulationConfig(BaseModel):
-    """Top-level simulation configuration."""
-
-    aerial: AerialImageConfig = Field(default_factory=AerialImageConfig)  # type: ignore[arg-type]
-    mask: MaskConfig = Field(default_factory=MaskConfig)  # type: ignore[arg-type]
-    resist: ResistConfig = Field(default_factory=ResistConfig)  # type: ignore[arg-type]
-
-
-class SimulationRequest(BaseModel):
-    """Request body for ``POST /simulate``."""
-
-    config: SimulationConfig = Field(
-        default_factory=SimulationConfig, description="Full simulation configuration"
+    config: PipelineOverrides = Field(  # type: ignore[valid-type]
+        default_factory=PipelineOverrides,
+        description="SimulationConfig field overrides (only the fields given are changed)",
     )
 
 
@@ -148,11 +59,56 @@ class SimulationResponse(BaseModel):
     """Response from ``POST /simulate``."""
 
     status: str = Field("completed", description="Simulation status")
-    config: SimulationConfig = Field(..., description="Config used for the simulation")
+    preset: str = Field(..., description="Preset the run started from")
+    config: Dict[str, Any] = Field(..., description="The full resolved SimulationConfig")
     results: List[SimulationResult] = Field(
         default_factory=list, description="Pipeline output metrics"
     )
-    raw: Optional[Dict[str, Any]] = Field(None, description="Optional raw output data")
+    raw: Optional[Dict[str, Any]] = Field(None, description="Profiles and auxiliary data")
+    notes: List[str] = Field(default_factory=list, description="Provenance and caveats")
+
+
+# ──────────────────────────────────────────────
+# Presets and field catalogue
+# ──────────────────────────────────────────────
+
+
+class PresetInfo(BaseModel):
+    """One named starting configuration."""
+
+    key: str
+    label: str
+    summary: str
+    provenance: str
+    config: Dict[str, Any] = Field(..., description="The preset's full SimulationConfig")
+
+
+class PresetListResponse(BaseModel):
+    """Response from ``GET /presets``."""
+
+    presets: List[PresetInfo]
+
+
+class FieldInfo(BaseModel):
+    """One SimulationConfig field as the GUI renders it."""
+
+    name: str
+    type: str = Field(..., description="float, int, bool, str or pair")
+    nullable: bool
+    default: Any = None
+    group: str
+    label: str
+    unit: str
+    help: str
+    choices: Optional[List[str]] = None
+    head: bool = Field(..., description="Shown open at the top of the GUI")
+
+
+class FieldCatalogueResponse(BaseModel):
+    """Response from ``GET /fields``."""
+
+    groups: Dict[str, str] = Field(..., description="Group key -> display title, in order")
+    fields: List[FieldInfo]
 
 
 # ──────────────────────────────────────────────

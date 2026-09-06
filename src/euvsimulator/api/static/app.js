@@ -1,4 +1,7 @@
-/* euvsimulator browser GUI — no external assets, plain DOM + inline SVG. */
+/* euvsimulator browser GUI — no external assets, plain DOM + inline SVG.
+   The parameter form is generated from GET /fields (every SimulationConfig
+   field) and filled from GET /presets; only the fields that differ from the
+   chosen preset are sent as overrides. */
 
 (function () {
   'use strict';
@@ -15,11 +18,20 @@
     simTime: $('#sim-time'),
     errorBar: $('#error-bar'),
     errorText: $('#error-text'),
+    preset: $('#preset'),
+    presetSummary: $('#preset-summary'),
+    presetProvenance: $('#preset-provenance'),
+    resetBtn: $('#reset-btn'),
+    headFields: $('#head-fields'),
+    groupFields: $('#group-fields'),
+    paramsLoading: $('#params-loading'),
     plot: $('#plot'),
     plotPlaceholder: $('#plot-placeholder'),
     plotLegend: $('#plot-legend'),
     legendThr: $('#legend-thr'),
     plotNote: $('#plot-note'),
+    notesCard: $('#notes-card'),
+    notes: $('#notes'),
     materialList: $('#material-list'),
     materialCount: $('#material-count'),
     materialSearch: $('#material-search'),
@@ -27,7 +39,24 @@
     elements: $('#elements'),
   };
 
-  const state = { materials: [], selectedElement: null, lastResponse: null, running: false };
+  const state = {
+    fields: [],        // catalogue rows from /fields
+    groups: {},        // group key -> title
+    presets: {},       // key -> preset info (with full config)
+    presetKey: 'default',
+    inputs: {},        // field name -> {read(), write(v), root}
+    materials: [],
+    selectedElement: null,
+    running: false,
+  };
+
+  // Convenience sliders for the head numerics; number fields stay authoritative.
+  const SLIDERS = {
+    na: [0.1, 0.9, 0.01],
+    period_nm: [16, 200, 1],
+    line_width_nm: [4, 150, 1],
+    dose_mj_cm2: [0.5, 80, 0.1],
+  };
 
   // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -45,6 +74,17 @@
     dom.submitBtn.disabled = loading;
     dom.spinner.classList.toggle('hidden', !loading);
     if (loading) dom.simTime.textContent = 'computing…';
+  }
+
+  function detailText(detail) {
+    if (!detail) return '';
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d) => `${(d.loc || []).filter((x) => x !== 'body').join('.')}: ${d.msg}`)
+        .join('; ');
+    }
+    return JSON.stringify(detail);
   }
 
   async function apiGet(path) {
@@ -69,30 +109,15 @@
     return resp.json();
   }
 
-  // FastAPI validation errors arrive as a list of {loc, msg}; flatten them.
-  function detailText(detail) {
-    if (!detail) return '';
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((d) => `${(d.loc || []).filter((x) => x !== 'body').join('.')}: ${d.msg}`)
-        .join('; ');
+  function el(tag, attrs, children) {
+    const node = document.createElement(tag);
+    for (const k in attrs || {}) {
+      if (k === 'text') node.textContent = attrs[k];
+      else if (k === 'class') node.className = attrs[k];
+      else node.setAttribute(k, attrs[k]);
     }
-    return JSON.stringify(detail);
-  }
-
-  function num(id) {
-    const el = document.getElementById(id);
-    const v = parseFloat(el.value);
-    return Number.isFinite(v) ? v : NaN;
-  }
-
-  // Blank field → null (server default / "built-in" behaviour).
-  function optNum(id) {
-    const el = document.getElementById(id);
-    if (el.value.trim() === '') return null;
-    const v = parseFloat(el.value);
-    return Number.isFinite(v) ? v : NaN;
+    for (const c of children || []) node.appendChild(c);
+    return node;
   }
 
   // ── Health ───────────────────────────────────────────────────────────
@@ -110,89 +135,170 @@
     }
   }
 
-  // ── Parameters → request body ────────────────────────────────────────
+  // ── Form generation ──────────────────────────────────────────────────
 
-  function readConfig() {
-    const shape = $('#p-shape').value;
-    const model = $('#p-model').value;
-    const cfg = {
-      aerial: {
-        na: num('p-na'),
-        illumination_sigma: num('p-sigma'),
-        illumination_shape: shape,
-        inner_sigma: shape === 'conventional' ? null : optNum('p-sigma-inner'),
-        pole_opening_deg: shape === 'conventional' ? null : optNum('p-pole'),
-        focus_nm: num('p-focus'),
-      },
-      mask: {
-        pitch_nm: num('p-pitch'),
-        cd_nm: num('p-cd'),
-        absorber_material: $('#p-absorber').value.trim(),
-        absorber_height_nm: num('p-abs-h'),
-        capping_material: $('#p-cap').value.trim(),
-        capping_height_nm: num('p-cap-h'),
-        multilayer_pairs: Math.round(num('p-ml-pairs')),
-        ml_d_mo_nm: num('p-ml-mo'),
-        ml_d_si_nm: num('p-ml-si'),
-        ml_gamma: optNum('p-ml-gamma'),
-        ml_grading_linear_nm: num('p-ml-glin'),
-        ml_grading_parabolic_nm: num('p-ml-gpar'),
-        ml_roughness_nm: num('p-ml-rough'),
-      },
-      resist: {
-        resist_model: model,
-        dose_mJ_cm2: num('p-dose'),
-        threshold_norm: num('p-thr'),
-        thickness_nm: num('p-thick'),
-        development_time_s: num('p-dev'),
-      },
-    };
-    return cfg;
+  // One input widget per catalogue row; returns {root, read, write}.
+  function makeInput(f) {
+    const id = 'f-' + f.name;
+    const root = el('div', { class: 'param', 'data-field': f.name });
+    const unit = f.unit ? ` [${f.unit}]` : '';
+    root.appendChild(el('label', { for: id, text: f.label + unit, title: f.name }));
+    let read, write;
+
+    if (f.type === 'bool') {
+      const box = el('input', { type: 'checkbox', id });
+      root.classList.add('param-check');
+      root.insertBefore(box, root.firstChild);
+      read = () => box.checked;
+      write = (v) => { box.checked = !!v; };
+    } else if (f.choices) {
+      const sel = el('select', { id });
+      for (const c of f.choices) sel.appendChild(el('option', { value: c, text: c }));
+      root.appendChild(sel);
+      read = () => sel.value;
+      write = (v) => { sel.value = v; };
+    } else if (f.type === 'pair') {
+      const a = el('input', { type: 'number', id, step: 'any', placeholder: 'min' });
+      const b = el('input', { type: 'number', step: 'any', placeholder: 'max' });
+      root.appendChild(el('div', { class: 'param-inputs param-pair' }, [a, b]));
+      read = () => {
+        if (a.value.trim() === '' && b.value.trim() === '') return null;
+        return [parseFloat(a.value), parseFloat(b.value)];
+      };
+      write = (v) => {
+        a.value = v === null || v === undefined ? '' : v[0];
+        b.value = v === null || v === undefined ? '' : v[1];
+      };
+    } else if (f.type === 'str') {
+      const attrs = { type: 'text', id };
+      if (/material|capping$/.test(f.name)) attrs.list = 'elements';
+      const inp = el('input', attrs);
+      root.appendChild(inp);
+      read = () => inp.value.trim();
+      write = (v) => { inp.value = v === null || v === undefined ? '' : v; };
+    } else {
+      // float / int, possibly nullable
+      const inp = el('input', {
+        type: 'number', id, step: f.type === 'int' ? '1' : 'any',
+        placeholder: f.nullable ? 'empty = none' : '',
+      });
+      if (SLIDERS[f.name]) {
+        const [min, max, step] = SLIDERS[f.name];
+        const slider = el('input', { type: 'range', min, max, step });
+        slider.addEventListener('input', () => { inp.value = slider.value; });
+        inp.addEventListener('input', () => {
+          const v = parseFloat(inp.value);
+          if (Number.isFinite(v)) slider.value = String(v);
+        });
+        root.appendChild(el('div', { class: 'param-inputs' }, [inp, slider]));
+        write = (v) => {
+          inp.value = v === null || v === undefined ? '' : v;
+          if (Number.isFinite(v)) slider.value = String(v);
+        };
+      } else {
+        root.appendChild(inp);
+        write = (v) => { inp.value = v === null || v === undefined ? '' : v; };
+      }
+      read = () => {
+        if (inp.value.trim() === '') return f.nullable ? null : NaN;
+        const v = parseFloat(inp.value);
+        return Number.isFinite(v) ? (f.type === 'int' ? Math.round(v) : v) : NaN;
+      };
+    }
+    root.appendChild(el('small', { text: f.help }));
+    return { root, read, write };
   }
 
-  // Only physics is checked here; the server validates the same bounds.
-  function validate(cfg) {
-    const e = [];
-    const a = cfg.aerial, m = cfg.mask, r = cfg.resist;
-    if (!(a.na > 0 && a.na < 1)) e.push('NA must be between 0 and 1');
-    if (!(a.illumination_sigma > 0 && a.illumination_sigma <= 1)) e.push('outer σ must be in (0, 1]');
-    if (a.inner_sigma !== null && !(a.inner_sigma >= 0 && a.inner_sigma < a.illumination_sigma))
-      e.push('inner σ must be ≥ 0 and smaller than the outer σ');
-    if (a.pole_opening_deg !== null && !(a.pole_opening_deg > 0 && a.pole_opening_deg <= 180))
-      e.push('pole opening must be in (0, 180] degrees');
-    if (!Number.isFinite(a.focus_nm)) e.push('defocus must be a number');
-    if (!(m.pitch_nm > 0)) e.push('pitch must be > 0');
-    if (!(m.cd_nm > 0)) e.push('line width must be > 0');
-    if (m.cd_nm >= m.pitch_nm) e.push('line width must be smaller than the pitch');
-    if (!m.absorber_material) e.push('absorber symbol missing');
-    if (!(m.absorber_height_nm > 0)) e.push('absorber height must be > 0');
-    if (!m.capping_material) e.push('capping symbol missing');
-    if (!(m.capping_height_nm > 0)) e.push('capping thickness must be > 0');
-    if (!(m.multilayer_pairs >= 0)) e.push('bilayer count must be ≥ 0');
-    if (!(m.ml_d_mo_nm > 0 && m.ml_d_si_nm > 0)) e.push('Mo and Si thicknesses must be > 0');
-    if (m.ml_gamma !== null && !(m.ml_gamma > 0 && m.ml_gamma < 1)) e.push('Γ must be between 0 and 1');
-    if (!(m.ml_grading_linear_nm >= 0 && m.ml_grading_parabolic_nm >= 0 && m.ml_roughness_nm >= 0))
-      e.push('gradings and roughness must be ≥ 0');
-    if (!(r.dose_mJ_cm2 > 0)) e.push('dose must be > 0');
-    if (!(r.threshold_norm > 0 && r.threshold_norm < 1)) e.push('threshold must be between 0 and 1');
-    if (!(r.thickness_nm > 0)) e.push('film thickness must be > 0');
-    if (!(r.development_time_s > 0)) e.push('development time must be > 0');
-    return e;
+  function buildForm() {
+    dom.headFields.innerHTML = '';
+    dom.groupFields.innerHTML = '';
+    state.inputs = {};
+    const byGroup = {};
+    for (const f of state.fields) {
+      const w = makeInput(f);
+      state.inputs[f.name] = w;
+      if (f.head) {
+        dom.headFields.appendChild(w.root);
+      } else {
+        (byGroup[f.group] = byGroup[f.group] || []).push(w.root);
+      }
+    }
+    for (const key in state.groups) {
+      if (!byGroup[key]) continue;
+      const det = el('details', { class: 'param-more' }, [el('summary', { text: state.groups[key] })]);
+      for (const node of byGroup[key]) det.appendChild(node);
+      dom.groupFields.appendChild(det);
+    }
+    dom.paramsLoading.classList.add('hidden');
+    for (const name of ['resist_model', 'illumination_shape', 'peb_model', 'enable_stochastic']) {
+      const w = state.inputs[name];
+      if (w) w.root.querySelector('input,select').addEventListener('change', updateVisibility);
+    }
+  }
+
+  // Fields that only matter for one model choice are hidden otherwise.
+  function updateVisibility() {
+    const v = (n) => (state.inputs[n] ? state.inputs[n].read() : undefined);
+    const rules = {
+      resist_threshold_norm: v('resist_model') === 'aerial_threshold',
+      sigma_inner: v('illumination_shape') !== 'conventional',
+      pole_opening_deg: ['dipole', 'dipole_y', 'quasar'].includes(v('illumination_shape')),
+      peb_k_trap_per_s: v('peb_model') === 'reaction_diffusion',
+      peb_D_quencher: v('peb_model') === 'reaction_diffusion',
+      peb_acid_lifetime_s: v('peb_model') === 'analytical',
+    };
+    for (const name in rules) {
+      const w = state.inputs[name];
+      if (w) w.root.classList.toggle('hidden', !rules[name]);
+    }
+  }
+
+  function applyPreset(key) {
+    const p = state.presets[key];
+    if (!p) return;
+    state.presetKey = key;
+    dom.presetSummary.textContent = p.summary;
+    dom.presetProvenance.textContent = p.provenance;
+    for (const f of state.fields) state.inputs[f.name].write(p.config[f.name]);
+    updateVisibility();
+    clearError();
+  }
+
+  // Read the form; return {config: overrides vs preset, errors}.
+  function collectOverrides() {
+    const base = state.presets[state.presetKey].config;
+    const config = {};
+    const errors = [];
+    for (const f of state.fields) {
+      const v = state.inputs[f.name].read();
+      if (typeof v === 'number' && Number.isNaN(v)) {
+        errors.push(`${f.label}: not a number`);
+        continue;
+      }
+      if (Array.isArray(v) && v.some((x) => !Number.isFinite(x))) {
+        errors.push(`${f.label}: both bounds needed`);
+        continue;
+      }
+      if (f.type === 'str' && !f.choices && v === '') {
+        errors.push(`${f.label}: missing`);
+        continue;
+      }
+      if (JSON.stringify(v) !== JSON.stringify(base[f.name])) config[f.name] = v;
+    }
+    return { config, errors };
   }
 
   // ── Simulation ───────────────────────────────────────────────────────
 
-  async function postSimulation(cfg) {
+  async function postSimulation(body) {
     setLoading(true);
     clearError();
     const t0 = performance.now();
     try {
-      const data = await apiPost('/simulate', { config: cfg });
-      const dt = (performance.now() - t0) / 1000;
-      dom.simTime.textContent = dt.toFixed(1) + ' s';
-      state.lastResponse = data;
+      const data = await apiPost('/simulate', body);
+      dom.simTime.textContent = ((performance.now() - t0) / 1000).toFixed(1) + ' s';
       renderResults(data);
-      drawProfile(dom.plot, data, cfg);
+      drawProfile(dom.plot, data);
     } catch (err) {
       dom.simTime.textContent = '';
       showError('Simulation failed: ' + err.message);
@@ -203,14 +309,13 @@
 
   function handleSubmit(ev) {
     ev.preventDefault();
-    if (state.running) return;
-    const cfg = readConfig();
-    const errors = validate(cfg);
+    if (state.running || !state.fields.length) return;
+    const { config, errors } = collectOverrides();
     if (errors.length) {
       showError(errors.join('; '));
       return;
     }
-    postSimulation(cfg);
+    postSimulation({ preset: state.presetKey, config });
   }
 
   function renderResults(data) {
@@ -222,10 +327,26 @@
     $('#r-contrast').textContent = fmt(by.contrast, 1);
     const refl = data.raw && data.raw.absorber_reflectivity;
     $('#r-refl').textContent = fmt(refl === undefined ? undefined : refl * 100, 1);
-    $('#r-dose').textContent = fmt(data.config.resist.dose_mJ_cm2, 2);
+    $('#r-dose').textContent = fmt(data.config.dose_mj_cm2, 2);
+    const stoch = by.ler_1sigma !== undefined;
+    $('#tile-ler').classList.toggle('hidden', !stoch);
+    $('#tile-lwr').classList.toggle('hidden', !stoch);
+    $('#r-ler').textContent = fmt(by.ler_1sigma, 2);
+    $('#r-lwr').textContent = fmt(by.lwr_1sigma, 2);
+
+    const notes = (data.notes || []).slice();
+    const pitch = data.config.period_nm;
     if (by.cd === 0) {
-      showError('CD = 0: no line printed at this dose/threshold (fully cleared or fully covered).');
+      notes.push('CD = 0: the whole period cleared at this dose (no line left).');
+    } else if (Math.abs(by.cd - pitch) < 1e-6) {
+      notes.push('CD = pitch: nothing developed at this dose (the line is not printing; raise the dose).');
     }
+    if (data.raw && data.raw.ler_metadata && data.raw.ler_metadata.n_eff !== undefined) {
+      notes.push(`Roughness statistics: n_eff = ${Number(data.raw.ler_metadata.n_eff).toFixed(1)} independent rows.`);
+    }
+    dom.notes.innerHTML = '';
+    for (const n of notes) dom.notes.appendChild(el('li', { text: n }));
+    dom.notesCard.classList.toggle('hidden', notes.length === 0);
   }
 
   // ── Plot (inline SVG) ────────────────────────────────────────────────
@@ -233,13 +354,12 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   function svgEl(tag, attrs, text) {
-    const el = document.createElementNS(SVG_NS, tag);
-    for (const k in attrs) el.setAttribute(k, attrs[k]);
-    if (text !== undefined) el.textContent = text;
-    return el;
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) node.setAttribute(k, attrs[k]);
+    if (text !== undefined) node.textContent = text;
+    return node;
   }
 
-  // "Nice" tick step for an axis span.
   function niceStep(span, target) {
     const raw = span / target;
     const pow = Math.pow(10, Math.floor(Math.log10(raw)));
@@ -248,7 +368,7 @@
     return f * pow;
   }
 
-  function drawProfile(svg, data, cfg) {
+  function drawProfile(svg, data) {
     const raw = data.raw || {};
     const aerial = raw.aerial_profile_nm || [];
     const resist = raw.resist_profile || [];
@@ -258,7 +378,7 @@
       showError('Server returned no image profile');
       return;
     }
-    const period = cfg.mask.pitch_nm;
+    const period = data.config.period_nm;
 
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     dom.plotPlaceholder.classList.add('hidden');
@@ -266,19 +386,17 @@
     dom.plotLegend.classList.remove('hidden');
     dom.legendThr.classList.toggle('hidden', thr === undefined);
     dom.plotNote.textContent =
-      `centre row, ${n} px, ${(period / n).toFixed(2)} nm/px` +
-      (cfg.resist.resist_model === 'full_chem' ? ' · full chemistry' : ' · aerial threshold');
+      `${data.preset} · centre row, ${n} px, ${(period / n).toFixed(2)} nm/px · ` +
+      (data.config.resist_model === 'full_chem' ? 'full chemistry' : 'aerial threshold');
 
     const W = 800, H = 380, L = 64, R = 20, T = 16, B = 46;
     const pw = W - L - R, ph = H - T - B;
-
     const xMin = -period / 2, xMax = period / 2;
     const yMax = Math.max(...aerial, thr || 0) * 1.08 || 1;
     const sx = (x) => L + ((x - xMin) / (xMax - xMin)) * pw;
     const sy = (y) => T + ph - (y / yMax) * ph;
     const xs = (i) => xMin + ((xMax - xMin) * i) / (n - 1);
 
-    // grid + ticks
     const xstep = niceStep(xMax - xMin, 8);
     for (let x = Math.ceil(xMin / xstep) * xstep; x <= xMax + 1e-9; x += xstep) {
       svg.appendChild(svgEl('line', { x1: sx(x), x2: sx(x), y1: T, y2: T + ph, class: 'grid' }));
@@ -298,7 +416,6 @@
       transform: `rotate(-90 14 ${T + ph / 2})`,
     }, 'local dose [mJ/cm²]'));
 
-    // developed regions (resist_profile: 1 = developed) as filled steps
     if (resist.length === n) {
       let d = '';
       for (let i = 0; i < n; i++) {
@@ -309,18 +426,12 @@
       }
       if (d) svg.appendChild(svgEl('path', { d, class: 'resist' }));
     }
-
-    // threshold line (only the aerial_threshold model has one)
     if (thr !== undefined) {
       svg.appendChild(svgEl('line', { x1: L, x2: L + pw, y1: sy(thr), y2: sy(thr), class: 'thr' }));
     }
-
-    // aerial curve
     let d = '';
     for (let i = 0; i < n; i++) d += (i ? 'L' : 'M') + sx(xs(i)).toFixed(1) + ',' + sy(aerial[i]).toFixed(1);
     svg.appendChild(svgEl('path', { d, class: 'aerial' }));
-
-    // frame
     svg.appendChild(svgEl('rect', { x: L, y: T, width: pw, height: ph, class: 'frame' }));
   }
 
@@ -350,9 +461,9 @@
         return `<span class="mat-chip${active}" data-symbol="${m.symbol}">${m.symbol} <span class="mat-z">${m.z}</span></span>`;
       })
       .join('');
-    dom.materialList.querySelectorAll('.mat-chip').forEach((el) => {
-      el.addEventListener('click', () => {
-        const mat = state.materials.find((m) => m.symbol === el.dataset.symbol);
+    dom.materialList.querySelectorAll('.mat-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const mat = state.materials.find((m) => m.symbol === chip.dataset.symbol);
         if (!mat) return;
         state.selectedElement = mat;
         renderMaterials();
@@ -379,41 +490,34 @@
     }
   }
 
-  // ── Form behaviour ───────────────────────────────────────────────────
+  // ── Init ─────────────────────────────────────────────────────────────
 
-  // Sliders are a convenience with a finite range; the number field is authoritative
-  // and accepts any physically valid value.
-  function wireSliders() {
-    document.querySelectorAll('input[type="range"][data-for]').forEach((slider) => {
-      const field = document.getElementById(slider.dataset.for);
-      slider.addEventListener('input', () => { field.value = slider.value; });
-      field.addEventListener('input', () => {
-        const v = parseFloat(field.value);
-        if (Number.isFinite(v)) slider.value = String(v);
-      });
-    });
-  }
-
-  // data-show-when="shape!=conventional" / "model=full_chem"
-  function updateVisibility() {
-    const ctx = { shape: $('#p-shape').value, model: $('#p-model').value };
-    document.querySelectorAll('[data-show-when]').forEach((el) => {
-      const rule = el.dataset.showWhen;
-      const neq = rule.includes('!=');
-      const [key, val] = rule.split(neq ? '!=' : '=');
-      const show = neq ? ctx[key] !== val : ctx[key] === val;
-      el.classList.toggle('hidden', !show);
-    });
+  async function loadCatalogue() {
+    try {
+      const [fields, presets] = await Promise.all([apiGet('/fields'), apiGet('/presets')]);
+      state.fields = fields.fields;
+      state.groups = fields.groups;
+      state.presets = {};
+      dom.preset.innerHTML = '';
+      for (const p of presets.presets) {
+        state.presets[p.key] = p;
+        dom.preset.appendChild(el('option', { value: p.key, text: p.label }));
+      }
+      buildForm();
+      applyPreset(dom.preset.value || 'default');
+    } catch (err) {
+      dom.paramsLoading.innerHTML = '';
+      showError('Could not load the field catalogue: ' + err.message);
+    }
   }
 
   function init() {
     dom.form.addEventListener('submit', handleSubmit);
+    dom.preset.addEventListener('change', () => applyPreset(dom.preset.value));
+    dom.resetBtn.addEventListener('click', () => applyPreset(state.presetKey));
     dom.materialSearch.addEventListener('input', renderMaterials);
-    $('#p-shape').addEventListener('change', updateVisibility);
-    $('#p-model').addEventListener('change', updateVisibility);
-    wireSliders();
-    updateVisibility();
     fetchHealth();
+    loadCatalogue();
     fetchMaterials();
     setInterval(fetchHealth, 30000);
   }

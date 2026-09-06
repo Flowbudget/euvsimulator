@@ -1,7 +1,8 @@
 """Tests for the euvsimulator REST API (``euvsimulator.api.main``).
 
-Uses FastAPI's ``TestClient`` to exercise all four endpoints:
+Uses FastAPI's ``TestClient`` to exercise the endpoints:
 - ``GET /health``
+- ``GET /presets``, ``GET /fields``
 - ``POST /simulate``
 - ``GET /materials``
 - ``POST /materials/nk``
@@ -52,46 +53,97 @@ class TestHealth:
 
 
 class TestSimulate:
-    """``POST /simulate`` — simulation pipeline."""
+    """``POST /simulate`` — simulation pipeline (preset + flat overrides)."""
 
     def test_default_config(self, client: TestClient) -> None:
-        resp = client.post("/simulate", json={"config": {}})
+        resp = client.post("/simulate", json={})
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "completed"
-        assert "config" in body
-        assert "results" in body
+        assert body["preset"] == "default"
+        assert body["config"]["period_nm"] == 64.0
         assert len(body["results"]) > 0
+        assert body["notes"]
 
-    def test_custom_config(self, client: TestClient) -> None:
+    def test_overrides_are_applied_and_echoed(self, client: TestClient) -> None:
         payload = {
             "config": {
-                "aerial": {"na": 0.55, "illumination_shape": "dipole"},
-                "mask": {"pitch_nm": 32.0, "cd_nm": 14.0, "absorber_material": "Au"},
-                "resist": {"thickness_nm": 30.0, "dose_mJ_cm2": 30.0},
+                "na": 0.55,
+                "illumination_shape": "dipole",
+                "period_nm": 32.0,
+                "line_width_nm": 14.0,
+                "absorber_material": "Au",
+                "dose_mj_cm2": 30.0,
+                "grid": 64,
             }
         }
         resp = client.post("/simulate", json=payload)
         assert resp.status_code == 200
+        cfg = resp.json()["config"]
+        for k, v in payload["config"].items():
+            assert cfg[k] == v, k
+        assert cfg["sigma"] == 0.8  # untouched default survives
+
+    def test_preset_with_override(self, client: TestClient) -> None:
+        resp = client.post("/simulate", json={"preset": "met2d", "config": {"grid": 64}})
+        assert resp.status_code == 200
         body = resp.json()
-        assert body["config"]["aerial"]["na"] == 0.55
-        assert body["config"]["mask"]["pitch_nm"] == 32.0
-        assert body["config"]["resist"]["thickness_nm"] == 30.0
+        assert body["preset"] == "met2d"
+        assert body["config"]["na"] == 0.30
+        assert body["config"]["grid"] == 64
+        assert "Sekiguchi" in body["notes"][0]
+
+    def test_unknown_preset_rejected(self, client: TestClient) -> None:
+        assert client.post("/simulate", json={"preset": "nope"}).status_code == 422
+
+    def test_unknown_field_rejected(self, client: TestClient) -> None:
+        assert client.post("/simulate", json={"config": {"not_a_field": 1}}).status_code == 422
 
     def test_invalid_na_rejected(self, client: TestClient) -> None:
-        resp = client.post("/simulate", json={"config": {"aerial": {"na": 99.0}}})
-        # Pydantic validation via FastAPI returns 422
+        resp = client.post("/simulate", json={"config": {"na": 99.0}})
         assert resp.status_code == 422
+        assert "na" in resp.json()["detail"]
 
-    def test_invalid_mask_pitch(self, client: TestClient) -> None:
-        resp = client.post("/simulate", json={"config": {"mask": {"pitch_nm": -5}}})
+    def test_invalid_pitch_rejected(self, client: TestClient) -> None:
+        assert client.post("/simulate", json={"config": {"period_nm": -5}}).status_code == 422
+
+    def test_dataclass_validation_becomes_422(self, client: TestClient) -> None:
+        resp = client.post("/simulate", json={"config": {"enable_stochastic": True}})
         assert resp.status_code == 422
+        assert "full_chem" in resp.json()["detail"]
 
     def test_results_contain_expected_metrics(self, client: TestClient) -> None:
-        resp = client.post("/simulate", json={"config": {}})
-        results = resp.json()["results"]
-        metrics = {(r["stage"], r["metric"]) for r in results}
+        resp = client.post("/simulate", json={})
+        metrics = {(r["stage"], r["metric"]) for r in resp.json()["results"]}
         assert ("aerial", "nils") in metrics
+        assert ("resist", "cd") in metrics
+
+
+class TestPresetsAndFields:
+    def test_presets_listed_with_provenance_and_config(self, client: TestClient) -> None:
+        resp = client.get("/presets")
+        assert resp.status_code == 200
+        presets = {p["key"]: p for p in resp.json()["presets"]}
+        assert set(presets) == {"default", "nxe1716", "nxe1716_calibrated", "met2d"}
+        assert presets["nxe1716"]["config"]["period_nm"] == 44.0
+        assert "19.7" in presets["nxe1716"]["provenance"]
+        assert "calibration" in presets["nxe1716_calibrated"]["provenance"]
+        assert (
+            presets["nxe1716_calibrated"]["config"]["peb_k"] > presets["nxe1716"]["config"]["peb_k"]
+        )
+
+    def test_fields_cover_the_dataclass(self, client: TestClient) -> None:
+        import dataclasses
+
+        from euvsimulator.pipeline import SimulationConfig
+
+        resp = client.get("/fields")
+        assert resp.status_code == 200
+        body = resp.json()
+        names = [f["name"] for f in body["fields"]]
+        assert names == [f.name for f in dataclasses.fields(SimulationConfig)]
+        assert set(f["group"] for f in body["fields"]) <= set(body["groups"])
+        assert sum(f["head"] for f in body["fields"]) == 6
 
 
 # ──────────────────────────────────────────────

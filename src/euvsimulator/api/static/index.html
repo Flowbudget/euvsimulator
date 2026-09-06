@@ -27,7 +27,7 @@
 
   <main class="container workspace">
 
-    <!-- ── Parameters ── -->
+    <!-- ── Parameters (generated from GET /fields and GET /presets) ── -->
     <aside class="params">
       <form id="sim-form" novalidate>
 
@@ -43,148 +43,28 @@
           <span id="error-text"></span>
         </div>
 
-        <h3>Optics</h3>
+        <h3>Start from</h3>
         <div class="param">
-          <label for="p-na">NA</label>
-          <div class="param-inputs">
-            <input type="number" id="p-na" step="0.01" value="0.33" />
-            <input type="range" data-for="p-na" min="0.1" max="0.9" step="0.01" value="0.33" />
-          </div>
-          <small>0 &lt; NA &lt; 1; isomorphic pupil (the anamorphic high-NA pupil is not wired in)</small>
+          <label for="preset">Preset</label>
+          <select id="preset"></select>
+          <small id="preset-summary"></small>
+          <button type="button" class="btn btn-secondary btn-small" id="reset-btn">Reset to preset</button>
         </div>
-        <div class="param">
-          <label for="p-shape">Illumination</label>
-          <select id="p-shape">
-            <option value="conventional" selected>Conventional (disk)</option>
-            <option value="annular">Annular</option>
-            <option value="dipole">Dipole X</option>
-            <option value="dipole_y">Dipole Y</option>
-            <option value="quasar">Quasar</option>
-          </select>
-        </div>
-        <div class="param">
-          <label for="p-sigma">Outer σ</label>
-          <div class="param-inputs">
-            <input type="number" id="p-sigma" step="0.01" value="0.8" />
-            <input type="range" data-for="p-sigma" min="0.05" max="1" step="0.01" value="0.8" />
-          </div>
-        </div>
-        <div class="param" data-show-when="shape!=conventional">
-          <label for="p-sigma-inner">Inner σ</label>
-          <input type="number" id="p-sigma-inner" step="0.01" placeholder="built-in geometry" />
-          <small>Set for scanner-style sources, e.g. dipole 90X 0.62/0.90; blank = built-in shape</small>
-        </div>
-        <div class="param" data-show-when="shape!=conventional">
-          <label for="p-pole">Pole opening [°]</label>
-          <input type="number" id="p-pole" step="1" placeholder="90" />
-        </div>
-        <div class="param">
-          <label for="p-focus">Defocus [nm]</label>
-          <div class="param-inputs">
-            <input type="number" id="p-focus" step="5" value="0" />
-            <input type="range" data-for="p-focus" min="-200" max="200" step="5" value="0" />
-          </div>
-        </div>
-
-        <h3>Mask</h3>
-        <div class="param">
-          <label for="p-pitch">Pitch [nm]</label>
-          <div class="param-inputs">
-            <input type="number" id="p-pitch" step="1" value="64" />
-            <input type="range" data-for="p-pitch" min="16" max="200" step="1" value="64" />
-          </div>
-        </div>
-        <div class="param">
-          <label for="p-cd">Line width [nm]</label>
-          <div class="param-inputs">
-            <input type="number" id="p-cd" step="1" value="32" />
-            <input type="range" data-for="p-cd" min="4" max="150" step="1" value="32" />
-          </div>
-          <small>Must be smaller than the pitch</small>
-        </div>
-        <div class="param">
-          <label for="p-absorber">Absorber</label>
-          <input type="text" id="p-absorber" list="elements" value="Ta" />
-          <datalist id="elements"></datalist>
-          <small>Any element with CXRO data (see Materials below)</small>
-        </div>
-        <div class="param">
-          <label for="p-abs-h">Absorber height [nm]</label>
-          <input type="number" id="p-abs-h" step="1" value="60" />
-        </div>
-        <details class="param-more">
-          <summary>Multilayer mirror</summary>
-          <div class="param">
-            <label for="p-ml-pairs">Mo/Si bilayers</label>
-            <input type="number" id="p-ml-pairs" step="1" value="50" />
-          </div>
-          <div class="param">
-            <label for="p-ml-mo">Mo thickness [nm]</label>
-            <input type="number" id="p-ml-mo" step="0.1" value="2.8" />
-          </div>
-          <div class="param">
-            <label for="p-ml-si">Si thickness [nm]</label>
-            <input type="number" id="p-ml-si" step="0.1" value="4.1" />
-          </div>
-          <div class="param">
-            <label for="p-ml-gamma">Γ = d<sub>Mo</sub>/(d<sub>Mo</sub>+d<sub>Si</sub>)</label>
-            <input type="number" id="p-ml-gamma" step="0.01" placeholder="from thicknesses" />
-            <small>Blank = use the two thicknesses above</small>
-          </div>
-          <div class="param">
-            <label for="p-ml-glin">Linear period grading [nm]</label>
-            <input type="number" id="p-ml-glin" step="0.01" value="0" />
-          </div>
-          <div class="param">
-            <label for="p-ml-gpar">Parabolic period grading [nm]</label>
-            <input type="number" id="p-ml-gpar" step="0.01" value="0" />
-          </div>
-          <div class="param">
-            <label for="p-ml-rough">Interface roughness σ [nm]</label>
-            <input type="number" id="p-ml-rough" step="0.05" value="0" />
-          </div>
-          <div class="param">
-            <label for="p-cap">Capping layer</label>
-            <div class="param-inputs">
-              <input type="text" id="p-cap" list="elements" value="Ru" />
-              <input type="number" id="p-cap-h" step="0.1" value="2.5" title="Capping thickness [nm]" />
-            </div>
-          </div>
+        <details class="provenance">
+          <summary>Where these numbers come from</summary>
+          <p id="preset-provenance"></p>
         </details>
 
-        <h3>Resist</h3>
-        <div class="param">
-          <label for="p-model">Model</label>
-          <select id="p-model">
-            <option value="aerial_threshold" selected>Aerial threshold (fast)</option>
-            <option value="full_chem">Full chemistry (Dill + PEB + development)</option>
-          </select>
-          <small>Full chemistry uses the documented default resist (docs/physics.md); its dose-to-size is about 1–3 mJ/cm²</small>
-        </div>
-        <div class="param">
-          <label for="p-dose">Dose [mJ/cm²]</label>
-          <div class="param-inputs">
-            <input type="number" id="p-dose" step="0.1" value="20" />
-            <input type="range" data-for="p-dose" min="0.5" max="80" step="0.1" value="20" />
-          </div>
-        </div>
-        <div class="param" data-show-when="model=aerial_threshold">
-          <label for="p-thr">Threshold (normalised)</label>
-          <div class="param-inputs">
-            <input type="number" id="p-thr" step="0.01" value="0.5" />
-            <input type="range" data-for="p-thr" min="0.05" max="0.95" step="0.01" value="0.5" />
-          </div>
-          <small>Fraction of the clear-field mean at the 20 mJ/cm² reference dose</small>
-        </div>
-        <div class="param">
-          <label for="p-thick">Film thickness [nm]</label>
-          <input type="number" id="p-thick" step="1" value="50" />
-        </div>
-        <div class="param" data-show-when="model=full_chem">
-          <label for="p-dev">Development time [s]</label>
-          <input type="number" id="p-dev" step="1" value="30" />
+        <h3>Main parameters</h3>
+        <div id="head-fields"></div>
+
+        <div id="group-fields"></div>
+
+        <div class="params-loading" id="params-loading">
+          <span class="spinner"></span> Loading the field catalogue…
         </div>
 
+        <datalist id="elements"></datalist>
       </form>
     </aside>
 
@@ -198,7 +78,7 @@
         </div>
         <div class="card-body plot-body">
           <div class="plot-placeholder" id="plot-placeholder">
-            Set the parameters on the left and press <strong>Run simulation</strong>.
+            Pick a preset, adjust what you like and press <strong>Run simulation</strong>.
           </div>
           <svg id="plot" class="plot hidden" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet" role="img"
                aria-label="Aerial image cross section"></svg>
@@ -216,6 +96,13 @@
         <div class="tile"><span class="tile-label">Contrast</span><span class="tile-value" id="r-contrast">—</span><span class="tile-unit">%</span></div>
         <div class="tile"><span class="tile-label">Absorber reflectivity</span><span class="tile-value" id="r-refl">—</span><span class="tile-unit">%</span></div>
         <div class="tile"><span class="tile-label">Dose</span><span class="tile-value" id="r-dose">—</span><span class="tile-unit">mJ/cm²</span></div>
+        <div class="tile hidden" id="tile-ler"><span class="tile-label">LER 1σ</span><span class="tile-value" id="r-ler">—</span><span class="tile-unit">nm</span></div>
+        <div class="tile hidden" id="tile-lwr"><span class="tile-label">LWR 1σ</span><span class="tile-value" id="r-lwr">—</span><span class="tile-unit">nm</span></div>
+      </div>
+
+      <div class="card hidden" id="notes-card">
+        <div class="card-header"><h2>Reading this result</h2></div>
+        <div class="card-body"><ul class="notes" id="notes"></ul></div>
       </div>
 
       <details class="card" id="materials-card">

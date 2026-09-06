@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — browser GUI, stage 2 (presets and guidance)
+- `GET /presets`: named starting configurations with provenance text and the full
+  `SimulationConfig` each resolves to — the documented default resist, the NXE1716 anchor as a
+  prediction (dose-to-size 19.7 vs measured 11.0 mJ/cm²), the same anchor with the ×1.79 dose
+  calibration labelled as a calibration, and the MET-2D / XP 5271 anchor.
+- `GET /fields`: every `SimulationConfig` field with type, default, group, label, unit, help and
+  choices (`api/fields.py`); `tests/test_api_fields.py` asserts catalogue, generated request
+  model and dataclass never drift apart.
+- `POST /simulate` now takes `{preset, config}` where `config` is any subset of the flat
+  `SimulationConfig` fields (generated pydantic model, unknown names rejected); the response
+  carries the fully resolved config and provenance notes. LER/LWR (1σ) are reported when photon
+  shot noise is enabled, with the no-SEM-bias caveat. Physical constraints only, no cosmetic
+  limits on grid, rows, seeds or realisations.
+- GUI: the parameter form is generated from the catalogue — six main parameters open, the
+  other 58 in collapsed groups (optics, mask, multilayer, exposure, PEB, development,
+  stochastics, numerics), preset selector with "where these numbers come from", reset to
+  preset, model-dependent fields hidden, only the overrides are sent; result notes explain
+  CD = 0 / CD = pitch and the roughness statistics.
+
 ### Changed — browser GUI, stage 1 (clean-up)
 - One page instead of two (`/`; the old `/simulate` page redirects there); the leftover
   "OpEnUV" name is gone.

@@ -632,3 +632,17 @@ details[open] .card-summary h2::before { content: "▾ "; }
 .mat-z { color: var(--text-muted); font-size: 11px; }
 .mat-hint { color: var(--text-muted); font-size: 13px; text-align: center; padding: 8px 0; }
 .footer-note { margin-top: 4px; font-size: 11px; }
+
+/* ── Stage 2: generated form, presets, notes ── */
+.btn-small { padding: 4px 10px; font-size: 12px; margin-top: 6px; }
+.provenance { margin: 4px 0 6px; }
+.provenance summary { cursor: pointer; font-size: 12px; color: var(--accent); user-select: none; }
+.provenance p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-top: 6px; }
+.params-loading { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; padding: 12px 0; }
+.param-check { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
+.param-check input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.param-check label { margin: 0; }
+.param-check small { grid-column: 2; }
+.param-pair { grid-template-columns: 1fr 1fr; }
+.notes { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
+.notes li { margin-bottom: 6px; }

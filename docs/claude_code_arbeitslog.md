@@ -3642,3 +3642,20 @@ der Pfade in `git log --all`. **Alle Commit-Hashes vor diesem Zeitpunkt sind dam
 a1bab02, aca89b4 zeigen auf die alte Historie; Inhalte identisch). Die eigenen Lehrbuch-PDFs (Commit „Add EUV Lithography
 textbooks", eigenes Material) blieben in der Historie. Hinweis: GitHub hält verwaiste Objekte eine Weile im Cache; vor einer
 Veröffentlichung ggf. GitHub-Support um Bereinigung bitten.
+
+## 2026-09-06 (Fortsetzung 45): Browser-GUI, Stufen 1 und 2 von 4
+Ausgangslage: Das Dashboard war ein Überbleibsel der OpEnUV-Zeit (zwei Seiten, 15 von 64 Parametern, Chart.js per CDN, blockierender
+`async`-Endpunkt, keine Presets, kein Stochastik-Lauf). Plan (vom Nutzer bestätigt, mit der Korrektur: keine künstlichen Parameter-
+Limits in der Software, nur meine Testläufe klein): 1 Aufräumen, 2 Presets und Führung, 3 Ergebnisse/Hintergrundjobs, 4 Prozessfenster
+und Bänder. **Stufe 1:** eine Seite unter `/`, alter `/simulate`-Pfad leitet um; Plot als eigenes Inline-SVG (Chart.js entfernt, Seite
+läuft offline; Asset-Links tragen die Paketversion gegen Browser-Cache); `POST /simulate` als sync-Endpunkt → Threadpool; die
+Schwellenlinie im Plot ist der Wert aus `_cd_via_aerial_threshold` (vorher 0,5·max). **Stufe 2:** `api/fields.py` mit Katalog aller
+64 `SimulationConfig`-Felder (Gruppe, Label, Einheit, Hilfe, Auswahl), Request-Modell per `create_model` aus der Dataclass,
+`physics_errors` (nur physikalische Grenzen: NA<1, σ≤1, CD<Pitch, Mack n>1 …; Grid/Zeilen/Seeds unbegrenzt), Presets default /
+nxe1716 (Vorhersage, D2S 19,7 vs. 11,0) / nxe1716_calibrated (×1,79, als Kalibrierung beschriftet) / met2d mit Herkunftstext;
+`GET /presets`, `GET /fields`, `POST /simulate {preset, config}` mit vollständig aufgelöster Konfiguration und Hinweisen in der
+Antwort. GUI erzeugt das Formular aus dem Katalog (sechs Hauptparameter offen, Rest in acht zugeklappten Gruppen), sendet nur die
+Abweichungen vom Preset, blendet modellfremde Felder aus, erklärt CD = 0 / CD = Pitch. `tests/test_api_fields.py` hält Katalog,
+Modell und Dataclass auf Gleichheit. Im Browser geprüft: NXE1716 kalibriert 20,35 nm bei 11 mJ/cm², Vorhersage-Preset CD = Pitch mit
+Hinweis, Override Dosis 19,7 → CD 21,9 nm (nur `{"dose_mj_cm2": 19.7}` gesendet). Nebenbefund: `test_release` verlangte noch den
+entfernten Documentation-Link (alt-rot seit dem README-Umbau) → angepasst.

@@ -12,8 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import euvsimulator.api.main as api_main
-from euvsimulator.api.main import app, pipeline_config_from_request
-from euvsimulator.api.schemas import SimulationConfig as ApiConfig
+from euvsimulator.api.main import app
 from euvsimulator.pipeline import SimulationConfig as PipelineConfig
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -74,7 +73,7 @@ class TestRouting:
         resp = client.get("/static/app.js")
         assert resp.status_code == 200
         assert "javascript" in resp.headers["content-type"]
-        for fn in ("fetchHealth", "fetchMaterials", "postSimulation", "drawProfile"):
+        for fn in ("fetchHealth", "fetchMaterials", "postSimulation", "drawProfile", "buildForm"):
             assert fn in resp.text, fn
 
     def test_unknown_static_file_returns_404(self, client: TestClient) -> None:
@@ -86,119 +85,41 @@ class TestSimulateEndpoint:
         """A long pipeline run must not block the event loop (health polling, other users)."""
         assert not inspect.iscoroutinefunction(api_main.run_simulation)
 
-    def test_every_api_field_reaches_the_pipeline(self) -> None:
-        """Each schema field is forwarded to a distinct pipeline field with its value intact."""
-        api_cfg = ApiConfig.model_validate(
-            {
-                "aerial": {
-                    "na": 0.55,
-                    "illumination_sigma": 0.9,
-                    "illumination_shape": "dipole",
-                    "inner_sigma": 0.62,
-                    "pole_opening_deg": 90.0,
-                    "focus_nm": -35.0,
-                },
-                "mask": {
-                    "pitch_nm": 44.0,
-                    "cd_nm": 22.0,
-                    "absorber_material": "Ni",
-                    "absorber_height_nm": 42.0,
-                    "capping_material": "Ru",
-                    "capping_height_nm": 2.0,
-                    "multilayer_pairs": 41,
-                    "ml_d_mo_nm": 2.7,
-                    "ml_d_si_nm": 4.2,
-                    "ml_gamma": 0.42,
-                    "ml_grading_linear_nm": 0.03,
-                    "ml_grading_parabolic_nm": 0.02,
-                    "ml_roughness_nm": 0.25,
-                },
-                "resist": {
-                    "thickness_nm": 35.0,
-                    "development_time_s": 45.0,
-                    "dose_mJ_cm2": 11.0,
-                    "resist_model": "full_chem",
-                    "threshold_norm": 0.4,
-                },
-            }
-        )
-        expected = {
-            "na": 0.55,
-            "sigma": 0.9,
-            "illumination_shape": "dipole",
-            "sigma_inner": 0.62,
-            "pole_opening_deg": 90.0,
-            "focus_nm": -35.0,
-            "period_nm": 44.0,
-            "line_width_nm": 22.0,
-            "absorber_material": "Ni",
-            "absorber_height_nm": 42.0,
-            "ml_capping": "Ru",
-            "ml_capping_nm": 2.0,
-            "ml_n_bilayers": 41,
-            "ml_d_mo_nm": 2.7,
-            "ml_d_si_nm": 4.2,
-            "ml_gamma": 0.42,
-            "ml_grading_linear_nm": 0.03,
-            "ml_grading_parabolic_nm": 0.02,
-            "ml_roughness_nm": 0.25,
-            "resist_thickness_nm": 35.0,
-            "develop_time_s": 45.0,
-            "dose_mj_cm2": 11.0,
-            "resist_model": "full_chem",
-            "resist_threshold_norm": 0.4,
-        }
-        pipe = pipeline_config_from_request(api_cfg)
-        for name, value in expected.items():
-            assert getattr(pipe, name) == value, name
-        # Count check: every leaf field of the API schema has a target above.
-        n_api_fields = sum(
-            len(type(model).model_fields)
-            for model in (api_cfg.aerial, api_cfg.mask, api_cfg.resist)
-        )
-        assert n_api_fields == len(expected)
-
-    def test_defaults_mirror_the_pipeline(self) -> None:
-        pipe = pipeline_config_from_request(ApiConfig())
+    def test_defaults_are_the_pipeline_defaults(self, client: TestClient) -> None:
+        resp = client.post("/simulate", json={"config": {"grid": 32}})
+        assert resp.status_code == 200
+        cfg = resp.json()["config"]
         ref = PipelineConfig()
-        for name in (
-            "na",
-            "sigma",
-            "illumination_shape",
-            "period_nm",
-            "line_width_nm",
-            "absorber_material",
-            "absorber_height_nm",
-            "ml_n_bilayers",
-            "ml_d_mo_nm",
-            "ml_d_si_nm",
-            "dose_mj_cm2",
-            "resist_model",
-            "resist_threshold_norm",
-            "resist_thickness_nm",
-            "develop_time_s",
-        ):
-            assert getattr(pipe, name) == getattr(ref, name), name
-        assert pipe.device == ref.device  # not pinned to CPU any more
+        for name in ("na", "sigma", "period_nm", "line_width_nm", "dose_mj_cm2", "device"):
+            assert cfg[name] == getattr(ref, name), name
 
     @pytest.mark.parametrize(
-        "payload",
+        "config",
         [
-            {"config": {"mask": {"pitch_nm": 32.0, "cd_nm": 40.0}}},  # CD >= pitch
-            {"config": {"aerial": {"na": 1.0}}},  # NA must be < 1
-            {"config": {"aerial": {"illumination_sigma": 0.5, "inner_sigma": 0.6}}},
-            {"config": {"resist": {"threshold_norm": 1.0}}},
+            {"period_nm": 32.0, "line_width_nm": 40.0},  # CD >= pitch
+            {"na": 1.0},  # NA must be < 1
+            {"sigma": 0.5, "sigma_inner": 0.6},
+            {"resist_threshold_norm": 1.0},
+            {"mack_n": 1.0},
+            {"ler_passband_nm": [800.0, 10.0]},
         ],
     )
-    def test_unphysical_requests_are_rejected(self, client: TestClient, payload: dict) -> None:
-        assert client.post("/simulate", json=payload).status_code == 422
+    def test_unphysical_requests_are_rejected(self, client: TestClient, config: dict) -> None:
+        assert client.post("/simulate", json={"config": config}).status_code == 422
+
+    def test_no_cosmetic_limits(self, client: TestClient) -> None:
+        """Large numerical sizes are accepted (validated only, run kept tiny)."""
+        from euvsimulator.api.fields import physics_errors, resolve_config
+
+        cfg = resolve_config(None, {"grid": 8192, "stochastic_ler_grid_y": 10**6})
+        assert physics_errors(cfg) == []
 
     def test_threshold_intensity_is_the_one_used_for_cd(self, client: TestClient) -> None:
         """The plotted threshold equals pipeline._cd_via_aerial_threshold's value."""
         from euvsimulator.pipeline import AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2
 
         resp = client.post(
-            "/simulate", json={"config": {"resist": {"dose_mJ_cm2": 10.0, "threshold_norm": 0.4}}}
+            "/simulate", json={"config": {"dose_mj_cm2": 10.0, "resist_threshold_norm": 0.4}}
         )
         assert resp.status_code == 200
         raw = resp.json()["raw"]
@@ -211,13 +132,32 @@ class TestSimulateEndpoint:
 
     def test_full_chem_has_no_threshold_line(self, client: TestClient) -> None:
         resp = client.post(
-            "/simulate",
-            json={"config": {"resist": {"resist_model": "full_chem", "dose_mJ_cm2": 1.3}}},
+            "/simulate", json={"config": {"resist_model": "full_chem", "dose_mj_cm2": 1.3}}
         )
         assert resp.status_code == 200
         raw = resp.json()["raw"]
         assert "threshold_intensity" not in raw
         assert set(raw["resist_profile"]) <= {0.0, 1.0}
+
+    def test_stochastic_run_reports_ler_and_lwr(self, client: TestClient) -> None:
+        resp = client.post(
+            "/simulate",
+            json={
+                "config": {
+                    "grid": 64,
+                    "resist_model": "full_chem",
+                    "dose_mj_cm2": 1.3,
+                    "enable_stochastic": True,
+                    "stochastic_ler_grid_y": 256,
+                    "stochastic_seed": 1,
+                }
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        metrics = {r["metric"]: r["value"] for r in body["results"]}
+        assert metrics["ler_1sigma"] > 0 and metrics["lwr_1sigma"] > 0
+        assert any("SEM bias" in n for n in body["notes"])
 
 
 class TestExistingApiStillWorks:

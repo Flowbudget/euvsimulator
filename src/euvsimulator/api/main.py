@@ -4,7 +4,9 @@ Endpoints
 ---------
 - ``GET  /``                — Browser GUI (single page, no external assets)
 - ``GET  /health``          — Service health check
-- ``POST /simulate``        — Run a full simulation pipeline
+- ``GET  /presets``         — Named starting configurations with provenance
+- ``GET  /fields``          — Every SimulationConfig field with group, label, help
+- ``POST /simulate``        — Run a full simulation pipeline (preset + overrides)
 - ``GET  /materials``       — List available materials in the CXRO database
 - ``POST /materials/nk``    — Retrieve refractive index for a given element/energy
 
@@ -16,27 +18,37 @@ GUI's health polling keeps working while a simulation is computing.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from euvsimulator import __version__
+from euvsimulator.api.fields import (
+    GROUPS,
+    PRESETS,
+    config_as_dict,
+    field_catalogue,
+    physics_errors,
+    resolve_config,
+)
 from euvsimulator.api.schemas import (
+    FieldCatalogueResponse,
     HealthResponse,
     MaterialElement,
     MaterialListResponse,
     NkRequest,
     NkResponse,
+    PresetInfo,
+    PresetListResponse,
     SimulationRequest,
     SimulationResponse,
     SimulationResult,
 )
-from euvsimulator.api.schemas import SimulationConfig as SimulationConfigSchema
 from euvsimulator.materials import _ELEMENT_TABLE, get_cxro_table
 from euvsimulator.pipeline import AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2
-from euvsimulator.pipeline import SimulationConfig as PipelineConfig
 from euvsimulator.pipeline import run_simulation as run_pipeline
 
 # ──────────────────────────────────────────────
@@ -111,60 +123,61 @@ async def health_check() -> HealthResponse:
     return HealthResponse(status="ok", version=__version__)
 
 
-def pipeline_config_from_request(cfg_api: SimulationConfigSchema) -> PipelineConfig:
-    """Map the API schema onto ``pipeline.SimulationConfig`` (one field each, nothing dropped)."""
-    return PipelineConfig(
-        na=cfg_api.aerial.na,
-        sigma=cfg_api.aerial.illumination_sigma,
-        illumination_shape=cfg_api.aerial.illumination_shape,
-        sigma_inner=cfg_api.aerial.inner_sigma,
-        pole_opening_deg=cfg_api.aerial.pole_opening_deg,
-        focus_nm=cfg_api.aerial.focus_nm,
-        period_nm=cfg_api.mask.pitch_nm,
-        line_width_nm=cfg_api.mask.cd_nm,
-        absorber_material=cfg_api.mask.absorber_material,
-        absorber_height_nm=cfg_api.mask.absorber_height_nm,
-        ml_n_bilayers=cfg_api.mask.multilayer_pairs,
-        ml_d_mo_nm=cfg_api.mask.ml_d_mo_nm,
-        ml_d_si_nm=cfg_api.mask.ml_d_si_nm,
-        ml_gamma=cfg_api.mask.ml_gamma,
-        ml_grading_linear_nm=cfg_api.mask.ml_grading_linear_nm,
-        ml_grading_parabolic_nm=cfg_api.mask.ml_grading_parabolic_nm,
-        ml_roughness_nm=cfg_api.mask.ml_roughness_nm,
-        ml_capping=cfg_api.mask.capping_material,
-        ml_capping_nm=cfg_api.mask.capping_height_nm,
-        dose_mj_cm2=cfg_api.resist.dose_mJ_cm2,
-        resist_model=cfg_api.resist.resist_model,
-        resist_threshold_norm=cfg_api.resist.threshold_norm,
-        resist_thickness_nm=cfg_api.resist.thickness_nm,
-        develop_time_s=cfg_api.resist.development_time_s,
+@app.get("/presets", response_model=PresetListResponse, tags=["simulation"])
+async def list_presets() -> PresetListResponse:
+    """Named starting configurations (defaults and the two anchors) with provenance."""
+    return PresetListResponse(
+        presets=[
+            PresetInfo(
+                key=p.key,
+                label=p.label,
+                summary=p.summary,
+                provenance=p.provenance,
+                config=config_as_dict(p.factory()),
+            )
+            for p in PRESETS.values()
+        ]
     )
+
+
+@app.get("/fields", response_model=FieldCatalogueResponse, tags=["simulation"])
+async def list_fields() -> FieldCatalogueResponse:
+    """Every ``SimulationConfig`` field with type, default, group, label and help."""
+    return FieldCatalogueResponse(groups=GROUPS, fields=field_catalogue())  # type: ignore[arg-type]
 
 
 @app.post("/simulate", response_model=SimulationResponse, tags=["simulation"])
 def run_simulation(req: SimulationRequest) -> SimulationResponse:
     """Execute a full EUV lithography simulation pipeline.
 
-    The simulation proceeds through:
-    1. Mask diffraction (thin mask by default, RCWA optional in the pipeline)
+    Starts from ``preset`` (default: the pipeline defaults), applies the
+    ``config`` overrides, checks the physical constraints and runs:
+    1. Mask diffraction (thin mask by default, RCWA optional)
     2. Aerial image formation (Abbe imaging)
     3. Resist: intensity threshold, or Dill exposure + PEB + development
-    4. CD extraction + NILS computation
+    4. CD extraction + NILS (+ LER/LWR with photon shot noise enabled)
 
     Sync endpoint: FastAPI executes it in the threadpool (see module docstring).
     """
-    cfg_api = req.config
-    pipe_cfg = pipeline_config_from_request(cfg_api)
+    preset_key = req.preset or "default"
+    if preset_key not in PRESETS:
+        raise HTTPException(status_code=422, detail=f"unknown preset '{preset_key}'")
+    overrides = cast(BaseModel, req.config).model_dump(exclude_unset=True)
+    try:
+        cfg = resolve_config(preset_key, overrides)
+    except ValueError as exc:  # the dataclass's own __post_init__ checks
+        raise HTTPException(status_code=422, detail=str(exc))
+    errors = physics_errors(cfg)
+    if errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
 
     try:
-        result = run_pipeline(pipe_cfg)
+        result = run_pipeline(cfg)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
     aerial = result.aerial_image
     centre = aerial.shape[0] // 2
-    aerial_profile = aerial[centre, :].tolist()
-    resist_profile = result.resist_profile[centre, :].tolist()
     i_max = float(aerial.max())
     i_min = float(aerial.min())
 
@@ -178,25 +191,50 @@ def run_simulation(req: SimulationRequest) -> SimulationResponse:
             unit="%",
         ),
     ]
+    if cfg.enable_stochastic:
+        results.append(
+            SimulationResult(stage="resist", metric="ler_1sigma", value=result.ler_nm, unit="nm")
+        )
+        results.append(
+            SimulationResult(stage="resist", metric="lwr_1sigma", value=result.lwr_nm, unit="nm")
+        )
 
     raw: Dict[str, Any] = {
-        "aerial_profile_nm": aerial_profile,
+        "aerial_profile_nm": aerial[centre, :].tolist(),
         "aerial_shape": list(aerial.shape),
         # 1 = developed (dissolved through the film), 0 = resist remaining
-        "resist_profile": resist_profile,
+        "resist_profile": result.resist_profile[centre, :].tolist(),
         "absorber_reflectivity": result.absorber_reflectivity,
-        "grid": pipe_cfg.grid,
+        "grid": cfg.grid,
     }
-    if pipe_cfg.resist_model == "aerial_threshold":
+    if cfg.resist_model == "aerial_threshold":
         # Same expression as pipeline._cd_via_aerial_threshold, so the plotted
         # threshold line is the one the CD was actually extracted at.
         raw["threshold_intensity"] = (
-            pipe_cfg.resist_threshold_norm
+            cfg.resist_threshold_norm
             * float(aerial.mean())
-            * (AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 / max(pipe_cfg.dose_mj_cm2, 1e-9))
+            * (AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 / max(cfg.dose_mj_cm2, 1e-9))
+        )
+    if cfg.enable_stochastic and result.ler_metadata:
+        raw["ler_metadata"] = {
+            k: v for k, v in result.ler_metadata.items() if isinstance(v, (int, float, str, bool))
+        }
+
+    notes = [PRESETS[preset_key].provenance]
+    if cfg.enable_stochastic:
+        notes.append(
+            "LER/LWR are 1σ of the simulated edge/width; no SEM bias is added (measured values "
+            "from CD-SEM carry one, e.g. imec biased/unbiased ≈ 1.66)."
         )
 
-    return SimulationResponse(status="completed", config=cfg_api, results=results, raw=raw)
+    return SimulationResponse(
+        status="completed",
+        preset=preset_key,
+        config=config_as_dict(cfg),
+        results=results,
+        raw=raw,
+        notes=notes,
+    )
 
 
 @app.get("/materials", response_model=MaterialListResponse, tags=["materials"])
