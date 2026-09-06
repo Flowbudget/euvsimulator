@@ -41,7 +41,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Flowbudget/euvsimulator"
 Repository = "https://github.com/Flowbudget/euvsimulator"
-Documentation = "https://euvsimulator.readthedocs.io/"
 Issues = "https://github.com/Flowbudget/euvsimulator/issues"
 
 [project.optional-dependencies]

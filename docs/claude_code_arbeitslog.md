@@ -3606,3 +3606,21 @@ Fano(b) = 1 + m·(1 − c·σ/b)²: gemessen 1,45 (b 8 nm) … 1,88 (b 44 nm), E
 analytischen D2S ohne/mit Zellrauschen (a = 1 und 4,3 nm), Mittel über Seeds; CLI-Flag `--bands/--no-bands`, Ausgabe im JSON unter
 `structural_bands`, Hinweis „kein SEM-Bias". Test mit grid 64/256 Zeilen (16 s). Version 2.1.0, CHANGELOG, README, physics.md.
 Keine Physikänderung. Damit ist der Abschlussplan §6 umgesetzt; weitere Physik nur nach §7 (neue Datenquelle).
+
+## 2026-09-06 (Fortsetzung 43): README neu, Lizenzprüfung, Buch-PDF entfernt
+
+- **README** (387 → 123 Zeilen): Pitch in einem Satz, „What it is — and what it is not", Quick start (Befehle gegen die CLI geprüft,
+  `simulate`-Beispiel läuft in 3 s), Stufen-Tabelle, Validierungsstatus mit Quellen, Grenzen, Dokumentation, Zitat, Lizenz/Dritt-
+  material, Beitrag/Support. **Entfernt, weil unbelegt oder falsch:** Vergleichstabelle „only open-source tool" gegen IMD/GD-Calc/
+  OpenLithoHub; „880+ tests" (jetzt 940); „GPU-native, differentiable from mask to CD" (nicht geprüft); SE-Blur-Abschnitt mit dem alten
+  Preset 5 nm und NILS-Zahlen von vor der Normierungskorrektur; „CI ✅ Linux/macOS/Windows" (seit 31.08. blockiert); „Docker ✅",
+  „High-NA ✅" neben „Research" (Widerspruch); Zenodo-DOI-Platzhalter; ReadTheDocs-Link (404, auch aus pyproject entfernt);
+  PayPal-Adresse im Klartext (Sponsors-Link bleibt). Die LPP-Quelle ist als parametrische Abschätzung ohne Anbindung benannt (so steht
+  es im Modul selbst).
+- **Lizenzprüfung:** Laufzeitabhängigkeiten numpy (BSD), scipy (BSD), torch (Apache/BSD), matplotlib (PSF), fastapi/pydantic/typer (MIT),
+  uvicorn/httpx (BSD), gdstk (BSL-1.0); Dev: pytest/pytest-cov/ruff/mypy/black/tomli/sphinx-rtd-theme (MIT), sphinx (BSD-2), jupyter/
+  nbconvert/ipykernel (BSD). Dashboard lädt Chart.js (MIT) per CDN. CXRO-Tabellen: frei für Forschung, mit Quellenangabe. Anker-JSON:
+  selbst digitalisierte Zahlen mit Zitat, keine Verlagsgrafik. **Befund:** `references/literature/…/Inside_PROLITH_Mack_1997.pdf`
+  (5 MB, Buch von 1997) war im Repository getrackt — vom Autor frei herunterladbar, aber ohne Weitergabelizenz → aus dem Repo entfernt
+  (lokale Kopie im Literaturordner), README dort mit Hinweis und Autoren-URL. NOTICE auf den heutigen Namen und um Chart.js und
+  Anker-Daten ergänzt.

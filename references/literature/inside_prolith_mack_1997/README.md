@@ -29,3 +29,8 @@ Defaults sind damit nachvollziehbar herkunftsbelegt, aber weiterhin **nicht**
 wissenschaftlich als EUV-CAR-repräsentativ validiert. Details und offene
 Punkte: siehe Kommentar bei `mack_R_max` etc. in `pipeline.py` sowie
 `docs/claude_code_arbeitslog.md`.
+
+**Note (2026-09-06):** the PDF itself is no longer part of this repository. Chris Mack offers
+*Inside PROLITH* (1997) as a free download on his own site, lithoguru.com; the copyright stays
+with the author, and redistributing the file here was not covered by any licence. Cite the
+book, download it from the author.
