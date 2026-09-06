@@ -3024,3 +3024,25 @@ dann erneut vorhersagen; kein Parameter wurde an die LWR angepasst.
 
 **2026-09-06, Nutzer:** Anfrage an Danilo De Simone (imec) abgeschickt (Entwurf: mack fits/email_draft_vesters_imec.md; Bitten:
 Mack-Fit-Parameter NXE1716/1717, Quencherbeladung, Entwicklungszeit, Blur/Säureausbeute bei 90 °C). Antwort ausstehend.
+
+## 2026-09-06 (Fortsetzung 28): Literatur-Runde 11 — Quencher, Blur bei 90 °C, Lebensdauer (Details: mack fits/search_log.md, catalog.md)
+
+Drei neue Primärquellen, alle frei und archiviert:
+1. **NIST/Intel, SPIE 7273 (2009), JSR-EUV-Resist, PEB 90 °C:** kP 1,6 nm³/s, **kT 0,026 s⁻¹ → τ = 38 s bei 90 °C**, DH 4,2 nm²/s;
+   Diffusionslänge modellfrei 36 nm ohne / **14 nm mit Quencher** (60 mol % rel. PAG). Erste belegte Lebensdauer bei 90 °C — und
+   der direkte Beleg, dass der Quencher die wirksame Diffusionslänge um 2,6× senkt. Für den NXE1716-Anker heißt das: τ(90 °C)
+   wäre eher 38 s als 10,5 s (Blur ohne Quencher noch größer), der Quencher ist der Hebel, der das kompensiert.
+2. **Anderson & Naulleau (LBNL), OSTI 950847, Table I/II:** XP 5271 (= MET-2D) bei PEB 120 °C/90 s: Deprotection-Blur 23,8 (Contact)
+   / 34,8 (Corner) nm, E-size 12,5 mJ/cm² (50 nm 1:1, MET NA 0,3), LER 6,7 ± 0,2 nm; dazu Basisreihen für XP 5435/5496/EH27 und
+   PEB-Reihen für TOK P1123 / Fuji 1195. **MET-2D wird damit zum vollständigsten Anker:** C + FQY (LBNL), B + Mack + Arrhenius
+   (Sekiguchi Table 6), Blur + E-size + LER (Naulleau) — vier Messgruppen, ein Handelsresist; Vorbehalte: Chargen 2008–2011,
+   PEB 110/120/130 °C je Quelle, Blur-Definition der HOST-PSF (σ vs. FWHM) noch zuzuordnen.
+3. **Osaka-Dissertation Jin 2025 (Kozawa-Gruppe):** benannter Modell-CAR mit PAG 0,2 / Quencher 0,1 nm⁻³, PEB 110 °C/90 s,
+   Neutralisationsradius 0,5 nm mit D 1,0 nm²/s → k_Q ≈ 12,6 nm³/s (Macks 15 nm³/s damit erstmals unabhängig gestützt),
+   Entwicklungsschwelle Cth 1,3–1,5 von 2,26 nm⁻³ (M_th ≈ 0,34–0,42, unser Default 0,39). Belichtung EB, nicht EUV.
+Nebenfund: Shin-Etsu-Patent US 10,809,617 (Google-Patents-Volltext) — PAG:Quencher ≈ 8:4,5 Massenteile, aber ArF-Test.
+Nicht gefunden: Quencherbeladung der NXE-Resists, Vesters' Fit-Tabelle (Anfrage läuft).
+
+**Konsequenz für den Plan (B2):** (a) Quencher explizit modellieren und am NXE1716/1717-Kurvenpaar (Q-Verhältnis 2:1) fitten;
+(b) MET-2D als zweiten Anker aufbauen (Preset aus vier Quellen, Vorhersage E-size 12,5 und LER 6,7 bei 50 nm 1:1 mit MET-Optik);
+(c) τ(90 °C) = 38 s (NIST) als belegten Wert für 90-°C-Presets führen, mit Quencher statt ohne.
