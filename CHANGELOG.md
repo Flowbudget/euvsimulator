@@ -20,6 +20,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Consequence: neutralisation during a 60 s PEB is incomplete (k_Q·G0·t ≈ 1.8), and the B2 two-curve
   quencher fit (which assumed complete neutralisation) needs re-evaluation.
 - Also: `peb_k_trap_per_s` (0.2076 at 110 °C from the Fig. 3 refit), `peb_D_quencher`.
+- **NXE1716 quencher fit through the concurrent PEB** (`presets.NXE1716_QUENCHER_FIT_PDE`,
+  `nxe1716_config(explicit_quencher=True, peb_model="reaction_diffusion")`, `presets.flood_rate_pde`):
+  Q/PAG = 0.36 (0.13 with the analytical PEB), Mack n 13–14 instead of at the fit bound, rms 0.04/0.07 —
+  the NIST law makes the two-curve fit physically consistent. The dose-to-size of the 22 nm lines stays
+  1.7× above the measurement (19.0 vs 11.0 mJ/cm² at grid 128) whichever PEB law is used.
 
 ### Changed (physics, 2026-09-06, plan stage C1) — PEB temperature model
 - **All seven Fig. 3 curves of Yamamoto 2011 (80–140 °C) digitised** and fitted with the chain's own

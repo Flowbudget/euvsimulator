@@ -131,7 +131,8 @@ C1 ✅ (2026-09-06, Fortsetzung 37): Fig. 3 komplett digitalisiert, k(T)/τ(T) j
 C2 ✅ teilweise (2026-09-06, Fortsetzung 38): PDE-PEB nach NIST (Trapping an deprotektierten Stellen, gleichzeitige Neutralisation)
    als `peb_model="reaction_diffusion"`, Null-Parameter-Anker NIST-Bilayer bestanden, k_Q 15 → 1,2 (einzig messbasiert). Aber: im
    Muster halbiert es die Druckdosis des Default-Resists; Flood-Daten entscheiden das Gesetz nicht → Default bleibt analytisch,
-   Differenz als offene, falsifizierbare Frage dokumentiert. Quencher-Fit B2 mit k_Q 1,2 im PDE-Modell neu (≈ 1 h/Fit auf M1).
+   Differenz als offene, falsifizierbare Frage dokumentiert. Quencher-Fit im PDE-Modell ✅ (Fortsetzung 39): Q/PAG 0,36, n 13–14,
+   D2S NXE1716 19,0 (grid 128) — Dosisdiskrepanz 1,7× bleibt gesetzunabhängig. Auflösungseinheit a: Quellen 1–5 nm (B4b).
 C2b Photon-Säure-Multiplizität (Mack 2011): Preflight LWR-Änderung bei fester Mittelwertkette (ursprünglicher C2-Punkt, offen).
 C3 Neutralisationsrate bei PEB: Mack 2011 k_Q als beratend markieren; Test gegen Sekiguchi mit Nachreaktionszeit-Hypothese
    (erklärt +28 %?).

@@ -104,3 +104,32 @@ def test_two_curve_quencher_fit_reproduces_both_curves():
         E[np.argmin(np.abs(np.log(flood_rate_quenched(cfg17, E)) - np.log(p17["R_max"] / 2)))]
     )
     assert sw16 > sw17 + 1.5
+
+
+def test_two_curve_quencher_fit_through_the_concurrent_peb():
+    """The same curve pair through the reaction-diffusion PEB (C2, log
+    Fortsetzung 39): rms <= 0.08 for both curves; the quencher loading is
+    Q/PAG = 0.36 there (0.13 with the analytical PEB).
+    """
+    from euvsimulator.presets import NXE1716_QUENCHER_FIT_PDE as F
+    from euvsimulator.presets import flood_rate_pde
+
+    d = load_nxe1716_anchor()
+    c16 = np.array(d["authors_mack_fit_E_R"])
+    c17 = np.array(d["nxe1717_low_quencher"]["authors_mack_fit_E_R"])
+    p17 = d["nxe1717_low_quencher"]["plateaus_nm_per_s"]
+    cfg16 = nxe1716_config(explicit_quencher=True, peb_model="reaction_diffusion")
+    cfg17 = nxe1716_config(
+        explicit_quencher=True,
+        peb_model="reaction_diffusion",
+        mack_n=F["mack_n_1717"],
+        quencher_density_per_nm3=F["q_rel_1717"] * 0.2,
+        mack_R_max=p17["R_max"],
+        mack_R_min=p17["R_min"],
+    )
+    assert cfg16.quencher_density_per_nm3 == pytest.approx(0.0727, abs=1e-3)
+    assert cfg16.acid_base_quench_rate_nm3_per_s == 1.2
+    for cfg, curve in ((cfg16, c16), (cfg17, c17)):
+        model = flood_rate_pde(cfg, curve[:, 0])
+        rms = float(np.sqrt(np.mean((np.log10(model) - np.log10(curve[:, 1])) ** 2)))
+        assert rms <= 0.08, rms

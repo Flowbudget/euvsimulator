@@ -3538,3 +3538,25 @@ Suite C1/C2: 934 bestanden + 1 Konvergenzschranke (`test_stochastic_consistency`
 bei ρ = 2000 skaliert mit 1/√(ρ·V_Blur), V_Blur ist mit dem C1-Blur (9,4 → 7,9 nm) um 0,59 kleiner → Schranke 0,75 px (Invarianten
 unverändert), Modul danach 5/5. Notebooks wurden mit den C1-Defaults neu ausgeführt (vor dem k_Q-Default; nur Notebooks mit Quencher
 > 0 wären betroffen — keine). Laufzeitregel (M1, 8 GB): ein schwerer Lauf zur Zeit, Preflights klein.
+
+## 2026-09-06 (Fortsetzung 39): Quencher-Fit NXE1716/1717 im Reaktions-Diffusions-Modell (Vorhersagen VOR dem Lauf)
+
+Konsistent zum C2-Modell: Flood-Kurven beider Resists mit `reaction_diffusion_pde` (uniform, D wirkungslos), k_trap(90 °C) = 0,0528
+(Polymer-A-Tabelle), k_Q = 1,2 nm³/s, G₀ 0,2, Mth 0,39, Plateaus aus den Daten, geteiltes k, n je Kurve, q₁₇₁₆ = 2·q₁₇₁₇.
+Vorhersagen: V1 q₁₇₁₆ = 0,10–0,18 (k_Q·G₀ = 0,24 s⁻¹ → Neutralisation im Flood in ≈ 4 s praktisch vollständig, also nahe B2);
+V2 rms ≤ 0,08 beide Kurven; V3 Muster (grid 128, 1024 Zeilen, deterministisch) D2S NXE1716 mit Quencher im PDE-Modell **18–30 mJ/cm²**
+(gemessen 11) — die Dosisdiskrepanz bleibt; V4 Laufzeit des Muster-Preflights auf dem M1 < 30 min.
+
+**B4b Quellen für die Auflösungseinheit a (leichte Recherche während des Laufs):** Schmid/Willson 2001 (SPIE 4345, frei): Monomer ≈ 1 nm,
+Rg typischer Kette ≈ 5 nm, Critical-Ionization-Gittermodell mit Monomerzellen. Zusammen mit Thackeray (Rg 4,3) und Jin 2025 (Mw 12,7k)
+ist a physikalisch auf 1–5 nm eingegrenzt; unser 4,3 nm liegt am oberen Rand. Da der Sockel ∝ 1/a (2D) ist, bleibt seine Unsicherheit
+Faktor 2–4, bis die Auflösungseinheit über ein Kettenmodell (CI) statt einer Zelle belegt ist. Notiert im Katalog.
+
+**Ergebnis PDE-konsistenter Quencher-Fit (c2_qfit.py):** k = 0,461 s⁻¹, n₁₇₁₆ = 12,7, n₁₇₁₇ = 14,2, **q₁₇₁₆ = 0,363** (Q = 0,073 nm⁻³,
+Q/PAG 0,36), rms 0,042 / 0,070. V2 hält; **V1 falsifiziert** (erwartet 0,10–0,18): im NIST-Gesetz überlebt Säure bei kleinem φ länger und
+die Neutralisation mit k_Q 1,2 ist anfangs unvollständig, also braucht dieselbe Dosisverschiebung mehr Quencher. Q/PAG 0,36 liegt
+zwischen Mack 2011 (0,25) und Osaka 2025 (0,5) — plausibler als die 0,13 aus B2 — und die Mack-n liegen bei 13–14 statt an der
+Schranke 2. **V3: D2S (PDE, Quencher, grid 128) = 18,97 mJ/cm²** (vorhergesagt 18–30; gemessen 11,0): die Dosisdiskrepanz bleibt
+bei 1,7×, unabhängig vom PEB-Gesetz. **V4:** 11 s pro Lauf bei grid 128, Preflight gesamt 95 s — das PDE-Modell ist bei grid 128
+praktikabel, bei grid 256 (dt ∝ dx²) ≈ 8× teurer. Umsetzung: zweiter Konstantensatz `NXE1716_QUENCHER_FIT_PDE` im Preset
+(`explicit_quencher=True, peb_model="reaction_diffusion"`), Flood-Helfer `flood_rate_pde`, Test auf beide Kurven.

@@ -128,6 +128,54 @@ NXE1716_QUENCHER_FIT = {
 }
 
 
+def flood_rate_pde(cfg: SimulationConfig, dose_mj_cm2):
+    """Flood response through the concurrent reaction-diffusion PEB
+    (:func:`euvsimulator.resist.peb.reaction_diffusion_pde`; uniform field, so
+    the diffusion terms are inert): acid trapping by deprotected sites,
+    neutralisation with k_Q*G0 and deprotection, then the Mack rate.
+    """
+    import torch
+
+    from euvsimulator.resist.peb import reaction_diffusion_pde
+
+    E = np.atleast_1d(np.asarray(dose_mj_cm2, dtype=float))
+    h = torch.tensor(1.0 - np.exp(-cfg.dill_C * E), dtype=torch.float64)
+    h = h.view(-1, 1, 1).expand(-1, 2, 2).clone()
+    q = cfg.quencher_density_per_nm3 / cfg.pag_density_per_nm3
+    _, _, M = reaction_diffusion_pde(
+        h,
+        float(q),
+        torch.ones_like(h),
+        D=0.0,
+        k=cfg.peb_k,
+        k_trap=cfg.peb_k_trap_per_s,
+        quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+        t_bake=cfg.peb_t_bake,
+        dx=1.0,
+        pag_density=cfg.pag_density_per_nm3,
+        dt=0.25,
+    )
+    return mack_rate(M[:, 0, 0].numpy(), cfg.mack_R_max, cfg.mack_R_min, cfg.mack_M_th, cfg.mack_n)
+
+
+# Same two-curve fit through the concurrent reaction-diffusion PEB (C2, log
+# Fortsetzung 39): k_trap(90 C) = 0.0528 1/s (Polymer A table, NIST law), k_Q
+# = 1.2 nm^3/s (NIST bilayer), shared k, per-curve n, 2:1 quencher ratio.
+# rms 0.042 / 0.070. The quencher loading comes out at Q/PAG = 0.36 --
+# between Mack 2011's 0.25 and Osaka 2025's 0.5 -- and the Mack n at 13-14,
+# i.e. this PEB law makes the curve-pair fit physically consistent where the
+# analytical one (complete neutralisation) did not (n at its bound).
+NXE1716_QUENCHER_FIT_PDE = {
+    "peb_k": 0.4608,
+    "peb_k_trap_per_s": 0.0528,
+    "mack_n_1716": 12.68,
+    "mack_n_1717": 14.16,
+    "q_rel_1716": 0.3633,
+    "q_rel_1717": 0.3633 / 2.0,
+    "acid_base_quench_rate_nm3_per_s": 1.2,
+}
+
+
 # Fit of (k, n) at M_th = 0.39 to the authors' Mack-fit curve (see module
 # docstring; scratchpad b1_nxe1716.py, rms 0.042 in log10 R).
 NXE1716_MACK_N = 12.76
@@ -152,7 +200,17 @@ def nxe1716_config(
     subtracted alike in flood and pattern, log Fortsetzung 29).
     """
     k = NXE1716_PEB_K_FROM_DRM * (NXE1716_DOSE_SCALE_CALIBRATION if calibrated_dose_scale else 1.0)
-    if explicit_quencher:
+    if explicit_quencher and overrides.get("peb_model") == "reaction_diffusion":
+        f = NXE1716_QUENCHER_FIT_PDE
+        k = f["peb_k"] * (NXE1716_DOSE_SCALE_CALIBRATION if calibrated_dose_scale else 1.0)
+        overrides = {
+            "mack_n": f["mack_n_1716"],
+            "quencher_density_per_nm3": f["q_rel_1716"] * 0.2,
+            "acid_base_quench_rate_nm3_per_s": f["acid_base_quench_rate_nm3_per_s"],
+            "peb_k_trap_per_s": f["peb_k_trap_per_s"],
+            **overrides,
+        }
+    elif explicit_quencher:
         f = NXE1716_QUENCHER_FIT
         k = f["peb_k"] * (NXE1716_DOSE_SCALE_CALIBRATION if calibrated_dose_scale else 1.0)
         overrides = {
