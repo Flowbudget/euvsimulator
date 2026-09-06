@@ -214,10 +214,22 @@ def reaction_diffusion_adi(
         raise ValueError(f"Unknown boundary condition: '{boundary}'")
 
     T_x = _build_tridiagonal_matrix(
-        W, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b
+        W,
+        float(main_diag),
+        float(off_diag),
+        float(main_b),
+        device,
+        dtype,
+        off_boundary=float(off_b),
     )
     T_y = _build_tridiagonal_matrix(
-        H, main_diag, off_diag, main_b, device, dtype, off_boundary=off_b
+        H,
+        float(main_diag),
+        float(off_diag),
+        float(main_b),
+        device,
+        dtype,
+        off_boundary=float(off_b),
     )
 
     for _ in range(n_steps):
@@ -537,7 +549,7 @@ def reaction_diffusion_with_quenching(
     pag_density: float | None = None,
     dz: float | None = None,
     acid_lifetime_s: float | None = None,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor | float, torch.Tensor]:
     """PEB with explicit acid-base quenching, for the sampled-PAG/quencher path.
 
     Extends :func:`reaction_diffusion_analytical` with the acid-quencher
@@ -679,12 +691,12 @@ def reaction_diffusion_with_quenching(
         if dz is not None and h.ndim == 3 and h.shape[0] > 1:
             h = _gaussian_blur_z(h, sigma_nm=float(blur_sigma), dz=dz)
 
-    uniform_q = not isinstance(quencher, torch.Tensor)
-    if uniform_q and float(quencher) == 0.0:
+    Q_final: torch.Tensor | float
+    if not isinstance(quencher, torch.Tensor) and float(quencher) == 0.0:
         # No base loaded: the neutralisation is a no-op; do not allocate.
         A_quenched, Q_final = h, 0.0
     else:
-        if uniform_q:
+        if not isinstance(quencher, torch.Tensor):
             q = torch.full_like(h, float(quencher))  # blur of a constant == constant
         else:
             q = quencher

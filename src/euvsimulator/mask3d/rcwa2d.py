@@ -313,7 +313,7 @@ class RCWA2D:
 
         # Incident: (m=0, n=0) only
         inc = torch.zeros(P, dtype=torch.complex128, device=self.device)
-        inc[P // 2] = 1.0 + 0.0j
+        inc[P // 2] = 1.0
 
         reflected = S_total[0, 0] @ inc
         return reflected
@@ -475,7 +475,7 @@ def rectangular_island_profile(
     eps = torch.full(
         (n_samples_x, n_samples_y), eps_background, dtype=torch.complex128, device=device
     )
-    eps[mask] = complex(eps_island)
+    eps[mask] = torch.tensor(complex(eps_island), dtype=eps.dtype, device=eps.device)
     return eps
 
 
@@ -516,5 +516,5 @@ def contact_hole_profile(
     eps = torch.full(
         (n_samples_x, n_samples_y), eps_background, dtype=torch.complex128, device=device
     )
-    eps[mask] = complex(eps_hole)
+    eps[mask] = torch.tensor(complex(eps_hole), dtype=eps.dtype, device=eps.device)
     return eps

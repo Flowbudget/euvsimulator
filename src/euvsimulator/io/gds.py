@@ -97,7 +97,7 @@ class MaskGeometry:
 
         for (layer, datatype), verts_list in self.polygons.items():
             for verts in verts_list:
-                polygon = gdstk.Polygon(verts, layer=layer, datatype=datatype)
+                polygon = gdstk.Polygon(verts.tolist(), layer=layer, datatype=datatype)
                 cell.add(polygon)
 
         lib.write_gds(str(path))
@@ -169,12 +169,15 @@ def load_gds(
             target_cell = top_level[0]
         else:
             # Pick the cell with the most polygons (direct or via refs)
+            real_cells = [c for c in cells if isinstance(c, gdstk.Cell)]
             target_cell = max(
-                cells,
+                real_cells,
                 key=lambda c: len(c.get_polygons() if flatten else c.polygons),
             )
 
     # Collect polygons
+    if not isinstance(target_cell, gdstk.Cell):
+        raise ValueError(f"cell {target_cell.name!r} is a raw (unparsed) cell")
     raw_polygons = target_cell.get_polygons() if flatten else target_cell.polygons
 
     geometry: Dict[Tuple[int, int], List[np.ndarray]] = {}

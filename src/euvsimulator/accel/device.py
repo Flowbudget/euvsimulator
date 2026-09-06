@@ -50,7 +50,7 @@ def device_info(device: torch.device) -> Dict[str, object]:
     if device.type == "cuda":
         idx = device.index if device.index is not None else 0
         name = torch.cuda.get_device_name(idx)
-        vram_gb = torch.cuda.get_device_properties(idx).total_mem / (1024**3)
+        vram_gb = torch.cuda.get_device_properties(idx).total_memory / (1024**3)
         cap = torch.cuda.get_device_capability(idx)
         return {
             "name": name,

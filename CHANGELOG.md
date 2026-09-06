@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [2.0.0] — 2026-09-06
+
+**Release summary.** This version closes the physics work of September 2026: every default of the
+resist chain now has a named source, a derivation, or an explicit calibration/assumption label
+(`docs/physics.md`); the aerial image is clear-field-normalised; the exposure, PEB, development and
+roughness models were rebuilt against primary measurements (Yamamoto 2011, Kang/NIST 2009/2010,
+LBNL film quantum yields, Thackeray 2010, Anderson/Naulleau 2008, Vesters 2017/2019, Lorusso/Mack
+2018); two named-resist anchors and their documented distance to the measurements replace the
+former unqualified "validated" claims. Defaults changed (Dill B/C, deprotection rate, acid lifetime,
+diffusivity, SE blur, quench rate), so results differ from 1.x — that is the point of the release.
+Experimental options (off by default, documented as such): `development_stochasticity`,
+`development_model="eikonal3d"`, `peb_model="reaction_diffusion"`, `exposure_stochasticity`,
+`ler_passband_nm`, `peb_temperature_c`. Known limitations: README "Known limitations" and
+`docs/physics.md` §7. Full local test suite: 935 tests; CI could not run (GitHub billing limit).
+The entries below are the detailed log of the release in reverse chronological order.
+
 ### Verified (2026-09-06, plan stage C2b)
 - The sampled exposure chain already carries the photon-to-acid multiplicity: acid counts in blocks
   larger than the SE blur are compound-Poisson with Var/E = 1 + m (measured 1.91 vs 2.0 for m = 1.0

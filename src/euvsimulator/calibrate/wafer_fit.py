@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.optimize import minimize
@@ -17,6 +17,23 @@ from scipy.optimize import minimize
 # ──────────────────────────────────────────────────────────
 # Data container
 # ──────────────────────────────────────────────────────────
+
+
+# Default parameter bounds of `euv calibrate`. They must contain the chain's
+# defaults (tests/test_calibrate_bounds.py): with peb_k <= 2.0 the fit was
+# clamped before it started once the default became 10.95 (2026-09-06).
+# peb_sigma_diff widened to 40 nm: Anderson et al. 2009 (OSTI 961531) measured
+# real EUV resists up to 38.4 nm; mack_n to 30: Schnattinger (FAU) measured 25.
+DEFAULT_BOUNDS: Dict[str, Tuple[float, float]] = {
+    "dill_C": (0.005, 0.2),
+    "peb_k": (0.05, 50.0),
+    "peb_t_bake": (30.0, 120.0),
+    "peb_sigma_diff": (1.0, 40.0),
+    "mack_R_max": (10.0, 500.0),
+    "mack_R_min": (0.01, 10.0),
+    "mack_n": (1.5, 30.0),
+    "mack_M_th": (0.1, 0.9),
+}
 
 
 @dataclass
@@ -147,7 +164,7 @@ def fit_resist_params(
     bounds: Optional[Dict[str, Tuple[float, float]]] = None,
     method: str = "Nelder-Mead",
     options: Optional[Dict] = None,
-) -> Dict[str, object]:
+) -> Dict[str, Any]:
     """Fit resist-model parameters to measured FEM CD data.
 
     Uses :func:`scipy.optimize.minimize` to minimise the RMSE between simulated
@@ -189,7 +206,7 @@ def fit_resist_params(
     x0 = np.array([initial_params[name] for name in param_names], dtype=float)
 
     # Build bounds array in scipy format
-    scipy_bounds: Optional[List[Tuple[float, float]]] = None
+    scipy_bounds: Optional[List[Tuple[Optional[float], Optional[float]]]] = None
     if bounds is not None:
         scipy_bounds = []
         for name in param_names:
@@ -239,7 +256,7 @@ def bootstrap_fit(
     method: str = "Nelder-Mead",
     ci_percentile: float = 95.0,
     seed: Optional[int] = None,
-) -> Dict[str, object]:
+) -> Dict[str, Any]:
     """Bootstrap estimation of parameter confidence intervals.
 
     Resamples the CD matrix (rows = dose conditions) with replacement and
@@ -301,7 +318,7 @@ def bootstrap_fit(
         )
 
         try:
-            fit_result = fit_resist_params(
+            fit_result: Dict[str, Any] = fit_resist_params(
                 boot_data,
                 initial_params,
                 pipeline_fn,
@@ -318,7 +335,7 @@ def bootstrap_fit(
 
     # Drop failed runs
     valid = ~np.any(np.isnan(boot_samples), axis=1)
-    valid_samples = boot_samples[valid]
+    valid_samples: np.ndarray = boot_samples[valid]
 
     n_valid = len(valid_samples)
     if n_valid < n_samples and n_valid < max(10, n_samples // 4):
@@ -340,10 +357,10 @@ def bootstrap_fit(
     ci_lower = {}
     ci_upper = {}
     for idx, name in enumerate(param_names):
-        vals = valid_samples[:, idx]
-        if len(vals) > 0:
-            ci_lower[name] = float(np.percentile(vals, ci_lower_pct))
-            ci_upper[name] = float(np.percentile(vals, ci_upper_pct))
+        col = valid_samples[:, idx]
+        if len(col) > 0:
+            ci_lower[name] = float(np.percentile(col, ci_lower_pct))
+            ci_upper[name] = float(np.percentile(col, ci_upper_pct))
         else:
             ci_lower[name] = float("nan")
             ci_upper[name] = float("nan")
@@ -370,7 +387,7 @@ def calibrate_on_synthetic(
     dose_values: Optional[np.ndarray] = None,
     focus_values: Optional[np.ndarray] = None,
     seed: Optional[int] = None,
-) -> Dict[str, object]:
+) -> Dict[str, Any]:
     """Test that the calibration can recover known parameters.
 
     Generates a synthetic FEM data set from known target parameters, adds
@@ -438,7 +455,7 @@ def calibrate_on_synthetic(
     # Fit: use target params as initial guess with small perturbation
     initial_guess = {k: v * (1.0 + 0.05 * rng.uniform(-1, 1)) for k, v in target_params.items()}
 
-    fit_result = fit_resist_params(data, initial_guess, pipeline_fn)
+    fit_result: Dict[str, Any] = fit_resist_params(data, initial_guess, pipeline_fn)
 
     fitted = fit_result["fitted_params"]
 

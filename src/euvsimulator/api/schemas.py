@@ -98,9 +98,9 @@ class ResistConfig(BaseModel):
 class SimulationConfig(BaseModel):
     """Top-level simulation configuration."""
 
-    aerial: AerialImageConfig = Field(default_factory=AerialImageConfig)
-    mask: MaskConfig = Field(default_factory=MaskConfig)
-    resist: ResistConfig = Field(default_factory=ResistConfig)
+    aerial: AerialImageConfig = Field(default_factory=AerialImageConfig)  # type: ignore[arg-type]
+    mask: MaskConfig = Field(default_factory=MaskConfig)  # type: ignore[arg-type]
+    resist: ResistConfig = Field(default_factory=ResistConfig)  # type: ignore[arg-type]
 
 
 class SimulationRequest(BaseModel):

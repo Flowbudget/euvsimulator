@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
@@ -499,7 +499,7 @@ def process_window(
     print(f"Depth of Focus: {dof:.1f} nm")
     print(f"Exposure Latitude: {el:.1f}%")
 
-    result = {
+    pw_result: dict[str, Any] = {
         "target_cd_nm": float(target_cd),
         "doses": doses.tolist(),
         "focuses": focuses.tolist(),
@@ -511,7 +511,7 @@ def process_window(
     }
 
     if output:
-        Path(output).write_text(json.dumps(result, indent=2))
+        Path(output).write_text(json.dumps(pw_result, indent=2))
         typer.echo(f"\U0001f4c1 Results saved to {output}")
 
     # Generate heatmap plot
@@ -573,14 +573,14 @@ def process_window(
     if output_csv:
         import csv
 
-        with open(output_csv, "w", newline="") as f:
-            writer = csv.writer(f)
+        with open(output_csv, "w", newline="") as fh:
+            writer = csv.writer(fh)
             # Header row
             writer.writerow([""] + [f"{d:.1f}" for d in doses])
             # Data rows
-            for j, f in enumerate(focuses):
-                row = [f"{f:.0f}"] + [f"{cd_matrix[i, j]:.2f}" for i in range(dose_steps)]
-                writer.writerow(row)
+            for j, foc in enumerate(focuses):
+                row_vals = [f"{foc:.0f}"] + [f"{cd_matrix[i, j]:.2f}" for i in range(dose_steps)]
+                writer.writerow(row_vals)
         typer.echo(f"\U0001f4c4 CSV saved to {output_csv}")
 
 
@@ -762,7 +762,12 @@ def calibrate(
 
     import numpy as np
 
-    from euvsimulator.calibrate.wafer_fit import WaferCDData, bootstrap_fit, fit_resist_params
+    from euvsimulator.calibrate.wafer_fit import (
+        DEFAULT_BOUNDS,
+        WaferCDData,
+        bootstrap_fit,
+        fit_resist_params,
+    )
     from euvsimulator.pipeline import SimulationConfig, run_simulation
 
     # Load wafer data
@@ -789,8 +794,8 @@ def calibrate(
         # NB: do not name the loop variable `cd` -- it would shadow the --cd
         # option and silently feed the last measured CD into the simulated
         # line width (found 2026-09-05 by the synthetic-FEM smoke test).
-        for d, f, cd_meas in zip(doses, foci, cd_values):
-            cd_matrix[dose_to_idx[d], focus_to_idx[f]] = cd_meas
+        for d, foc, cd_meas in zip(doses, foci, cd_values):
+            cd_matrix[dose_to_idx[d], focus_to_idx[foc]] = cd_meas
         data = WaferCDData(
             dose_values=np.array(dose_vals),
             focus_values=np.array(focus_vals),
@@ -860,27 +865,7 @@ def calibrate(
             else json.loads(b_path.read_text())
         )
     else:
-        bounds = {
-            "dill_C": (0.01, 0.2),
-            "peb_k": (0.05, 2.0),
-            "peb_t_bake": (30.0, 120.0),
-            "peb_sigma_diff": (
-                1.0,
-                40.0,
-                # widened: Anderson et al. 2009 (OSTI 961531) measured real EUV resists up to
-                # 38.4 nm -- a 20 nm cap would have artificially excluded valid fits
-            ),
-            "mack_R_max": (10.0, 500.0),
-            "mack_R_min": (0.01, 10.0),
-            "mack_n": (
-                1.5,
-                30.0,
-                # widened: Schnattinger PhD thesis (FAU, 193nm CAR resist, see pipeline.py mack_n
-                # comment) measured n=25.14 -- a 20 cap would have excluded that real (if
-                # wavelength-caveated) value
-            ),
-            "mack_M_th": (0.1, 0.9),
-        }
+        bounds = dict(DEFAULT_BOUNDS)
 
     # Create pipeline function
     _defaults = SimulationConfig()
@@ -912,7 +897,7 @@ def calibrate(
 
     # Run fitting
     typer.echo("[>] Fitting resist parameters...")
-    fit_result = fit_resist_params(
+    fit_result: dict[str, Any] = fit_resist_params(
         data,
         initial_params,
         pipeline_fn,
@@ -931,7 +916,7 @@ def calibrate(
         typer.echo(f"     {name}: {val:.4f}")
 
     # Bootstrap confidence intervals
-    boot_result = None
+    boot_result: dict[str, Any] | None = None
     if bootstrap_samples > 0:
         typer.echo(
             f"\n[~] Running {bootstrap_samples} bootstrap samples for confidence intervals..."

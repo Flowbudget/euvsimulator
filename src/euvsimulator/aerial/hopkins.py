@@ -18,7 +18,7 @@ accelerator provides large iteration-count savings.
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 import torch
 
@@ -110,7 +110,7 @@ def compute_tcc(
     P_shifted = torch.zeros(n_freqs, n_src, dtype=torch.complex128, device=device)
 
     for s_idx in range(n_src):
-        di, dj = shifts_px[s_idx, 0].item(), shifts_px[s_idx, 1].item()
+        di, dj = int(shifts_px[s_idx, 0].item()), int(shifts_px[s_idx, 1].item())
         pupil_roll = torch.roll(pupil, shifts=(-di, -dj), dims=(0, 1))
         P_shifted[:, s_idx] = pupil_roll.reshape(-1)
 
@@ -252,7 +252,7 @@ def compare_hopkins_abbe(
     grid: int = 64,
     period_m: float = 1e-6,
     wavelength_m: float = 13.5e-9,
-) -> Dict[str, torch.Tensor]:
+) -> Dict[str, Any]:
     """Compare Hopkins/TCC aerial image with the Abbe reference.
 
     Parameters

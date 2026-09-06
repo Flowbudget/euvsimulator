@@ -199,7 +199,7 @@ def build_permittivity_profile(
     mask = (x >= period_m / 2 - half_line) & (x <= period_m / 2 + half_line)
 
     eps = torch.full_like(x, space_eps, dtype=torch.complex128)
-    eps[mask] = complex(line_eps)
+    eps[mask] = torch.tensor(complex(line_eps), dtype=eps.dtype, device=eps.device)
 
     # Effective substrate permittivity (thickness-weighted average Mo/Si),
     # optical constants from the CXRO table at the requested energy.

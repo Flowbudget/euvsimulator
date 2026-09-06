@@ -190,4 +190,5 @@ def custom(
 def _meshgrid(grid: int, device: str) -> tuple[torch.Tensor, torch.Tensor]:
     """Normalised frequency coordinates in [-1, 1]."""
     x = torch.linspace(-1.0, 1.0, grid, device=device)
-    return torch.meshgrid(x, x, indexing="ij")
+    gx, gy = torch.meshgrid(x, x, indexing="ij")
+    return gx, gy

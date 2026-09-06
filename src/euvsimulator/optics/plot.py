@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Tuple
+from typing import Sequence, Tuple
 
 import torch
 
@@ -138,7 +138,7 @@ def plot_reflectivity_angle(
             n_layers,
             thicknesses,
             wl_batch[i : i + 1],
-            angles_rad[i].item(),
+            angles_rad[i],
             n_substrate=n_substrate,
             te=te,
             roughness_nm=roughness_nm,
@@ -210,7 +210,7 @@ def plot_reflectivity(
             n_layers,
             thicknesses,
             wl_batch[i : i + 1],
-            angles_rad[i].item(),
+            angles_rad[i],
             n_substrate=n_substrate,
             te=te,
             roughness_nm=roughness_nm,
@@ -232,7 +232,7 @@ def plot_reflectivity(
 def plot_roughness_comparison(
     n_layers: torch.Tensor,
     thicknesses: torch.Tensor,
-    sigma_values: list = (0.0, 0.3, 0.5, 0.7),
+    sigma_values: Sequence[float] = (0.0, 0.3, 0.5, 0.7),
     wavelength_range: Tuple[float, float, int] = (12.0e-9, 15.0e-9, 201),
     theta0: float = math.radians(6.0),
     n_substrate: torch.Tensor | None = None,

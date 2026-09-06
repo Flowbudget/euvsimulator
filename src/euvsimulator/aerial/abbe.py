@@ -436,8 +436,8 @@ def abbe_image(
         # A source point at sigma s shifts the mask spectrum by s * NA / lambda.
         # In FFT pixels, this is s * (NA / lambda) / df = s * pupil_radius_px.
         for idx in range(src_indices.shape[0]):
-            si = src_indices[idx, 0].item()
-            sj = src_indices[idx, 1].item()
+            si = int(src_indices[idx, 0].item())
+            sj = int(src_indices[idx, 1].item())
             weight = source[si, sj].item()
 
             # Source sigma coordinate: (0,0) is centre, (-1,1) are edges
@@ -472,8 +472,8 @@ def abbe_image(
     else:
         # Pupil covers the entire FFT grid (or more) — no spatial filtering
         for idx in range(src_indices.shape[0]):
-            si = src_indices[idx, 0].item()
-            sj = src_indices[idx, 1].item()
+            si = int(src_indices[idx, 0].item())
+            sj = int(src_indices[idx, 1].item())
             weight = source[si, sj].item()
 
             sx = (si - half) / half
@@ -579,6 +579,7 @@ def _compute_tcc_matrix(
         if not (0.0 < opening <= math.pi):
             raise ValueError("pole_opening_deg must be in (0, 180]")
         theta = torch.atan2(FY, FX)
+        axes: tuple[float, ...]
         if shape == "quasar":
             axes = (math.pi / 4, 3 * math.pi / 4, -math.pi / 4, -3 * math.pi / 4)
         elif shape == "dipole_y":

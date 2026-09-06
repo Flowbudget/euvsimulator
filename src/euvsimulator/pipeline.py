@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 
@@ -196,6 +196,14 @@ class SimulationConfig:
     device : str
         PyTorch device (default: "auto"). Use "auto" to auto-select GPU
         if available, or "cpu"/"cuda" explicitly.
+
+
+    Experimental options (2.0.0; off by default, documented in docs/physics.md):
+    ``development_stochasticity`` (dissolution-cell noise), ``development_model="eikonal3d"``
+    (y-coupled front), ``peb_model="reaction_diffusion"`` (concurrent PEB, NIST law),
+    ``exposure_stochasticity`` (PAG/quencher counting), ``ler_passband_nm`` (metrology band),
+    ``peb_temperature_c`` (measured kinetics at 80-140 C). Their physics is sourced; their effect
+    on printed results is characterised in the log, not validated against independent data.
     """
 
     wavelength_nm: float = 13.5
@@ -1551,7 +1559,7 @@ def _cd_via_full_chem(
     half: int,
     line_width_px: int,
     energy_eV: float,
-) -> tuple[float, torch.Tensor, float, float, float]:
+) -> tuple[float, torch.Tensor, float, float, float, dict[str, Any] | None]:
     """Extract CD via full resist chemistry chain (dose → acid → PEB → develop).
 
     Depth-resolved chain (2026-09-03, round 9; PEB step unified 2026-09-04):
@@ -2049,7 +2057,7 @@ def run_simulation(
         )
 
         eps_profile, thicknesses, eps_sub = build_permittivity_profile(
-            mask, n_samples=1024, device=device
+            mask, n_samples=1024, device=str(device)
         )
 
         # RCWA solver for TE polarization (standard for EUV)

@@ -158,3 +158,21 @@ Preflight; C1 und D1 sind größer.
 - Der Default-Resist bleibt ein 2011er Forschungsresist (D2S ≈ 1,3–1,7 mJ/cm²); Zahlen daraus dürfen nicht als
   Produktionsresist-Aussagen gelesen werden.
 - Ohne CI ist die Plattform-Matrix (Windows, 3.11–3.13) ungeprüft.
+
+## 6. Abschlussplan (2026-09-06, beschlossen)
+
+**Definition von „fertig" (1.0):** (1) jeder Default hat Quelle oder ist als Kalibrierung/Annahme markiert — erfüllt (docs/physics.md);
+(2) Behauptungen nur, was geprüft ist (Numerik, Quellen-Reproduktion, Anker mit dokumentiertem Abstand) — erfüllt; (3) Schnittstelle
+eingefroren, Experimentelles markiert; (4) Typprüfung, Version, Release-Notes, Installations- und Laufzeithinweise (M1, 8 GB);
+(5) Liste der bekannten Grenzen. **Keine neue Physik mehr.**
+**1.1:** `euv calibrate` gibt Unsicherheitsbänder aus (Blur bei PEB-Temperatur, Auflösungseinheit 1–5 nm, Verlustgesetz), statt einer Zahl.
+**Danach:** Physik nur bei neuer freier Datenquelle; Kettenmodell, Flare, D(T) bleiben Roadmap-Einträge ohne Termin.
+CI: sobald das GitHub-Limit zurückgesetzt ist (Nutzer).
+
+## 7. Roadmap nach 2.0 (ohne Termin, nur bei neuer freier Datenquelle oder Bedarf)
+- Kettenbasiertes Auflösungsmodell (Critical Ionization, Schmid/Willson 2001) statt Zellgröße a.
+- Verlustgesetz in Mustern (τ vs. Trapping) — braucht eine strukturierte Messung an Polymer A oder einem Resist mit Flood- und
+  Bilayer-/Musterdaten aus einer Quelle.
+- Flare und Maskenrauheit für den MET-Anker; D(T); k_Q an einem zweiten Resist.
+- imec-Antwort: NXE1716 mit echten Werten neu rechnen, Kalibrierung ×1,79 prüfen.
+- 2.1: `euv calibrate` mit Unsicherheitsbändern (Blur, Auflösungseinheit, Verlustgesetz).

@@ -273,9 +273,8 @@ def pw_metrics(
     # Best point: in-spec CD closest to target
     deviations = np.where(in_spec, np.abs(cd_matrix - target_cd), np.inf)
     if np.isfinite(deviations).any():
-        best_focus_idx, best_dose_idx = np.unravel_index(
-            int(np.nanargmin(deviations)), cd_matrix.shape
-        )
+        bf, bd = np.unravel_index(int(np.nanargmin(deviations)), cd_matrix.shape)
+        best_focus_idx, best_dose_idx = int(bf), int(bd)
     else:
         best_focus_idx, best_dose_idx = 0, 0
 

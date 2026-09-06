@@ -3584,3 +3584,19 @@ der Commit-Kette durch, obwohl sie rot war (Exitcode hinter `tail` versteckt —
 `pipestatus` prüfen). Zweiter Befund: bei endlichen Blöcken zerschneiden die Blockränder die Säurewolke eines Photons (σ 2,5 nm),
 Fano(b) = 1 + m·(1 − c·σ/b)²: gemessen 1,45 (b 8 nm) … 1,88 (b 44 nm), Extrapolation 1/b → 0: **1,97** gegen 1 + m = 2,007. Test jetzt mit
 3 Seeds × 6 Blockgrößen und Extrapolation (18 s), grün mit explizitem Exitcode.
+
+## 2026-09-06 (Fortsetzung 41): Abschluss 2.0.0 — Typprüfung, Grenzen, Release
+
+- **mypy:** 76 Befunde in 19 Dateien → 0 (`--python-version 3.12`, nicht strict). Überwiegend Annotationen (Rückgabetypen
+  `Dict[str, object]` → `Any`, Tensor-Index-Casts, komplexe Zuweisungen in Tensoren als `torch.tensor(…)`), drei echte Auffälligkeiten
+  behoben: `accel/device.py` benutzte `total_mem` statt `total_memory` (CUDA-Pfad, auf dem Mac nie gelaufen), `io/cli.py` verwendete
+  `f` als Dateihandle *und* Schleifenvariable, `io/gds.py` behandelte RawCell wie Cell. CI-Job mypy ohne `|| true`.
+- **Version:** Tags gehen bis v1.1.0 (Umbenennung), pyproject stand auf 1.0.3 → **2.0.0** (Defaults geändert = Bruch); CHANGELOG mit
+  Release-Zusammenfassung über dem Detailprotokoll; README-Zitat auf 2.0.0.
+- **Grenzen:** README-Abschnitt „Known limitations (2.0.0)" (kein Vorhersagewerkzeug für Produktionsresists; zwei unentschiedene
+  Physikfragen mit Faktor 2; Optik ohne Flare; D(T) eine Temperatur; SEM-Bias; Rechenbedarf M1 8 GB; CI seit 2026-08-31 blockiert).
+- **Experimentelles markiert:** SimulationConfig-Docstring listet die sechs Optionen, die per Default aus sind.
+- Vor dem Tag: Teilsuite der berührten Module, dann eine volle Suite allein.
+- Nebenbefund beim Lesen von `euv calibrate` für 2.1: die Default-Schranken der Anpassung enthielten den aktuellen Default nicht mehr
+  (peb_k ≤ 2,0 bei Default 10,95; dill_C ≥ 0,01 bei 0,0152 knapp) — der Fit wäre an der Schranke geklemmt. Auf (0,05, 50) bzw.
+  (0,005, 0,2) gesetzt. Regel: Schranken-Tests müssen die Defaults einschließen (Test folgt in 2.1).

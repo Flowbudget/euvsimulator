@@ -280,7 +280,7 @@ class RCWA1D:
 
         # Incident: 0th order only
         inc = torch.zeros(self.M, dtype=torch.complex128, device=self.device)
-        inc[self.M // 2] = 1.0 + 0.0j
+        inc[self.M // 2] = 1.0
 
         # Reflected orders = S_total[0,0] @ inc
         reflected = S_total[0, 0] @ inc
@@ -555,8 +555,8 @@ def _build_ml_reflection_operator(
             wavelength,
             kx_norm=kx_norm,
             te=te,
-            n_incident=complex(float(n_inc.real), float(n_inc.imag)),
-            n_substrate=complex(float(n_sub.real), float(n_sub.imag)),
+            n_incident=torch.tensor(complex(float(n_inc.real), float(n_inc.imag))),
+            n_substrate=torch.tensor(complex(float(n_sub.real), float(n_sub.imag))),
         )
         # optics.tmm returns the reflection coefficient of the field whose
         # continuity its admittance formulation is built on: E_y for TE, and
@@ -565,7 +565,7 @@ def _build_ml_reflection_operator(
         # H_y = −η E_x, so r_H = −r_E. Verified 2026-09-04 on an empty
         # grating over the ML stack: with the sign, |r0|² and phase match the
         # TMM to 1e-6; without it, 0.633 vs 0.639 and −1.5° vs −12.6°.
-        S_ML[0, 0, m, m] = r_m if te else -r_m
+        S_ML[0, 0, m, m] = torch.as_tensor(r_m if te else -r_m, dtype=S_ML.dtype)
 
     return S_ML
 
@@ -606,5 +606,5 @@ def binary_grating_profile(
     half = fill_width / 2.0
     mask = (x >= period / 2 - half) & (x <= period / 2 + half)
     eps = torch.full_like(x, eps_space, dtype=torch.complex128)
-    eps[mask] = complex(eps_line)
+    eps[mask] = torch.tensor(complex(eps_line), dtype=eps.dtype, device=eps.device)
     return eps

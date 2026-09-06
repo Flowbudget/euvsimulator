@@ -298,6 +298,27 @@
 > Eikonal has no y-coupling, so it stays off by default (log Fortsetzungen 30–34). Measured roughness values carry SEM bias
 > (Lorusso/Mack 2018), which the anchor data record.
 > The full chain with every default's provenance and status is in [docs/physics.md](docs/physics.md).
+
+### Known limitations (2.0.0)
+
+- **Not a predictive tool for production resists.** The chain reproduces the measurements of its
+  own sources and shows, at two named-resist anchors, how far it is from the measured printing dose
+  and roughness (NXE1716: dose 1.7–1.9× too high, a documented inconsistency inside the source data;
+  MET-2D: roughness 4.3 vs 6.7 nm 3σ SEM-biased). It does not claim more.
+- **Two physics questions are undecided and change results by a factor 2:** the acid-loss law in
+  patterns (first-order lifetime vs trapping by deprotected sites, `peb_model`) and the size of the
+  unit that dissolves as a whole (`dissolution_cell_nm`, 1–5 nm). Both are documented with the data
+  that would decide them (`docs/physics.md` §7).
+- **Optics:** thin-mask 1D gratings (RCWA optional), no flare, no mask roughness, defocus only.
+- **PEB:** the acid diffusivity has one measured temperature (90 °C); the quench rate one resist.
+- **Roughness metrology:** measured values carry SEM bias; comparisons need the source's passband
+  (`ler_passband_nm`) and a bias estimate, which the anchor data record.
+- **Compute:** the stochastic chain at 2048 rows and grid 256 needs ~1.8 GB and minutes per
+  realisation; the concurrent PEB (`peb_model="reaction_diffusion"`) costs ~6× more and is practical
+  at grid 128. Developed and tested on an Apple M1 with 8 GB RAM: run one heavy job at a time.
+- **CI:** the GitHub Actions matrix (Windows, Python 3.11–3.13) has not run since 2026-08-31
+  (account billing limit); all verification is local (macOS, Python 3.14).
+
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|
@@ -327,7 +348,7 @@ indexed in [`docs/history/`](docs/history/README.md).
 294|@software{euvsimulator2026,
 295|  author       = {Flowbudget},
 296|  title        = {euvsimulator: Open Source EUV Lithography Simulator},
-297|  version      = {1.0.3},
+297|  version      = {2.0.0},
 298|  year         = {2026},
 299|  url          = {https://github.com/Flowbudget/euvsimulator},
 300|  license      = {Apache-2.0},

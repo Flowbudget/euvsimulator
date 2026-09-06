@@ -7,7 +7,7 @@ with the GPU-accelerated resist and pipeline modules.
 from __future__ import annotations
 
 import math
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn.functional as F
@@ -264,7 +264,7 @@ def etch_bias_from_formula(
 # exists in this repository for any of the 35 numbers, so they must be read
 # as illustrative trend shapes for screening, not as measured etch behaviour
 # (docs/audit_2026-09-04_vollpruefung.md, C4). Not used by the pipeline.
-_CHEMISTRY_FORMULAS: Dict[str, Dict[str, float]] = {
+_CHEMISTRY_FORMULAS: Dict[str, Dict[str, Any]] = {
     "cf4": {
         "a": 12.0,
         "b": -0.6,

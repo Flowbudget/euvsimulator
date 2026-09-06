@@ -587,7 +587,7 @@ def eikonal_development(
                 ),
                 dy=dy,
             )
-            if return_arrival:
+            if isinstance(out, tuple):
                 depths.append(out[0])
                 arrivals.append(out[1])
             else:

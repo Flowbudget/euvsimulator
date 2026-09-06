@@ -173,6 +173,7 @@ def poisson_shot_noise(
     # Rescale back to the original concentration units.
     if dose is not None:
         # photons_per_voxel already computed above
+        assert photons_per_voxel is not None
         mean_acid_count = photons_per_voxel * quantum_efficiency
         # Rescale Poisson count to match deterministic acid concentration.
         # Deterministic acid concentration is in `acid` tensor.
@@ -1035,6 +1036,7 @@ def ler_lwr_estimate(
         )
 
         # Threshold development
+        assert isinstance(noisy, torch.Tensor)
         developed = (noisy > develop_threshold).float()
 
         # Extract LER/LWR
@@ -1173,6 +1175,7 @@ def rms_scaling_check(
                 dy_nm=dy_nm,
                 rng=rng,
             )
+            assert isinstance(noisy, torch.Tensor)
             developed = (noisy > develop_threshold).float()
             ler_i.append(extract_ler(developed, dx=dx_nm))
             lwr_i.append(extract_lwr(developed, dx=dx_nm))

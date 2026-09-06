@@ -103,7 +103,7 @@ jobs:
 
       - name: Run mypy (type check)
         run: |
-          uv run mypy src/euvsimulator --strict --show-error-codes --pretty --python-version 3.12 || true
+          uv run mypy src/euvsimulator --show-error-codes --pretty --python-version 3.12
 
       - name: Run pyright (optional, non-blocking)
         continue-on-error: true

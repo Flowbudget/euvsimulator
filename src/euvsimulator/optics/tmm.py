@@ -406,7 +406,14 @@ def reflectivity_at_wavelength(
     """Single-wavelength reflectivity (scalar wrapper)."""
     wl = torch.tensor([wavelength_m], dtype=torch.float64)
     R, _ = reflectivity(
-        n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm
+        n_layers,
+        thicknesses,
+        wl,
+        torch.as_tensor(theta0, dtype=torch.float64),
+        n_incident,
+        n_substrate,
+        te=te,
+        roughness_nm=roughness_nm,
     )
     return float(R.item())
 
@@ -441,7 +448,14 @@ def reflectivity_scan(
     npts = wavelength_range[2]
     wl = torch.linspace(wavelength_range[0], wavelength_range[1], npts)
     R, _ = reflectivity(
-        n_layers, thicknesses, wl, theta0, n_incident, n_substrate, te=te, roughness_nm=roughness_nm
+        n_layers,
+        thicknesses,
+        wl,
+        torch.as_tensor(theta0, dtype=torch.float64),
+        n_incident,
+        n_substrate,
+        te=te,
+        roughness_nm=roughness_nm,
     )
     return wl, R
 
@@ -515,4 +529,4 @@ def reflectivity_at_kx(
         roughness_nm=roughness_nm,
         n0_sin2=torch.tensor([n0_sin2_val], dtype=torch.float64),
     )
-    return r[0]
+    return complex(r[0].item())
