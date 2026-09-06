@@ -3046,3 +3046,9 @@ Nicht gefunden: Quencherbeladung der NXE-Resists, Vesters' Fit-Tabelle (Anfrage 
 **Konsequenz für den Plan (B2):** (a) Quencher explizit modellieren und am NXE1716/1717-Kurvenpaar (Q-Verhältnis 2:1) fitten;
 (b) MET-2D als zweiten Anker aufbauen (Preset aus vier Quellen, Vorhersage E-size 12,5 und LER 6,7 bei 50 nm 1:1 mit MET-Optik);
 (c) τ(90 °C) = 38 s (NIST) als belegten Wert für 90-°C-Presets führen, mit Quencher statt ohne.
+
+**Nachtrag Blur-Definition:** Andersons „deprotection blur" ist eine Breite („average width of the volume … rendered dissolvable by a
+single acid"), Modellkern HOST-PSF (Houle/Hinsberg 2000); Naulleaus PSF-Fits sind als FWHM angegeben. Als FWHM gelesen: MET-2D
+(120 °C) σ ≈ 10,1 nm — nahe unserem Default 9,4; **Produktionsresists bei 90 °C (P1123, Fuji 1195): σ ≈ 5,7–7,6 nm** — genau der
+Bereich, in dem der NXE1716-Anker das 1,3×-Kriterium träfe (4,8 nm 3σ bei σ 5; 10,9 bei 9,4). Kein Beleg für NXE1716 selbst,
+aber ein belegtes Band für 90-°C-CARs, das die 9,4 nm (110-°C-τ) als zu groß ausweist.
