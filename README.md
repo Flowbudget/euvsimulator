@@ -128,6 +128,4 @@ euvsimulator is developed and tested on a single laptop. If it saves you time, y
 the work:
 
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub-Sponsor-ea4aaa?logo=github&logoColor=white)](https://github.com/sponsors/Flowbudget)
-[![Donate via PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=Gofter%40web.de&currency_code=EUR)
-
-PayPal donations go to **Gofter@web.de**.
+[![PayPal](https://img.shields.io/badge/PayPal-paypal.me%2FFlorianScheide-00457C?logo=paypal&logoColor=white)](https://paypal.me/FlorianScheide)
