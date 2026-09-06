@@ -297,6 +297,7 @@
 > that to 5.0 nm, but scales roughly with 1/cell size (10 nm at 2.15 nm cells) and the per-row
 > Eikonal has no y-coupling, so it stays off by default (log Fortsetzungen 30–34). Measured roughness values carry SEM bias
 > (Lorusso/Mack 2018), which the anchor data record.
+> The full chain with every default's provenance and status is in [docs/physics.md](docs/physics.md).
 271|
 272|| Area | Description | Priority |
 273||------|-------------|----------|
