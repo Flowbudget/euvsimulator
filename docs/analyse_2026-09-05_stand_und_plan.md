@@ -102,9 +102,15 @@ B1 ✅ durchgeführt (2026-09-06, Fortsetzung 27) — **Kriterium verfehlt.** DR
    mit molekularem Rauschen 19 nm; mit σ_PEB 5 nm (τ(90 °C) unbekannt) 4,8 nm → Messung eingeklammert, Rauschmodell hier
    **weder validiert noch falsifiziert** (±1,6× ohne gemessenen Blur). Kandidaten: Quencher-Kontrast (NXE1716 =
    Hoch-Quencher, Q unbekannt), α_B und Säureausbeute B0 (Dissertation Fig. 4.1/4.4, nur grafisch), τ bei 90 °C, imec-Entwicklungszeit.
-B2 Nächste Schritte: (a) Fig. 4.1/4.4 digitalisieren (α_B, Säuren pro Photon für B0) → C·G₀ und α resistspezifisch;
-   (b) Quencher-Modell mit Q-Beladung als Parameter am Anker prüfen (Preflight: LWR fällt mit Q?); (c) Sampler-Varianz
-   (V4b) gegen analytische Poisson-Erwartung; (d) Multiplizitätsmodell (3.3).
+B2 ✅ (2026-09-06, Fortsetzungen 29/30): (b) Quencher am NXE1716/1717-Paar gefittet (q ≈ 0,13–0,15 rel.) — ändert weder D2S noch
+   LWR bei gleicher Dosis; Strukturanalyse: D2S = E_through/Bildmittel (0,318), Flood- und Patterning-Experiment sind ≈ 2×
+   inkompatibel (PAB 110 vs 90 °C, Substrat). MET-2D-Anker aus vier Quellen: Photonen-LER 0,74 nm 3σ gegen 6,7 gemessen →
+   **Rauschmodell „nur Photonen" falsifiziert** (fehlender Sockel; NXE1716 zeigt den Photonenterm am dünnen Film 1,6× zu groß).
+   Offen aus B2: (a) Fig. 4.1/4.4 digitalisieren; (c) Sampler-Varianz; (d) Multiplizität.
+B3 **Neu, höchste Priorität:** LER-Sockel. Kandidaten mit Quelle: (i) SEM-Bias der Messwerte (Anderson: unkorrigiert, S-4800 2 kV;
+   Vesters: CG-5000, unkorrigiert) — Vergleich nur nach Abzug eines belegten Rauschbodens; (ii) Polymer-/Entwicklungsrauschen
+   (Thackeray Rg 4,3 nm; development_stochasticity seit Audit A6 aus); (iii) Andersons „intrinsic LER floor 3–4 nm".
+   Preflight: MET-2D mit exposure_stochasticity (läuft); dann Entwicklungs-Stochastik reaktivieren und am MET-2D-Punkt messen.
 
 **Stufe C — Physikvervollständigung mit Quelle**
 C1 Temperaturmodell k(T) aus Yamamoto Fig. 4 (Ea aus Steigung), τ(T) aus Fig.-3-Plateaus bei 80–140 °C; Test: Fig.-3-Kurven

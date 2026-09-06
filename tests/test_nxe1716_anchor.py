@@ -70,3 +70,37 @@ def test_preset_geometry_and_optics_follow_the_thesis():
     )
     assert (c.resist_thickness_nm, c.peb_t_bake) == (35.0, 60.0)
     assert nxe1716_config(dose_mj_cm2=5.0).dose_mj_cm2 == 5.0
+
+
+def test_two_curve_quencher_fit_reproduces_both_curves():
+    """NXE1716 (high quencher) and NXE1717 (half the quencher) with shared k
+    and a 2:1 quencher ratio, through the chain's quenching PEB step
+    (log Fortsetzung 29): rms in log10 R <= 0.08 for both curves.
+    """
+    from euvsimulator.presets import NXE1716_QUENCHER_FIT as F
+    from euvsimulator.presets import flood_rate_quenched
+
+    d = load_nxe1716_anchor()
+    c16 = np.array(d["authors_mack_fit_E_R"])
+    c17 = np.array(d["nxe1717_low_quencher"]["authors_mack_fit_E_R"])
+    p17 = d["nxe1717_low_quencher"]["plateaus_nm_per_s"]
+    cfg16 = nxe1716_config(explicit_quencher=True)
+    cfg17 = nxe1716_config(
+        explicit_quencher=True,
+        mack_n=F["mack_n_1717"],
+        quencher_density_per_nm3=F["q_rel_1717"] * 0.2,
+        mack_R_max=p17["R_max"],
+        mack_R_min=p17["R_min"],
+    )
+    assert cfg16.quencher_density_per_nm3 == pytest.approx(2 * cfg17.quencher_density_per_nm3)
+    for cfg, curve in ((cfg16, c16), (cfg17, c17)):
+        model = flood_rate_quenched(cfg, curve[:, 0])
+        rms = float(np.sqrt(np.mean((np.log10(model) - np.log10(curve[:, 1])) ** 2)))
+        assert rms <= 0.08, rms
+    # the quencher shifts the high-quencher switch to higher dose, as in the data
+    E = np.linspace(2.0, 30.0, 2000)
+    sw16 = float(E[np.argmin(np.abs(np.log(flood_rate_quenched(cfg16, E)) - np.log(122.5)))])
+    sw17 = float(
+        E[np.argmin(np.abs(np.log(flood_rate_quenched(cfg17, E)) - np.log(p17["R_max"] / 2)))]
+    )
+    assert sw16 > sw17 + 1.5

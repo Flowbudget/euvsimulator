@@ -3052,3 +3052,172 @@ single acid"), Modellkern HOST-PSF (Houle/Hinsberg 2000); Naulleaus PSF-Fits sin
 (120 °C) σ ≈ 10,1 nm — nahe unserem Default 9,4; **Produktionsresists bei 90 °C (P1123, Fuji 1195): σ ≈ 5,7–7,6 nm** — genau der
 Bereich, in dem der NXE1716-Anker das 1,3×-Kriterium träfe (4,8 nm 3σ bei σ 5; 10,9 bei 9,4). Kein Beleg für NXE1716 selbst,
 aber ein belegtes Band für 90-°C-CARs, das die 9,4 nm (110-°C-τ) als zu groß ausweist.
+
+## 2026-09-06 (Fortsetzung 29): B2a — expliziter Quencher am NXE1716/1717-Kurvenpaar (Vorhersagen VOR dem Fit)
+
+**Daten:** Fig. 6 grau (NXE1717, halbe Quencherbeladung) digitalisiert wie die schwarze Kurve (Pixel 90–175): 11 Marker, 30
+Fit-Stützstellen, Plateaus 0,0119 / 157,7 nm/s (schwarz 0,0186 / 245 — Vesters: „both Rmin and Rmax higher for the high-quencher
+resist", Weichmacherwirkung). Beide Kurven im Paketdatensatz `vesters2017_nxe1716.json`.
+
+**Modell (Kettenfunktionen, kein Ersatzmodell):** acid h = 1 − e^{−C·E} (C 0,0152), Neutralisation nach Mack 2011 zweiter Ordnung
+(`reaction_diffusion_with_quenching`, k_Q·G₀), M = exp(−k·t_eff·h_rest), R = Mack(M) mit Plateaus je Kurve aus den Daten.
+Fest (mit Quelle): τ = 38 s (NIST/Intel 90 °C), k_Q = 12,6 nm³/s (Osaka 2025, 4π·0,5 nm·2 nm²/s; Mack 15 zum Vergleich), G₀ 0,2,
+M_th 0,39 (mit k degeneriert). **Frei, gemeinsam für beide Kurven:** k, n, q₁₇₁₇ mit **q₁₇₁₆ = 2·q₁₇₁₇** (q relativ zu G₀).
+
+**Vorhersagen:**
+- V1 q₁₇₁₆ aus der Dosisverschiebung der Schaltflanken (≈ 2,6–4 mJ/cm² ↔ ΔH 0,04–0,06): **q₁₇₁₆ = 0,06–0,15** (Q = 0,012–0,03 nm⁻³,
+  Q/PAG ≈ 0,1) — deutlich unter Mack 2011 (0,25) und Osaka (0,5).
+- V2 rms(log₁₀R) ≤ 0,08 für beide Kurven mit *gemeinsamem* k, n; sonst ist „gleiche Kinetik, nur 2:1 Quencher" falsch.
+- V3 n bleibt 10–14.
+- V4 Linien (Preset NXE1716 mit gefittetem Quencher, τ 38 s, ohne Kalibrierung): **D2S ändert sich um < 10 %** gegenüber 19,7 —
+  der Quencher wird in Flood und Linie gleich abgezogen, die Dosisdiskrepanz bleibt (Begründung: Space-Mitte braucht dieselbe
+  Restsäure wie der Flood-Schaltpunkt). Falls D2S doch auf < 15 fällt, war die Diskrepanz Quencher/τ.
+- V5 LWR am kalibrierten Punkt (6 Seeds × 2 Real. × 2048 Zeilen): **10–40 % unter 10,9 nm 3σ** (Quencher schärft das latente Bild;
+  τ 38 s vergrößert den Blur, Quencher kürzt die Reichweite) — Band 6,5–9,8 nm.
+
+**Ergebnis gemeinsamer Fit (k, n, q geteilt; τ 38 s, k_Q 12,6):** k = 0,287 s⁻¹, n = 4,6, q₁₇₁₆ = 0,077 (Q = 0,015 nm⁻³), rms 0,131 / 0,129
+(τ 10,5: k 1,08, n 7,0, q₁₇₁₆ 0,095, rms 0,079 / 0,103). **V1 hält (q im Band), V2 und V3 fallen.** Befund: die schwarze Kurve
+(hoher Quencher) ist in log-Dosis *breiter* als die graue, ein subtraktiver Quencher bei gleicher Kinetik macht sie *schmaler*;
+außerdem zeigt die schwarze Kurve eine Schulter bei 7–8 mJ/cm² (Marker 1,3/1,8 nm/s, dann Sprung auf 71 bei 10). „Gleiche
+Kinetik, nur 2:1 Quencher" ist damit falsifiziert. Physikalisch motivierte Verfeinerung (vorab festgelegt): Vesters führt die
+höheren Plateaus des Hoch-Quencher-Resists auf eine Weichmacherwirkung in der *Entwicklung* zurück → Mack-n je Kurve frei,
+k (Deprotektion: gleiches Polymer, gleicher PAG, gleiche PEB) und q-Verhältnis 2:1 geteilt. Vorhersage V2b: rms ≤ 0,08 beide,
+q₁₇₁₆ weiter 0,06–0,15; sonst bleibt auch der Quencher-Anteil unbestimmt.
+
+**Ergebnis verfeinerter Fit (k, q geteilt; n je Kurve; Plateaus aus Daten):**
+
+| τ | k (s⁻¹) | n₁₇₁₆ / n₁₇₁₇ | q₁₇₁₆ (rel. G₀) | Q₁₇₁₆ (nm⁻³) | rms₁₆ / rms₁₇ |
+|---|---|---|---|---|---|
+| 38 s (NIST, 90 °C) | 0,489 | **2,0 (Schranke)** / 3,5 | 0,126 ± 0,004 | 0,025 | 0,074 / 0,066 |
+| 10,5 s | 1,82 | 4,5 / 7,4 | 0,148 ± 0,005 | 0,030 | 0,031 / 0,063 |
+| Einzelkurve frei (1716) | 0,172 | 12,8 | **0,000** | – | 0,042 |
+| Einzelkurve frei (1717) | 0,922 | 2,7 | 0,085 | – | 0,052 |
+
+V2b hält (rms ≤ 0,08), V1 hält (q₁₇₁₆ 0,13–0,15 → **Q/PAG ≈ 0,13–0,15**, Q ≈ 0,025–0,03 nm⁻³ bei G₀ 0,2). Aber: n₁₇₁₆ läuft bei τ 38 s
+an die untere Schranke (2,0) — Quencher-Abzug und Mack-n formen beide die Flanke und sind gegenläufig korreliert; aus einer
+Einzelkurve ist q gar nicht bestimmbar (1716 allein: q = 0, n = 12,8). Belastbar ist daher nur das *Paar*-Ergebnis für q
+(0,12–0,15, robust gegen τ), nicht die n-Werte. Für die Linien-Vorhersage wird q₁₇₁₆ = 0,126 (τ 38 s) und 0,148 (τ 10,5)
+geprüft; Q/PAG ≈ 0,13 liegt zwischen Mack 2011 (0,25) und den Naulleau-Basisreihen (relativ) und unter Osaka (0,5).
+
+**V4 (Linien mit explizitem Quencher, ohne Kalibrierung), Satz τ 38 s / q₁₇₁₆ 0,126 / n 2,0:** D2S = **23,5 mJ/cm²** (vorher 19,7,
+gemessen 11,0); bei 11,0 druckt weiterhin nichts. Vorhersage „< 10 % Änderung" **falsifiziert nach oben** (+19 %): τ = 38 s macht
+t_eff = 30 s und den Blur √(2·4,2·30) = 15,9 nm, was die Modulation bei 44 nm Pitch weiter dämpft; der Quencher wird in Flood
+und Linie gleich abgezogen. Die Dosisdiskrepanz ist mit belegtem τ und Quencher also *größer*, nicht kleiner. τ-10,5-Satz und
+die Quencher-frei-Varianten laufen nach.
+
+**Strukturanalyse der Dosisdiskrepanz (kein Fit, reine Arithmetik der Kette):** Für ein symmetrisches 1:1-Bild liegt die
+Kante bei x = P/4 exakt auf dem *Mittelwert* der Intensität — Blur und Quencher ändern die Säure dort nicht (Symmetrie des
+Kosinus). Chain-Luftbild bei 11 mJ/cm²: max 0,628, min 0,004, **Mittel 0,318** des Open-Frame. Der Rand druckt, wenn die Kette
+bei der mittleren Dosis in der Entwicklungszeit durch den Film kommt: DRM-Kurve → R ≥ 35 nm/30 s = 1,17 nm/s ab
+**E_through = 6,96 mJ/cm²** (60 s: 6,45). Also D2S ≈ 6,96/0,318 = 21,9 (Bisektion 19,7, Rest ist Kantengeometrie). Umgekehrt
+verlangt die gemessene D2S 11,0 ein Durchentwickeln bei 3,5 mJ/cm², wo die DRM-Kurve 0,02 nm/s liefert (Faktor 60 in der Rate,
+≈ 2 in der Dosis). **Folgerung: Kein Blur-, Quencher- oder Entwicklungszeit-Parameter kann das schließen — die DRM-Flood-Kurve
+und das Patterning-Experiment sind unter jedem symmetrischen Bildmodell um ≈ 2× in der Dosisskala inkonsistent.** Dokumentierte
+Unterschiede der beiden Experimente: PAB 110 °C/60 s (DRM, Paper Table 1) vs. 90 °C/60 s (Patterning, Dissertation §4.3.1),
+Substrat SiO₂ (DRM) vs. AL412-Unterlage (Patterning), Film 40 vs. 35 nm. Zum Vergleich: E-size/E0 ≈ 2–3 ist in der Literatur
+üblich (LBNL: BMET E-size = 2× AMET E0); die Kette liegt mit 19,7/7,0 = 2,8 im Normalbereich — nur *imecs* E0 wäre dann ≈ 4,
+nicht 7. Das ist eine Frage an die Autoren (gestellt), nicht an den Simulator. Die deklarierte Dosisskalen-Kalibrierung ×1,79
+bleibt die ehrliche Handhabung; der Quencher-Fit liefert q₁₇₁₆ ≈ 0,13 für die LWR-Prüfung (V5).
+
+## 2026-09-06 (Fortsetzung 30): B2b — MET-2D (XP 5271) als zweiter Anker, Vorhersagen VOR dem Lauf
+
+**Datensatz** `data/anchors/met2d_xp5271.json`: LBNL (C 0,0152, FQY 1,39, α 4,37, 80-nm-Film, PEB 130 °C), Sekiguchi Table 6
+(B 5,21, Mack 170,2/0,028/0,518/18,96, PEB 110 °C/90 s, Film 125 nm), Anderson/Naulleau OSTI 950847 (XP 5271-D: Blur 23,8
+Contact / 34,8 Corner, E-size 12,5 mJ/cm² für 50 nm 1:1, LER 6,7 ± 0,2 nm (50 nm) / 5,2 (100 nm), PEB 120 °C/90 s, 80 nm,
+MF26A 45 s; MET NA 0,3, annular σ 0,35–0,55, Dunkelfeldmaske). Chargen/PEB je Quelle verschieden — dokumentiert.
+
+**Preset** `presets.met2d_config()`: Blur direkt als gemessene Größe gesetzt (σ = 23,8/2,355 = 10,1 nm; Corner-Variante 14,8),
+Mack und B von Sekiguchi, C von LBNL, Optik/Film/Entwicklung von Anderson. **Nicht belegt in unserer Form:** die Deprotektions-
+rate bei 120 °C (Sekiguchis PROLITH-Paar k(120 °C) = 2,0 s⁻¹ ist an C = 0,090 und PROLITHs zweigliedriges PEB-Modell gebunden;
+eine Flood-Kurve für MET-2D liegt nicht vor). Deshalb wird — wie bei NXE1716 — die Dosisskala (k) deklariert an E-size 12,5
+kalibriert und **nur die LER vorhergesagt**. LER-Konvention bei Anderson: Einzellinien-LER, Mittel über 54 Linien; ob 1σ oder 3σ,
+nennt das Paper nicht explizit (die *Unsicherheit* ist 3σ) — LBNL-Praxis ist 3σ; wird als 3σ gelesen und so vermerkt.
+
+**Vorhersagen (6 Seeds × 2 Real. × 2048 Zeilen, nur Photonenrauschen):**
+- P1 LER 3σ bei 50 nm 1:1, Blur 10,1 nm: **4–7 nm** (gemessen 6,7; Kriterium ≤ 1,3× → ≤ 8,7). Begründung: 80-nm-Film absorbiert 34 %
+  statt 14 %, Feature 50 statt 22 nm, Blur ähnlich → weniger relatives Rauschen als beim NXE1716-Anker (10,9 bei σ 9,4).
+- P2 mit Corner-Blur 14,8 nm: LER **höher** als P1 um 20–60 % (bei P = 100 nm kostet der größere Blur Steigung, gewinnt wenig Glättung).
+- P3 LER bei 100 nm 1:1 (gemessen 5,2): Verhältnis LER(50)/LER(100) der Kette **1,1–1,6** (gemessen 1,29).
+Falsifikation: P1 > 8,7 nm → Rauschmodell überschätzt auch hier; P1 < 3 nm → unterschätzt (Molekülrauschen fehlt).
+
+**V5-Ergebnis (expliziter Quencher, k per Bisektion auf D2S = 11,0; τ 10,5, q₁₇₁₆ 0,148, n 4,48; 6 Seeds × 2 Real. × 2048 Zeilen):**
+k 1,82 → 6,06 (×3,33 — die frühere Skalierung „×Dosisverhältnis" gilt mit Quencher nicht, sie hatte 15 statt 11 ergeben);
+**LWR 1σ 3,70 ± 0,36 → 3σ 11,1 nm** gegen 10,9 ohne expliziten Quencher. **V5 falsifiziert:** bei gleicher D2S schärft der
+subtraktive Quencher das latente Bild nicht — die Kontrastverstärkung durch Quencher existiert nur im Vergleich *bei gleicher
+Dosis* zum quencherfreien Resist, nicht bei angepasster Dosis. Satz τ 38 s: mit 15,9 nm Blur erreicht keine Kalibrierung
+CD 22 bei 11 mJ/cm² (Modulation zu klein) — abgebrochen. Fazit B2a: q₁₇₁₆ ≈ 0,13–0,15 (rel.) ist ein echter Fund aus dem
+Kurvenpaar, aber weder D2S noch LWR des Ankers hängen davon ab; die Diskrepanzen liegen woanders.
+
+**B2b-Ergebnis MET-2D (b2_met2d.py):** unkalibriert (Default-k 7,87 aus Yamamoto) E-size 1,1 mJ/cm² — die Yamamoto-Kinetik
+ist für MET-2D nicht übertragbar; kalibriert k = 0,696 (E-size 13,2 statt 12,5 durch Bisektionsraster, +5 %).
+
+| | Vorhersage | Kette (nur Photonen, 3σ) | gemessen (Anderson) |
+|---|---|---|---|
+| P1 LER 50 nm 1:1, Blur σ 10,1 | 4–7 nm | **0,74 ± 0,02 nm** | 6,7 ± 0,2 |
+| P2 mit Corner-Blur 14,8 | +20…60 % | 0,81 (+9 %) | – |
+| P3 LER(50)/LER(100) | 1,1–1,6 | 0,90 (0,82 nm bei 100 nm) | 1,29 (5,2 nm) |
+
+**Alle drei falsifiziert — in die Gegenrichtung von NXE1716.** Bei 80 nm Film (34 % absorbiert), 13 mJ/cm² und 50-nm-Linien trägt
+Photonenschrotrauschen < 1 nm 3σ; die gemessenen 6,7 nm sind zu ≥ 85 % etwas anderes. Das deckt sich mit Andersons eigener
+Schlussfolgerung im selben Papier („intrinsic LER floor ≈ 3–4 nm across a wide range of resists", Titel: „Don't always blame
+the photons"), plus SEM-Rauschen (S-4800, 2 kV, unkorrigiert), Maskenrauheit und Flare des MET. Gemeinsam mit NXE1716
+(Photonen-LWR 1,6× *zu hoch* bei 22 nm HP / 35 nm Film) ergibt sich: **das Rauschmodell der Kette ist ein reines Photonenmodell;
+es fehlt ein dosisunabhängiger Sockel (Polymer/Entwicklung/SEM), und der Photonenterm selbst ist am dünnen Film zu groß.**
+Beide Anker zusammen sind damit informativer als jeder allein. Nächster Test läuft: molekulares Rauschen (exposure_stochasticity)
+am MET-2D-Punkt — erreicht es den Sockel nicht, liegt er in Entwicklung/Polymer (development_stochasticity ist seit Audit A6
+deaktiviert) oder in der Messung (SEM-Bias).
+
+**MET-2D mit molekularem Rauschen (b2_met2d_mol.py, 3 Seeds × 2 Real. × 2048 Zeilen):** nur Photonen 0,73 nm 3σ; Photonen +
+PAG-Zählrauschen (G₀ 0,2) **1,97 nm 3σ** — immer noch 3,4× unter den gemessenen 6,7 nm. In Quadratur fehlen ≈ 6,4 nm, die weder
+Photonen- noch PAG-Statistik liefern. Kandidaten für B3, jeweils mit Beleg zu prüfen: SEM-Rauschbias (Anderson unkorrigiert;
+Mack/Lorusso-PSD-Methodik gibt Größenordnungen), Entwicklungs-/Polymerstochastik (Kozawa: Polymergröße; Mack: stochastische
+Auflösung; `development_stochasticity` seit Audit A6 deaktiviert), Masken-LER des MET-Retikels, Flare. Erst der Bias, dann das
+Modell — sonst wird der Sockel an eine Messartefakt-Zahl gefittet.
+
+## 2026-09-06 (Fortsetzung 31): B3 — LER-Sockel, Schritt 1: SEM-Bias der Ankerwerte (Quellen)
+
+- **Lorusso, Rutigliani, Van Roey, Mack, „Unbiased roughness measurements: Subtracting out SEM effects", Microelectron. Eng. 190
+  (2018) 33** — `lithoguru/2018_Unbiased_Roughness_Measurement.pdf` (frei). Table 1 (16-nm-Linien, 500 eV, imec-Protokoll):
+  biased LWR 4,47–5,10 nm 3σ, unbiased 3,63–3,70 → SEM-Anteil in Quadratur 2,6–3,6 nm. Table 2: **EUV, 32 nm Pitch, 500 V, 1024
+  Rechteckpixel (Vesters' biased Protokoll): biased/unbiased = 1,66, Differenz 2,19 nm** → b 5,5 / u 3,3 → SEM-Anteil ≈ 4,4 nm;
+  0,8-nm-Quadratpixel 2048: 1,39 / 1,44 nm. Vesters-Dissertation §5.3 bestätigt das Protokoll (CG-5000, 500 eV, 8 pA, 16 Frames,
+  Rechteckscan 1024 px für biased; unbiased ab Kap. 5 per Fractilia metroLER — Kap. 4 (unser Anker) nur biased). Table 7.1 der
+  Dissertation nennt B0 als „CAR PTD + Metal sensitizer, 44 nm, LER 4,6 (= LWR/√2), 11 mJ/cm²" (biased).
+- **Folge für NXE1716:** unbiased LWR ≈ √(6,7² − (3,5…4,4)²) = **5,1–5,7 nm 3σ** (Verhältnismethode 1,4–1,66: 4,0–4,8). Vergleich
+  Kette (nur Photonen): 10,9 (σ 9,4) bzw. 4,8 (σ 5) — der Photonenterm allein liegt je nach Blur *über oder knapp unter* dem
+  unbiased Wert; ein zusätzlicher Sockel hätte hier also wenig Platz (≤ 3 nm in Quadratur bei σ 5).
+- **Anderson (MET-2D):** S-4800, 2 kV, 100–150k, keine Korrektur, kein Bias-Wert publiziert; die 6,7 nm bleiben eine Obergrenze.
+  Andersons „intrinsic LER floor 3–4 nm" ist ebenfalls biased gemessen. Kette 0,73 (Photonen) / 1,97 (mit PAG-Zählung).
+  Selbst mit einem SEM-Anteil wie bei imec (≈ 4 nm) bliebe unbiased ≈ 5,4 nm — Faktor 2,7 über der Kette.
+Damit ist der Sockel real, aber kleiner als die Rohzahlen suggerieren: Größenordnung 3–5 nm 3σ bei 50-nm-Linien/80-nm-Film.
+
+**B3, Schritt 2 — Kandidat „Zählstatistik der geschützten Einheiten" (Mack 2010, „LER and the Ultimate Limits of Lithography",
+`lithoguru/2010_LER_Ultimate_Limits.pdf`, Gl. 36/37):** σ_m²/m² = 1/(n₀,blocked·m·V) + (Kamp·t)²·(σ_h,eff/h)²·… — der erste Term ist
+die Poisson-Statistik der blockierten Polymereinheiten, die unsere Kette *nicht* sampelt (exposure_stochasticity sampelt nur PAG/
+Quencher; die Deprotektion bleibt Mean-Field). Überschlag für MET-2D (n₀ ≈ 2 nm⁻³, m ≈ 0,5 an der Kante, Blur-Volumen
+(2√π·10 nm)³ ≈ 4·10⁴ nm³): σ_m/m ≈ 0,5 % → Kantenversatz ≈ 0,1 nm — **vernachlässigbar bei 10 nm Blur** (Macks eigenes Beispiel:
+4,3 % bei (10 nm)³ ohne Blur-Mittelung, dominiert vom Säureterm). Der Sockel von 3–5 nm liegt also nicht in der Deprotektions-
+statistik, sondern in der **Entwicklung** (Macks Stochastik-Papiere 2009/2010: Rauigkeitswachstum der Auflösungsfront,
+dynamisches Skalieren; jetzt archiviert `lithoguru/2009_…/2010_Stochastic_Development.pdf`) und/oder in der Messung (Anderson:
+2 kV, unkorrigiert). Nächster Schritt: Macks Entwicklungsmodell lesen — nur wenn es dimensionierte Parameter mit Quelle liefert,
+wird es implementiert (Audit A6 bleibt bindend).
+
+## 2026-09-06 (Fortsetzung 32): B3, Schritt 3 — Entwicklungsrauschen aus der Zählstatistik der Auflösungszellen (Vorhersagen VOR dem Lauf)
+
+**Quelle des Mechanismus:** Mack, „Stochastic modeling of photoresist development in two and three dimensions", JM3 9, 041202
+(2010) (`lithoguru/2010_Stochastic_Development.pdf`): eine oberflächenlimitierte Auflösung mit zellweise verrauschter Rate
+(σ_r/r, Zelle = Gitter 1 nm) fällt in die KPZ-Universalitätsklasse (1+1: α 0,5, β 1/3; 2+1: α 0,4, β 0,25); die gesättigte
+Rauigkeit skaliert σ_sat ≈ σ̂_sat·L^α mit σ̂_sat ≈ 0,15–0,21 (2+1, Fig. 10) für σ_r/r 0,1–0,3 → bei L ≈ 500 nm ≈ 2 nm (1σ) —
+die Größenordnung des gemessenen Sockels. Macks σ_r/r ist dort eine Annahme; hier wird sie **abgeleitet**: pro Auflösungszelle
+der Kantenlänge a sind N = n₀·m·a³ blockierte Einheiten vorhanden (Mack 2010 „Ultimate Limits", Gl. 36, erster Term), deren
+Poisson-Streuung δm/m = 1/√N über die Mack-Kurve in eine Ratenstreuung σ_lnR = |dlnR/dm|·m/√N übersetzt wird — lokal, aus
+dem vorhandenen M-Feld, ohne freien Parameter. Neue Größen mit Quelle: n₀ (blockierte Einheiten; Kozawa/Jin 2025: 2,26 nm⁻³ bei
+54,6 % t-BOC; Polymer A 35 %: ≈ 2,1 nm⁻³) und a (Auflösungseinheit: Thackeray 2010 Rg 4,3 nm; Alternative 1 nm = Macks Gitter).
+Einschränkung der Kette: der Eikonal-Löser arbeitet je y-Zeile in (x, z) — Zellrauschen ist über y nur über die Zellgröße
+korreliert, KPZ-Glättung entlang y fehlt; das Ergebnis ist damit eher eine Obergrenze des Effekts.
+
+**Preflight (Monkey-Patch: MackModel.rate × exp(ξ·σ_lnR), ξ ~ N(0,1) je Zelle a³, hochgetastet):**
+- P1 MET-2D (kalibriert, Photonen + PAG-Zählung: 1,97 nm 3σ): mit a = 4,3 nm **LER 3σ 3–6 nm** (der Sockel erscheint);
+  mit a = 1 nm ähnlich oder kleiner (mehr Zellen mitteln). Falsifikation: < 2,5 nm → Zellstatistik erzeugt den Sockel nicht.
+- P2 NXE1716 (σ 9,4, Photonen 10,9 nm 3σ): Anstieg < 20 % (Quadratur eines 3–6-nm-Sockels).
+- P3 Dosisunabhängigkeit: am MET-2D-Punkt bei 1,5× Dosis fällt der Photonenanteil ∝ 1/√Dosis, der Zellanteil bleibt.

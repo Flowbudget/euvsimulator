@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added (validation anchors, 2026-09-06, plan stage B2)
+- **Explicit quencher for NXE1716** (`presets.NXE1716_QUENCHER_FIT`, `nxe1716_config(explicit_quencher=True)`,
+  `presets.flood_rate_quenched`): the NXE1717 curve (half the quencher) was digitised too; a joint fit with
+  shared deprotection rate and a 2:1 quencher ratio through the chain's own neutralisation step gives a
+  relative quencher loading of 0.13–0.15 (Q ≈ 0.03 nm⁻³), rms 0.03/0.06 in log10 R. Finding: neither the
+  dose-to-size (19.7 → 19.7) nor the LWR at matched dose (10.9 → 11.1 nm 3σ) depends on it — a subtractive
+  quencher is cancelled alike in flood and pattern. Structural result (log Fortsetzung 29): for a symmetric
+  1:1 image the edge sits at the mean intensity (0.318 of open frame here), so the printing dose is the flood
+  through-dose divided by 0.318; imec's 11.0 mJ/cm² would need the film to clear at 3.5 mJ/cm² where the DRM
+  curve gives 0.02 nm/s. The two Vesters experiments (PAB 110 vs 90 °C, SiO₂ vs AL412 underlayer) are
+  incompatible by ~2× in dose under any symmetric image model; the calibration stays declared.
+- **MET-2D / XP 5271 anchor** (`presets.met2d_config`, `data/anchors/met2d_xp5271.json`): C and FQY (LBNL),
+  B and Mack (Sekiguchi 2011 Table 6), measured deprotection blur, E-size and LER (Anderson & Naulleau 2008,
+  OSTI 950847) for one commercial resist from four groups; blur set directly from the measurement
+  (23.8 nm width → σ 10.1). With the dose scale calibrated to E-size 12.5, the photon-shot-noise LER at
+  50 nm 1:1 is **0.74 nm 3σ vs measured 6.7** — the chain's photon-only noise model accounts for ≤ 15 % of
+  the measured LER at 80 nm film / 13 mJ/cm², consistent with Anderson's "intrinsic LER floor". Together
+  with NXE1716 (photon LWR 1.6× too high at 35 nm film / 22 nm HP) this falsifies "photon shot noise only"
+  as the LWR model: a dose-independent floor (polymer, development, SEM bias) is missing.
+- New tests: `tests/test_met2d_anchor.py`, two-curve quencher regression in `tests/test_nxe1716_anchor.py`.
+
 ### Added (validation anchor, 2026-09-06, plan stage B1)
 - **NXE1716 anchor** (`euvsimulator.presets.nxe1716_config`, data in `data/anchors/vesters2017_nxe1716.json`):
   Vesters 2017 DRM contrast curve digitised (25 fit points, 16 markers, axis-calibrated) and the thesis

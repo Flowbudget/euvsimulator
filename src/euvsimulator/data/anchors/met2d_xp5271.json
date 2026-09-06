@@ -1,0 +1,92 @@
+{
+ "resist": "Rohm and Haas XP 5271 / MET-2D (EUV chemically amplified resist of the Berkeley-MET era, 2007-2011)",
+ "note": "Assembled from four independent measurement groups on the same commercial resist; batches and PEB conditions differ per source (stated per entry). Not a single-source set.",
+ "lbnl_film_quantum_yield": {
+  "source": "Brainard et al. (LBNL), Film Quantum Yields of EUV & Ultra-High PAG Photoresists, OSTI 1004159, Table 3 (XP5271D)",
+  "film_nm": 80.0,
+  "transmittance": 0.71,
+  "alpha_per_um": 4.37,
+  "dill_C_cm2_per_mJ": 0.0152,
+  "density_g_cm3": 1.2,
+  "acids_per_absorbed_photon": 1.39,
+  "peb": "130 C"
+ },
+ "sekiguchi_2011_table6_euv_met2d": {
+  "source": "A. Sekiguchi, Approach to EUV Lithography Simulation, InTech 2011, ch. 9, Table 6 (EUV MET-2D column); PAB 130 C/60 s, film 125 nm, PEB 110 C/90 s",
+  "dill_A_per_um": 0.0,
+  "dill_B_per_um": 5.21,
+  "dill_C_prolith_cm2_per_mJ": 0.09,
+  "mack_R_max_nm_per_s": 170.2,
+  "mack_R_min_nm_per_s": 0.028,
+  "mack_M_th": 0.518,
+  "mack_n": 18.96,
+  "peb_amplification_Ea_kcal_mol": 2.23,
+  "peb_amplification_lnAr_per_s": 3.55,
+  "peb_diffusivity_Ea_kcal_mol": 5.0,
+  "peb_diffusivity_lnAr_nm2_per_s": 30.0
+ },
+ "anderson_naulleau_2008_osti_950847": {
+  "source": "C. N. Anderson, P. P. Naulleau, Don't always blame the photons (OSTI 950847), Tables I and II, XP 5271 base series J/K/D",
+  "process": {
+   "film_nm": 80.0,
+   "pab": "130 C 60 s",
+   "peb": "120 C 90 s",
+   "developer": "MF26A (0.26 N TMAH) 45 s"
+  },
+  "optics": "SEMATECH Berkeley MET, NA 0.3, annular illumination sigma 0.35-0.55, LBNL 5,2 dark-field mask",
+  "blur_definition": "HOST-PSF deprotection blur = average width of the volume rendered dissolvable by one acid (a width, FWHM-like; Naulleau's Gaussian PSF fits are quoted as FWHM); sigma ~ blur/2.355 with that reading",
+  "rows": [
+   {
+    "id": "XP 5271-J",
+    "base_relative": 0.3,
+    "blur_contact_nm": 27.9,
+    "blur_corner_nm": 31.2,
+    "pattern_limit_nm": 47,
+    "ler_50nm_1to1_nm": 13.4,
+    "ler_50_unc": 0.8,
+    "ler_100nm_1to1_nm": 8.0,
+    "lc_50_nm": 25.8,
+    "lc_100_nm": 25.2,
+    "e_size_mj_cm2": 4.0
+   },
+   {
+    "id": "XP 5271-K",
+    "base_relative": 0.5,
+    "blur_contact_nm": 25.4,
+    "blur_corner_nm": 32.3,
+    "pattern_limit_nm": 43,
+    "ler_50nm_1to1_nm": 6.7,
+    "ler_50_unc": 0.3,
+    "ler_100nm_1to1_nm": 5.3,
+    "lc_50_nm": 22.9,
+    "lc_100_nm": 37.0,
+    "e_size_mj_cm2": 6.5
+   },
+   {
+    "id": "XP 5271-D",
+    "base_relative": 1.0,
+    "blur_contact_nm": 23.8,
+    "blur_corner_nm": 34.8,
+    "pattern_limit_nm": 39,
+    "ler_50nm_1to1_nm": 6.7,
+    "ler_50_unc": 0.2,
+    "ler_100nm_1to1_nm": 5.2,
+    "lc_50_nm": 20.6,
+    "lc_100_nm": 26.1,
+    "e_size_mj_cm2": 12.5
+   }
+  ],
+  "e_size_definition": "dose to print 50 nm 1:1 features at coded size at best focus (SPIE 2008 dose calibration)",
+  "ler_definition": "average of 54 single-line LER values in a 3x3 dose-focus window, passband 10-834 nm, Hitachi S-4800 2 kV, no noise correction stated",
+  "sem_bias_note": "Hitachi S-4800, 2 kV, 100-150k magnification, no noise correction; no bias value published -> LER values are upper bounds"
+ },
+ "naulleau_2006_psf_osti_900654": {
+  "source": "P. Naulleau et al., Modeling of EUV photoresists with a resist point spread function (OSTI 900654)",
+  "gaussian_psf_fwhm_nm": {
+   "MET-1K": 18.0,
+   "KRS": 18.0,
+   "EUV-2D": 53.0
+  },
+  "note": "MET-2D not in this paper; FWHM convention documented here"
+ }
+}
