@@ -53,7 +53,7 @@ def test_manifest_in_exists():
     """MANIFEST.in exists with expected includes.
 
     NOTE (2026-09-04): this test previously asserted "graft src/euv/data/cxro",
-    a path that has not existed since the OpEnUV -> euvsimulator rename
+    a path that has not existed since the project was renamed to euvsimulator
     (commit 964139f) -- the actual CXRO data directory is
     src/euvsimulator/data/cxro. The test was pinned to the broken (pre-fix)
     value rather than the correct one; MANIFEST.in was the thing that was

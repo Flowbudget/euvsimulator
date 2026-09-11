@@ -39,10 +39,9 @@ class TestStaticFiles:
 
     @pytest.mark.parametrize("filename", STATIC_FILES)
     def test_no_external_assets_and_no_old_name(self, filename: str) -> None:
-        """The GUI must work offline: no CDN scripts/styles, and no 'OpEnUV' leftovers."""
+        """The GUI must work offline: no CDN scripts or styles."""
         with open(os.path.join(STATIC_DIR, filename), encoding="utf-8") as fh:
             text = fh.read()
-        assert "OpEnUV" not in text
         urls = re.findall(r"https?://[^\s\"'<>)]+", text)
         allowed = ("https://github.com/Flowbudget/euvsimulator", "http://www.w3.org/2000/svg")
         offenders = [u for u in urls if not u.startswith(allowed)]

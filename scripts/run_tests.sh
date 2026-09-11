@@ -1,10 +1,10 @@
 #!/bin/bash
-# Install dependencies and run all tests for OpEnUV
+# Install dependencies and run all tests for euvsimulator
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-echo "=== OpEnUV Full Test Suite ==="
+echo "=== euvsimulator Full Test Suite ==="
 echo "Python: $(python3 --version)"
 echo "PyTorch: $(python3 -c 'import torch; print(torch.__version__)')"
 echo ""

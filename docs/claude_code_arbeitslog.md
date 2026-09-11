@@ -299,7 +299,7 @@ bestätigt: kein PDF hinterlegt, auch im eigenen Institutsrepository nur Metadat
 
 **Verifiziert:** `uv run python -c "SimulationConfig()"` lädt fehlerfrei mit den neuen Werten.
 Vollständige Testsuite: 796/797 bestanden, die eine Fehlschlag ist die bereits bekannte,
-unabhängige `test_metro.py`-Altlast (verwaister `import euv.metro` aus der OpEnUV-Umbenennung)
+unabhängige `test_metro.py`-Altlast (verwaister `import euv.metro` aus der Umbenennung des Projekts)
 — keine Regression durch diese Änderungen.
 
 **Verbleibende Lücke (Stand zu diesem Zeitpunkt):** `mack_M_th` weiterhin ohne EUV-native
@@ -3644,7 +3644,7 @@ textbooks", eigenes Material) blieben in der Historie. Hinweis: GitHub hält ver
 Veröffentlichung ggf. GitHub-Support um Bereinigung bitten.
 
 ## 2026-09-06 (Fortsetzung 45): Browser-GUI, Stufen 1 und 2 von 4
-Ausgangslage: Das Dashboard war ein Überbleibsel der OpEnUV-Zeit (zwei Seiten, 15 von 64 Parametern, Chart.js per CDN, blockierender
+Ausgangslage: Das Dashboard war ein Überbleibsel aus der Zeit vor der Umbenennung (zwei Seiten, 15 von 64 Parametern, Chart.js per CDN, blockierender
 `async`-Endpunkt, keine Presets, kein Stochastik-Lauf). Plan (vom Nutzer bestätigt, mit der Korrektur: keine künstlichen Parameter-
 Limits in der Software, nur meine Testläufe klein): 1 Aufräumen, 2 Presets und Führung, 3 Ergebnisse/Hintergrundjobs, 4 Prozessfenster
 und Bänder. **Stufe 1:** eine Seite unter `/`, alter `/simulate`-Pfad leitet um; Plot als eigenes Inline-SVG (Chart.js entfernt, Seite

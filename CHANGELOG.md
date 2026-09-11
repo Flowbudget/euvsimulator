@@ -62,7 +62,7 @@ progress/cancel hook). See the stage notes below.
 
 ### Changed — browser GUI, stage 1 (clean-up)
 - One page instead of two (`/`; the old `/simulate` page redirects there); the leftover
-  "OpEnUV" name is gone.
+  old project name is gone.
 - No external assets: the profile plot is inline SVG, Chart.js and its CDN load are removed
   (NOTICE/README updated). The page works offline.
 - `POST /simulate` is a sync endpoint, so FastAPI runs the pipeline in its threadpool and the
