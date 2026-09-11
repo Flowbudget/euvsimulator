@@ -259,9 +259,9 @@ def simulate(
         if cfg_path.suffix in (".yaml", ".yml"):
             import yaml
 
-            raw = yaml.safe_load(cfg_path.read_text())
+            raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
         elif cfg_path.suffix == ".json":
-            raw = json.loads(cfg_path.read_text())
+            raw = json.loads(cfg_path.read_text(encoding="utf-8"))
         else:
             typer.echo(f"Unsupported config format: {cfg_path.suffix}", err=True)
             raise typer.Exit(1)
@@ -816,9 +816,9 @@ def calibrate(
         import yaml
 
         raw = (
-            yaml.safe_load(data_path.read_text())
+            yaml.safe_load(data_path.read_text(encoding="utf-8"))
             if data_path.suffix.lower() in (".yaml", ".yml")
-            else json.loads(data_path.read_text())
+            else json.loads(data_path.read_text(encoding="utf-8"))
         )
         data = WaferCDData(**raw)
     else:
@@ -838,9 +838,9 @@ def calibrate(
 
         ip_path = Path(initial_params_file)
         initial_params = (
-            yaml.safe_load(ip_path.read_text())
+            yaml.safe_load(ip_path.read_text(encoding="utf-8"))
             if ip_path.suffix.lower() in (".yaml", ".yml")
-            else json.loads(ip_path.read_text())
+            else json.loads(ip_path.read_text(encoding="utf-8"))
         )
     else:
         # Default initial guess for typical EUV CAR resist
@@ -871,9 +871,9 @@ def calibrate(
 
         b_path = Path(bounds_file)
         bounds = (
-            yaml.safe_load(b_path.read_text())
+            yaml.safe_load(b_path.read_text(encoding="utf-8"))
             if b_path.suffix.lower() in (".yaml", ".yml")
-            else json.loads(b_path.read_text())
+            else json.loads(b_path.read_text(encoding="utf-8"))
         )
     else:
         bounds = dict(DEFAULT_BOUNDS)

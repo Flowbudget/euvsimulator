@@ -71,7 +71,7 @@ def test_calibrate_simulates_the_requested_geometry(tmp_path, monkeypatch):
     assert {c.se_blur_nm for c in seen} == {3.0}
     assert {c.resist_model for c in seen} == {"full_chem"}
     assert {c.dose_mj_cm2 for c in seen} == {4.0, 4.5, 5.0, 5.5}
-    payload = json.loads(out.read_text())
+    payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["fit"]["fitted_params"]["peb_sigma_diff"] == pytest.approx(7.0, abs=0.5)
     assert payload["fit"]["rmse"] < 0.3
 
