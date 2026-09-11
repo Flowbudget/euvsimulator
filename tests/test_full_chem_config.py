@@ -141,7 +141,7 @@ def test_config_file_with_resist_params(tmp_path):
 
     from euvsimulator.pipeline import SimulationConfig
 
-    cfg = SimulationConfig(**yaml.safe_load(config_path.read_text()))
+    cfg = SimulationConfig(**yaml.safe_load(config_path.read_text(encoding="utf-8")))
     assert cfg.dill_C == 0.1
     assert cfg.peb_k == 0.25
     assert cfg.peb_t_bake == 90.0

@@ -53,7 +53,7 @@ def test_dockerignore_exists() -> None:
 
 def _read_dockerfile(name: str) -> str:
     path = DOCKERFILES[name]
-    return path.read_text()
+    return path.read_text(encoding="utf-8")
 
 
 def test_dockerfile_multi_stage() -> None:
@@ -159,7 +159,7 @@ def test_cli_dockerfile_no_uvicorn() -> None:
 
 def test_compose_api_port() -> None:
     """docker-compose.yml must map port 8000."""
-    text = COMPOSE_FILES["docker-compose.yml"].read_text()
+    text = COMPOSE_FILES["docker-compose.yml"].read_text(encoding="utf-8")
     assert '"8000:8000"' in text or "'8000:8000'" in text or "8000:8000" in text, (
         "docker-compose.yml missing port mapping 8000:8000"
     )
@@ -167,19 +167,19 @@ def test_compose_api_port() -> None:
 
 def test_compose_api_volume() -> None:
     """docker-compose.yml must have a volume for CXRO data."""
-    text = COMPOSE_FILES["docker-compose.yml"].read_text()
+    text = COMPOSE_FILES["docker-compose.yml"].read_text(encoding="utf-8")
     assert "euvsimulator/data" in text, "docker-compose.yml missing CXRO data volume mount"
 
 
 def test_compose_api_restart() -> None:
     """docker-compose.yml must set restart: unless-stopped."""
-    text = COMPOSE_FILES["docker-compose.yml"].read_text()
+    text = COMPOSE_FILES["docker-compose.yml"].read_text(encoding="utf-8")
     assert "unless-stopped" in text, "docker-compose.yml missing restart: unless-stopped"
 
 
 def test_compose_cli_interactive() -> None:
     """docker-compose.cli.yml must set stdin_open and tty for -it mode."""
-    text = COMPOSE_FILES["docker-compose.cli.yml"].read_text()
+    text = COMPOSE_FILES["docker-compose.cli.yml"].read_text(encoding="utf-8")
     assert "stdin_open" in text, "docker-compose.cli.yml missing stdin_open"
     assert "tty:" in text, "docker-compose.cli.yml missing tty"
 
@@ -189,7 +189,7 @@ def test_compose_cli_interactive() -> None:
 
 def test_dockerignore_entries() -> None:
     """.dockerignore must ignore common patterns."""
-    text = DOCKERIGNORE.read_text()
+    text = DOCKERIGNORE.read_text(encoding="utf-8")
     required = [".git", "__pycache__", "tests", "*.ipynb", ".env"]
     for pattern in required:
         assert pattern in text, f".dockerignore missing required entry: {pattern}"

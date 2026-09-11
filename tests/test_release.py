@@ -14,7 +14,7 @@ def test_changelog_exists():
     """CHANGELOG.md exists and has expected format."""
     path = PROJECT_ROOT / "CHANGELOG.md"
     assert path.exists(), f"{path} does not exist"
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     assert "# Changelog" in content, "Missing # Changelog header"
     assert "## v0.1.0" in content, "Missing v0.1.0 entry"
     assert "Initial public release" in content
@@ -25,7 +25,7 @@ def test_contributing_exists():
     """CONTRIBUTING.md exists."""
     path = PROJECT_ROOT / "CONTRIBUTING.md"
     assert path.exists(), f"{path} does not exist"
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     assert "Contributing to euvsimulator" in content
     assert "DCO" in content or "Developer Certificate" in content
     assert "Apache" in content or "Apache-2.0" in content
@@ -35,7 +35,7 @@ def test_code_of_conduct_exists():
     """CODE_OF_CONDUCT.md exists."""
     path = PROJECT_ROOT / "CODE_OF_CONDUCT.md"
     assert path.exists(), f"{path} does not exist"
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     assert "Contributor Covenant" in content
     assert "Code of Conduct" in content
 
@@ -44,7 +44,7 @@ def test_security_exists():
     """SECURITY.md exists."""
     path = PROJECT_ROOT / "SECURITY.md"
     assert path.exists(), f"{path} does not exist"
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     assert "Security" in content or "security" in content
     assert "Reporting" in content or "reporting" in content
 
@@ -62,7 +62,7 @@ def test_manifest_in_exists():
     """
     path = PROJECT_ROOT / "MANIFEST.in"
     assert path.exists(), f"{path} does not exist"
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     assert "graft src/euvsimulator/data/cxro" in content
     assert (PROJECT_ROOT / "src" / "euvsimulator" / "data" / "cxro").is_dir()
     assert "include LICENSE" in content
@@ -73,7 +73,7 @@ def test_pyproject_has_classifiers():
     """pyproject.toml contains project.classifiers."""
     path = PROJECT_ROOT / "pyproject.toml"
     assert path.exists(), f"{path} does not exist"
-    data = tomllib.loads(path.read_text())
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
     classifiers = data.get("project", {}).get("classifiers", [])
     assert len(classifiers) >= 7, f"Expected at least 7 classifiers, got {len(classifiers)}"
     expected = [
@@ -92,7 +92,7 @@ def test_pyproject_has_classifiers():
 def test_pyproject_has_urls():
     """pyproject.toml contains project.urls."""
     path = PROJECT_ROOT / "pyproject.toml"
-    data = tomllib.loads(path.read_text())
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
     urls = data.get("project", {}).get("urls", {})
     # No "Documentation" key on purpose: there is no hosted documentation site, and a
     # URL that points nowhere would be a false claim in the package metadata.
@@ -104,7 +104,7 @@ def test_pyproject_has_urls():
 def test_pyproject_has_include_package_data():
     """pyproject.toml enables package data inclusion under [tool.setuptools]."""
     path = PROJECT_ROOT / "pyproject.toml"
-    data = tomllib.loads(path.read_text())
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
     tool = data.get("tool", {})
     setuptools = tool.get("setuptools", {})
     # Modern setuptools uses the hyphenated key "include-package-data";

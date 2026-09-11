@@ -83,7 +83,7 @@ def test_process_window_small_grid(tmp_path):
         ],
     )
     assert r.exit_code == 0, r.output
-    payload = json.loads(out.read_text())
+    payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload, "empty process-window output"
     text = json.dumps(payload)
     assert "cd" in text.lower()
