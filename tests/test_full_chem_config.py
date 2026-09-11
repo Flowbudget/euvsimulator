@@ -247,3 +247,18 @@ def test_full_chem_nils_is_measured_at_the_printed_edge():
     )
     assert cleared.cd_nm == 0.0
     assert cleared.nils_value != cleared.nils_value  # NaN: no printed edge
+
+
+def test_full_chem_reports_no_nils_when_nothing_develops():
+    """CD = pitch (whole row undeveloped) has no printed edge, so NILS must be NaN,
+    not a value read off the wrap-around pixels (campaign 2026-09-07).
+    """
+    import math
+
+    from euvsimulator.pipeline import SimulationConfig, run_simulation
+
+    r = run_simulation(SimulationConfig(grid=32, resist_model="full_chem", dose_mj_cm2=0.05))
+    assert r.cd_nm == 64.0
+    assert math.isnan(r.nils_value)
+    r2 = run_simulation(SimulationConfig(grid=32, resist_model="full_chem", dose_mj_cm2=1.3))
+    assert 0.0 < r2.cd_nm < 64.0 and r2.nils_value > 0.0

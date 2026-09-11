@@ -3691,3 +3691,22 @@ GitHub-Release. Inhalt: die Browser-GUI der Fortsetzungen 45–46; keine Physik�
 Repositoriums geprüft: GitHub liefert die Commits der bereinigten alten Historie (Buch-PDF, SPIE-Volltext) per SHA noch aus;
 die SHA-Nennungen aus Fortsetzung 44 wurden deshalb aus dem Log entfernt. Schaltung auf public erst nach Entscheidung des
 Nutzers zum Support-Purge (siehe README-/Log-Hinweis Fortsetzung 44).
+
+## 2026-09-07 bis 11 (Fortsetzung 48): PEB-Kinetik-Analyse, Parameterkampagne, Repo public
+**Auftrag „neue Effekte aus dem Repo ableiten", falsifiziert.** Kandidat: Kompensation von k und τ über die
+Temperatur in Yamamotos Fig.-3-Fits (corr ln k/ln τ −0,99; Rate Ea ≈ 89, Umsatz Ea ≈ 24 kJ/mol, modellfrei
+aus den Rohkurven bestätigt, τ pro Temperatur auf ±10 % bestimmt). Drei Modelle passen gleich gut (Lebensdauer
+1. Ordnung, NIST-Einfang, erreichbarer Anteil ohne Verlust; rms 0,016–0,017), gestreckte Exponentialfunktion
+nicht (0,043). Literatur: Kang et al., Macromolecules 43, 4275 (2010) Tabelle 1 misst dieselbe Struktur an zwei
+anderen Resists (Ea Deprotektion 136/152, Einfang 86/89 kJ/mol) → bekannt, Folge des Einfang-Modells. Erste
+Vermutung „Einfang ⇒ D2S flach über T" war falsch: Kette sagt das Gegenteil (Quotient der Gesetze 1,07 → 2,66
+von 80 bis 140 °C). Temperatursprung-Test als Messvorschlag (physics.md §7). Quellen-PDFs (Yamamoto 2011 J-STAGE,
+Kang 2010 und Lavery 2006 NIST) lokal gelesen, nicht ins Repo.
+**Parameterkampagne** (docs/campaign_2026-09-07/, 256 Konfigurationen, Grid 64, 32 min): alle Muster bekannt;
+Faktor 2 in dCD/dlnE = Blur-Dämpfung aller Harmonischen × laterale Entwicklung (1,1–1,3, bis 3 bei 90 s);
+Randfall 80 °C/D 8 = Klippe bei Blur/Pitch 0,47, EL verschwindet bei ≈ 0,3. Nebenbefunde: eikonal vs column
+verschiebt D2S um 37 %; full_chem meldete bei CD = Pitch einen NILS aus Wrap-around-Pixeln → NaN (Fix + Test).
+**Repo public (2026-09-11):** GitHub Support (Ticket #4734231) hat die fünf Commits und acht Blobs der alten
+Historie gelöscht (API 404 geprüft). Vorher Privatpfade (`$HOME` statt Nutzerpfad) und der Rechnername aus
+Log und Kommentaren entfernt. Sichtbarkeit auf public gesetzt; Actions laufen für public Repos ohne Kontingent.
+

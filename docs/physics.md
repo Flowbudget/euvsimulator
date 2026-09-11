@@ -90,7 +90,19 @@ dissolution-unit size) as bands (`calibrate/bands.py`, 2.1).
 ## 7. Open questions, ranked
 
 1. Which acid-loss law holds in patterns for Polymer A (first-order τ vs trapping by deprotected sites):
-   factor 2 in printing dose; needs one structured measurement on that resist.
+   factor 2 in printing dose; needs one structured measurement on that resist. Two measurements that
+   would decide it (analysis 2026-09-07, work log Fortsetzung 48): (a) dose-to-size vs PEB temperature at
+   64/32 nm, 60 s bake, chain prediction D2S analytical / reaction_diffusion [mJ/cm²]: 80 °C 4.60/4.29,
+   90 1.93/1.49, 100 1.49/0.91, 110 1.29/0.67, 120 1.12/0.50, 130 0.83/0.35, 140 0.71/0.27 — the ratio
+   grows from 1.07 to 2.66; (b) a temperature jump, 150 s at 100 °C then 150 s at 140 °C: with acid loss
+   the protection ratio stays ≈ 0.20, without loss (only a temperature-dependent accessible fraction) it
+   falls to ≈ 0.04. Yamamoto's flood curves themselves cannot decide: first-order loss, trapping and an
+   accessible-fraction model fit them equally (rms 0.016–0.017). The strong anti-correlation of k and τ
+   across temperature (rate Ea ≈ 89 kJ/mol, extent Ea ≈ 24) is not a new effect but the trapping model's
+   signature — Kang, Wu, Choi, De Silva, Ober, Prabhu, Macromolecules 43, 4275 (2010), Table 1, measured
+   it on two other resists: Ea(k_P) 136 ± 3 / 152 ± 8, Ea(k_T) 86 ± 5 / 89 ± 7, Ea(D_H) 127 / 165 kJ/mol
+   (P(HOSt-co-tBA) / CM4R). Those are the only free temperature series for k_trap and D; they are not
+   used as defaults because they are other resists.
 2. The dissolving unit a (1–5 nm): factor 2–4 in the roughness floor; a chain-based critical-ionization
    dissolution model would replace the cell.
 3. NXE1716 dose scale: unpublished quencher loading, develop time and blur; request sent to imec.

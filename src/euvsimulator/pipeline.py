@@ -1851,6 +1851,7 @@ def _cd_via_full_chem(
         longest = max(runs, key=lambda r: r[1] - r[0])
         lidx, ridx = longest
         cd_nm = (ridx - lidx + 1) * dx_nm
+        whole_row_undeveloped = (ridx - lidx + 1) >= dev_for_cd.shape[0]
         if arrival_bottom is not None:
             # Sub-pixel line width from the bottom-layer arrival time
             # (Eikonal model): the pixel count above is quantised to dx,
@@ -1866,11 +1867,21 @@ def _cd_via_full_chem(
         # between the last developed and the first undeveloped pixel defines
         # the threshold at which this chemistry prints; nils() then measures
         # CD·|dI/dx|/I at the crossings of that level (Mack 2007 §4.5).
-        row_i = dose_map_blurred[half, :]
-        W_ = row_i.shape[0]
-        i_l = 0.5 * (float(row_i[(lidx - 1) % W_]) + float(row_i[lidx]))
-        i_r = 0.5 * (float(row_i[ridx]) + float(row_i[(ridx + 1) % W_]))
-        nils_val = nils(dose_map_blurred, half, line_width_px, dx_nm, threshold=0.5 * (i_l + i_r))
+        if whole_row_undeveloped:
+            # Nothing developed (CD = pitch): there is no printed edge, so no
+            # NILS. Before 2026-09-11 the threshold was taken from the
+            # wrap-around pixels and nils() reported a spurious value (0.47
+            # at 64 nm pitch) for a line that does not exist (campaign
+            # 2026-09-07, docs/campaign_2026-09-07/README.md).
+            nils_val = float("nan")
+        else:
+            row_i = dose_map_blurred[half, :]
+            W_ = row_i.shape[0]
+            i_l = 0.5 * (float(row_i[(lidx - 1) % W_]) + float(row_i[lidx]))
+            i_r = 0.5 * (float(row_i[ridx]) + float(row_i[(ridx + 1) % W_]))
+            nils_val = nils(
+                dose_map_blurred, half, line_width_px, dx_nm, threshold=0.5 * (i_l + i_r)
+            )
     # dev_2d für Visualisierung
     dev_2d = dev_chem.clone()
 

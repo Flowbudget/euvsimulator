@@ -5,7 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- full_chem reported a NILS (0.47 at 64 nm pitch) when nothing developed (CD = pitch), read off the
+  wrap-around pixels; it is now NaN because there is no printed edge (test added).
+
+### Added
+- `docs/campaign_2026-09-07/`: exploratory parameter campaign (256 configurations over optics, PEB
+  kinetics, development and stochastics) with scripts, raw data and the pattern-search report — all
+  patterns map onto known laws (edge-dose invariance, lumped-parameter development model to 8 %,
+  Gaussian correlation length, blur-limited exposure latitude vanishing at blur/pitch ≈ 0.3).
+- docs/physics.md §7: the two measurements that would decide the acid-loss law, and Kang 2010's
+  activation energies as the only free temperature series for trapping and diffusion.
+- Repository public since 2026-09-11 (old history purged by GitHub Support, ticket #4734231).
 
 ## [2.2.0] — 2026-09-06
 
