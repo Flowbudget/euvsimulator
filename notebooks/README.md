@@ -1,6 +1,6 @@
-# OpEnUV Jupyter Notebooks
+# euvsimulator Jupyter Notebooks
 
-Interactive notebooks demonstrating the OpEnUV EUV lithography simulator.
+Interactive notebooks demonstrating the euvsimulator EUV lithography simulator.
 
 ## Notebooks
 
@@ -61,19 +61,19 @@ Mask topography effects using RCWA:
 ## Running the Notebooks
 
 ```bash
-cd /Users/pi-server/Projekte/OpEnUV
+cd euvsimulator            # the repository root
 jupyter lab notebooks/
 ```
 
 Or start Jupyter from the project root:
 ```bash
-cd /Users/pi-server/Projekte/OpEnUV
+cd euvsimulator            # the repository root
 jupyter notebook
 ```
 
 ## Requirements
 
-- OpEnUV installed in development mode (`pip install -e .`)
+- euvsimulator installed in development mode (`pip install -e .`)
 - JupyterLab or Jupyter Notebook
 - matplotlib for plotting
 

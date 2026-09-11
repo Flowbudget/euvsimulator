@@ -4,38 +4,41 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 2.2.x   | :white_check_mark: |
+| < 2.2   | :x:                |
 
 ## Reporting a Vulnerability
 
-We take the security of euvsimulator seriously. If you discover a security vulnerability, please report it responsibly.
+euvsimulator is a simulation library with a local REST/GUI server. If you find a
+security problem, please report it privately.
 
 **Do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please send an email to **openeuv-security@nousresearch.com** with the following information:
+Use GitHub's private vulnerability reporting for this repository:
+[Report a vulnerability](https://github.com/Flowbudget/euvsimulator/security/advisories/new)
+(Security tab → "Report a vulnerability"). Please include:
 
 - A description of the vulnerability
 - Steps to reproduce the issue
 - The version(s) of euvsimulator affected
 - Any potential impact you have identified
 
-You should receive a response within 48 hours. If you do not, please follow up to ensure we received your message.
-
 ### What to expect
 
-- We will acknowledge receipt of your report within 48 hours.
-- We will provide an estimated timeline for a fix.
-- We will notify you when the vulnerability is fixed.
-- You will be credited for the discovery (unless you request otherwise).
+This project is maintained by one person in their spare time.
+
+- Receipt is acknowledged within about one week.
+- A fix is coordinated with you before disclosure, with a timeline that depends on severity.
+- You are credited in the advisory unless you ask not to be.
 
 ## Disclosure Policy
 
-When a vulnerability report is received, we will:
+1. Confirm receipt and reproduce the issue.
+2. Prepare a fix and a release.
+3. Publish a GitHub security advisory and credit the reporter (with consent).
 
-1. Confirm receipt and begin investigation.
-2. Work on a fix and coordinate a release timeline.
-3. Publish a security advisory and credit the reporter (with consent).
-
-We aim to release fixes as soon as possible, depending on the severity and complexity of the issue.
+Note that `euv serve` binds to all interfaces (0.0.0.0) by default and has no
+authentication; it is meant for a local machine or a trusted network. Do not
+expose it to the internet.
 
 Thank you for helping keep euvsimulator and its users safe.
