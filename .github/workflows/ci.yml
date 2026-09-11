@@ -133,12 +133,15 @@ jobs:
         run: |
           uv sync --extra notebook --extra test --python 3.12
 
+      # Per-cell timeout is a hang guard, not a performance budget: 05_stochastics runs 24
+      # sampled-molecule stochastic simulations (4096 rows) in one cell, ~250-300 s on a
+      # hosted runner (timed out at 300 s on 2026-09-11).
       - name: Execute notebooks
         run: |
           cd notebooks
           for nb in *.ipynb; do
             echo "Executing $nb..."
-            uv run jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=300 "$nb"
+            uv run jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=900 "$nb"
           done
 
   build-wheel:
