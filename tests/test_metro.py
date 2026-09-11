@@ -248,6 +248,24 @@ class TestProcessWindow:
         # At best dose (20) and best focus (0), CD should be closest to 32
         assert not np.isnan(cd_mat).any(), "All entries should be valid"
 
+    def test_dose_matrix_accepts_any_parameter_names(self):
+        """The callback is called positionally, so (dose, focus) works as well."""
+
+        def fn(dose, focus):
+            return {"cd_nm": 32.0 - (dose - 20.0) + 0.005 * focus**2}
+
+        cd_mat = dose_matrix(fn, [15.0, 20.0], [-30.0, 0.0, 30.0])
+        assert cd_mat.shape == (3, 2) and not np.isnan(cd_mat).any()
+
+    def test_dose_matrix_does_not_hide_errors(self):
+        """A failing callback raises instead of silently filling the matrix with NaN."""
+
+        def broken(dose, focus):
+            raise RuntimeError("simulation failed")
+
+        with pytest.raises(RuntimeError):
+            dose_matrix(broken, [20.0], [0.0])
+
     def test_plot_bossung(self, bossung_data, capsys):
         """plot_bossung prints ASCII table without error."""
         cd_matrix, doses, focuses, _ = bossung_data

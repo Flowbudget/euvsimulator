@@ -40,7 +40,7 @@ def dose_matrix(
     Parameters
     ----------
     pipeline_fn : Callable
-        Function ``fn( dose_mj_cm2, focus_nm )`` that returns a dict
+        Function ``fn(dose_mj_cm2, focus_nm)`` (called positionally) that returns a dict
         with key ``'cd_nm'`` (float).  Typically the project's
         ``euvsimulator.pipeline.run_simulation`` wrapped to accept focus.
     doses : list of float
@@ -61,14 +61,17 @@ def dose_matrix(
     Nd = len(doses)
     cd_matrix = np.full((Nf, Nd), np.nan)
 
+    # Positional call: the callback may name its parameters freely. Errors propagate: until
+    # 2026-09-11 every exception (including a TypeError from a callback named ``(dose, focus)``,
+    # which the keyword call triggered) became NaN without a warning, and notebook 04 reported
+    # DoF = EL = 0 for a whole NA sweep. A point that does not print returns a CD (0 or the
+    # pitch), not an exception, so nothing legitimate is lost.
     for i, f in enumerate(focuses):
         for j, d in enumerate(doses):
-            try:
-                result = pipeline_fn(dose_mj_cm2=d, focus_nm=f)
-                cd = float(result["cd_nm"]) if isinstance(result, dict) else float(result.cd_nm)
-                cd_matrix[i, j] = cd
-            except Exception:
-                cd_matrix[i, j] = np.nan
+            result = pipeline_fn(d, f)
+            cd_matrix[i, j] = (
+                float(result["cd_nm"]) if isinstance(result, dict) else float(result.cd_nm)
+            )
 
     return cd_matrix
 
