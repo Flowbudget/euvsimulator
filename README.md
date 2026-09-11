@@ -2,11 +2,10 @@
 
 **An open-source EUV lithography simulator whose every physical default has a named source.**
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
-[![Version 2.1.0](https://img.shields.io/badge/version-2.1.0-blue.svg)](CHANGELOG.md)
-[![Tests](https://img.shields.io/badge/tests-940%20passing%20locally-brightgreen.svg)](tests/)
-[![Type-checked](https://img.shields.io/badge/mypy-clean-brightgreen.svg)](pyproject.toml)
+[![CI](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Flowbudget/euvsimulator/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Flowbudget/euvsimulator?label=release)](https://github.com/Flowbudget/euvsimulator/releases)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FFlowbudget%2Feuvsimulator%2Fmain%2Fpyproject.toml)](pyproject.toml)
+[![License](https://img.shields.io/github/license/Flowbudget/euvsimulator)](LICENSE)
 
 euvsimulator models the EUV imaging and resist chain at 13.5 nm — multilayer mirror, mask
 diffraction, partially coherent imaging, chemically amplified resist, development, and the

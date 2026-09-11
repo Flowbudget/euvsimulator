@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- README badges are live: CI status (GitHub workflow badge; the pipeline runs the tests on Linux,
+  macOS and Windows with Python 3.10–3.13 plus ruff and mypy), latest release, required Python and
+  licence. They replace the static "version 2.1.0", "940 tests passing locally" and "mypy clean"
+  badges, two of which had gone stale.
+
 ### Fixed
 - full_chem reported a NILS (0.47 at 64 nm pitch) when nothing developed (CD = pitch), read off the
   wrap-around pixels; it is now NaN because there is no printed edge (test added).
