@@ -1,10 +1,10 @@
 name: Release Build
 
 on:
-  workflow_dispatch:  # manuell triggern: "Run workflow" Button in Actions
-  push:
-    tags:
-      - 'v*'
+  # Manual only: builds the wheel on every OS/Python pair as a portability check.
+  # GitHub releases are created by the "Create Release" job in ci.yml, which runs
+  # after the full test matrix on a v* tag (two tag-triggered release jobs raced).
+  workflow_dispatch:
 
 permissions:
   contents: read
