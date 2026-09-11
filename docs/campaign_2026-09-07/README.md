@@ -3,7 +3,8 @@
 Vier Rechenkampagnen über die belegten Teile der Kette (Grid 64, Default-Resist, 1:1 Linien),
 danach eine Mustersuche ohne Schlagwörter: Potenzgesetze, Invarianten, dimensionslose Gruppen,
 Residuen. Skripte `run.py` (Rechnung, 32 min auf dem M1) und `analyse.py` (Auswertung), Rohdaten
-`c1.csv` bis `c4.csv`. Ziel war, Zusammenhänge zu finden, die in den Modulen nicht explizit stehen.
+`c1.csv` bis `c4.csv`. `analyse.py` braucht pandas, das keine Abhängigkeit des Pakets ist
+(`pip install pandas`). Ziel war, Zusammenhänge zu finden, die in den Modulen nicht explizit stehen.
 
 | Kampagne | Variation | Zeilen |
 |---|---|---|

@@ -113,7 +113,12 @@ where it does not, is tabulated in [docs/physics.md](docs/physics.md) §6; the d
   parametric power-budget estimate and is not connected to the imaging chain.
 - Compute: the stochastic chain at 2048 rows and grid 256 needs about 1.8 GB and minutes per
   realisation; the concurrent PEB costs ~6× more. Developed and tested on an Apple M1 with 8 GB.
-- CI has not run since 2026-08-31 (account limit); all verification is local (macOS, Python 3.14).
+- Tests run in CI on Linux, macOS and Windows with Python 3.10–3.13 (see the badge); numeric goldens
+  were measured on an Apple M1 and hold on x86 to 1e-4 nm.
+- The fast `aerial_threshold` model sets its threshold relative to the mean intensity of the
+  image. That is fine for dose and focus sweeps of one mask, but when the mask itself changes
+  the threshold moves with it: MEEF at 64/32 nm comes out 0.50 instead of 1.02 with a fixed
+  threshold (1.28 in the full chemistry). Use `full_chem` for MEEF and mask comparisons.
 
 ## Documentation
 
@@ -127,7 +132,7 @@ where it does not, is tabulated in [docs/physics.md](docs/physics.md) §6; the d
 @software{euvsimulator2026,
   author  = {Florian Scheide},
   title   = {euvsimulator: Open Source EUV Lithography Simulator},
-  version = {2.2.0},
+  version = {2.2.1},
   year    = {2026},
   url     = {https://github.com/Flowbudget/euvsimulator},
   license = {Apache-2.0}

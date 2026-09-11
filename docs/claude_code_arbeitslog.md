@@ -3710,3 +3710,40 @@ verschiebt D2S um 37 %; full_chem meldete bei CD = Pitch einen NILS aus Wrap-aro
 Historie gelöscht (API 404 geprüft). Vorher Privatpfade (`$HOME` statt Nutzerpfad) und der Rechnername aus
 Log und Kommentaren entfernt. Sichtbarkeit auf public gesetzt; Actions laufen für public Repos ohne Kontingent.
 
+## 2026-09-11 (Fortsetzung 49): Notebooks geprüft, Serve-Default, Release 2.2.1
+**Anlass:** Frage des Nutzers nach Anmerkungen zum öffentlichen Repo. Stichprobe Notebook 05 zeigte eine Dosis
+(4 mJ/cm²) weit über der Dose-to-Size (1,30) → alle sechs Notebooks gegen die aktuellen Defaults geprüft, jede
+Behauptung mit einer eigenen Rechnung. **Befunde (alle vor heute schon in den committeten Ausgaben):** 02
+SE-Blur-Sweep flach (Schwellwertmodell ignoriert `se_blur_nm`), Tabelle 5,5/2,7/1,8 falsch, Auflösungsaussage
+13–16 nm widerspricht der eigenen NILS-Kurve (< 2 zwischen 20 und 16 nm HP); 03/05 Dosis 4 statt 1,3 mit
+veraltetem Kommentar „5,7“, PEB-Blur-Override mit Begründung „Default 19,9 nm“ (Default ist 7,9), Photonenzahl
+„~100/nm²“ (richtig 13,6 einfallend, ≈ 2,7 absorbiert), Q-Faktor in der Formel; 05 Dill-C-Sweep 8/8 ohne Kante,
+CLI-Beispiel löst den Film vollständig; eigenständige Schrotrausch-Demo in 03 und 05 kaputt (LER 0, Fit +0,54
+bzw. NaN: QE 0,04 ohne Quelle → 0,005 Säuren/Pixel an der Kante, k·t = 18 sättigt, Skalierungstest verschiebt
+die Kante mit der Dosis, helle statt dunkle Linie). 04 Dosisfenster 15–35 verfehlt Dose-to-Size 13,8, DoF
+120 nm = Sweepbreite, NA- und SE-Blur-Sweep lieferten DoF = EL = 0 — Ursache in der Bibliothek:
+`metro.dose_matrix` rief den Callback mit Schlüsselwörtern auf und verwandelte jede Ausnahme (hier TypeError
+wegen `(dose, focus)`) stillschweigend in NaN → jetzt positional, Fehler werden durchgereicht, 2 Tests. MEEF im
+Schwellwertmodell 0,50 gegen 1,02 mit fester absoluter Schwelle auf denselben Bildern und 1,27 Vollchemie:
+die Schwelle folgt dem Bildmittelwert, der mit der Masken-CD sinkt (5,08 → 4,87) → dokumentierte Einschränkung
+(README, physics.md §1), Modell nicht geändert (wäre Modelländerung, kein Patch). 06 RCWA-Demo ohne Spiegel,
+im Wafermaßstab und mit Ru im Absorber (Effizienzen ~1000× zu klein, Asymmetrie 0,30) → wie die Pipeline
+(4×, `ml_stack`): 0. Ordnung 0,135 vs dünn 0,119, |−1|/|+1| = 0,86 TE / 0,80 TM, ±2 ≈ 0,003; Taper-Zelle
+rechnete nur die erste 7,5-nm-Scheibe im Vakuum → ersetzt durch die Ablehnung der Pipeline; bester Fokus
+dünn 0 nm, RCWA +25 nm. 01 σ 0,5 „kohärent“. **Neue Schrotrausch-Demo** (Prototyp vorab): dunkle Linie,
+Poisson auf relativer Dosis mit 0,2 Säuren pro einfallendem Photon (20 % Absorption × ≈ 1 Säure/abs. Photon),
+Blur 5 nm, Schwelle bei halbem deterministischen Maximum, 1024 Zeilen: LER ∝ D^−0,487, LWR/LER ≈ 1,4 (√2).
+**Außerdem:** `euv serve` bindet an 127.0.0.1 (keine Authentifizierung; Docker unverändert, startet uvicorn
+selbst mit 0.0.0.0); Flankenwinkel/Unterätzung liefern in der API 422 statt Serverfehler; nur noch der
+gegatete Release-Job in ci.yml legt Releases an (release.yml manuell, beide feuerten beim Tag); README-Zeile
+„CI has not run“ korrigiert. **Nebenbei vom Nutzer hochgeladen:** Bhattarai-Dissertation (UC Berkeley 2017) und
+Kim et al., RSC Adv. 12, 2589 (2022, CC BY-NC) — nicht ins Repo (Lizenz); Einschätzung im Chat.
+**Ausgeführte Notebooks (2026-09-11):** 04 Hauptfenster DoF 180 nm / EL 50 % (Fokus ±150 nm, nicht mehr
+abgeschnitten), NA 0,33/0,40/0,55: DoF 180/150/150 nm, EL 50/47/67 %; SE-Blur 0→10 nm: EL 22,8→10,0 %;
+MEEF Vollchemie 1,278, Schwellwertmodell 0,504. 05 Demo: Fit-Exponent −0,546 (4 Seeds, Prototyp −0,487),
+LER·√D 2,02→1,75, LWR/LER 1,37–1,43; Pipeline CD 32,06 nm, Dill-C-Sweep 0/8 ohne Kante. 02 Fokus bei
+Dose-to-Size: CD 32,00/32,01 nm über ±50 nm (isofokal), NILS 5,10→4,46/4,43. 03 CD 31,95, LER 1,93, LWR 3,16 nm.
+06 ausgeführt: Effizienzen dünn/RCWA-TE/TM für −2…+2: 0/0,0028/0,0027, 0,0853/0,0653/0,0601, 0,1194/0,1354/0,1305,
+0,0853/0,0764/0,0755, 0/0,0029/0,0030; |−1|/|+1| 0,855 TE / 0,796 TM; Konvergenz 0. Ordnung 0,1333 (11) → 0,1363 (61),
+21 Ordnungen 0,7 % darunter; bester Fokus dünn 0 nm, RCWA +25 nm; über Pitch 40–96 nm +10…+30 nm (10-nm-Schritte).
+

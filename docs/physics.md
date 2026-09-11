@@ -16,6 +16,13 @@ flare, mask roughness, aberrations beyond defocus. Note for anchors: for a symme
 sits at the image mean (0.318 of the open frame at 44 nm pitch, NA 0.33), which fixes the ratio of
 printing dose to flood through-dose.
 
+The fast `aerial_threshold` model thresholds the image at a fraction of its own mean intensity
+(scaled with dose). For one mask that is a fixed dose threshold; across masks it is not, because
+the mean follows the mask duty cycle. MEEF at 64/32 nm: 0.50 with the mean-relative threshold,
+1.02 with a fixed absolute threshold on the same images, 1.28 in the full chemistry at grid 256
+(1.27 at grid 128; 2026-09-11).
+Mask-to-mask comparisons (MEEF, pitch sweeps at one threshold) belong to `full_chem`.
+
 ## 2. Exposure
 
 Dill ABC with Beer–Lambert attenuation through the film and acid = G0·(1 − e^{−C·E}):

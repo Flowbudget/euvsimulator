@@ -74,7 +74,7 @@ Vesters NXE1716: Mack-Kurve (DRM) + D2S/LWR bei 22 nm HP, aber kein Dill/PEB. Se
 fragwürdig), kein LWR. Deshalb ist „Plausibilität 1,2–1,7×" heute die Obergrenze des Erreichbaren.
 
 ### 3.8 Software
-CI seit 31. 8. durch Billing blockiert (alle „failures" sind 0-Schritt-Jobs); mypy --strict 140 beratende Befunde;
+CI seit 31. 8. durch Billing blockiert (alle „failures" sind 0-Schritt-Jobs) (Stand 5. 9.; seit 11. 9. läuft die CI wieder, Repo public); mypy --strict 140 beratende Befunde;
 `dx`/`dx_nm` gemischt; Arbeitslog 2745 Zeilen — die Physikbeschreibung ist über Log, Feldkommentare und CHANGELOG
 verteilt, ein konsolidiertes `docs/physics.md` fehlt; 61440-Zeilen-Test 5 min (CI-Risiko); notebooks laufen.
 
@@ -146,7 +146,7 @@ D2 Thin-mask: Vektor-/CRA-Effekt zumindest als Warnung/Flag; RCWA-2D-Tests auf P
 **Stufe E — Software und Dokumentation**
 E1 `docs/physics.md`: konsolidierte Modellbeschreibung jeder Stufe mit Formel, Parameter, Quelle, Test (aus Log/Kommentaren
    destilliert); README auf diese Datei verweisen.
-E2 CI wieder aktiv (Billing beim Nutzer), dann Matrix beobachten; 61440-Test ggf. auf 8192 Zeilen als CI-Variante.
+E2 ✅ (2026-09-11: Repo public, Matrix Linux/macOS/Windows × Py 3.10–3.13 grün) CI wieder aktiv (Billing beim Nutzer), dann Matrix beobachten; 61440-Test ggf. auf 8192 Zeilen als CI-Variante.
 E3 mypy-Bereinigung in kleinen, semantikfreien Schritten; `dx`-Vereinheitlichung.
 E4 Literatur: Anfrage an Yamamoto/Kozawa (Rohdaten Fig. 3/5) und Vesters (Fit-Tabelle) — nur durch den Nutzer.
 
