@@ -5,17 +5,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [2.2.1] — 2026-09-11
+
+Maintenance release: corrected notebooks, a safer server default, the NILS fix and
+cross-platform CI (Linux, macOS, Windows; Python 3.10–3.13). No change to the physics.
+
 ### Changed
 - README badges are live: CI status (GitHub workflow badge; the pipeline runs the tests on Linux,
   macOS and Windows with Python 3.10–3.13 plus ruff and mypy), latest release, required Python and
   licence. They replace the static "version 2.1.0", "940 tests passing locally" and "mypy clean"
   badges, two of which had gone stale.
+- `euv serve` binds to 127.0.0.1 by default (was 0.0.0.0): the server has no authentication and
+  should not listen on the network unasked. `--host 0.0.0.0` restores network access; the Docker
+  image is unchanged (it starts uvicorn with its own host setting).
+- Notebooks 01–06 re-checked against the current defaults and re-executed; several sections showed
+  results that did not support their text. 02: the SE-blur sweep was flat because the threshold
+  model ignores `se_blur_nm`; the blur is now applied to the image (NILS 4.97 → 3.59 → 1.45 at
+  0 / 5 / 10 nm), and the resolution statement follows the computed NILS (< 2 between 20 and 16 nm
+  half-pitch). 03 and 05: exposure at the dose-to-size of the default resist (1.3 mJ/cm², was 4 with
+  a stale "prints near 5.7" comment), the chain's own PEB blur, the correct photon budget (13.6
+  incident, ≈ 2.7 absorbed per nm² at 20 mJ/cm²), no removed Q factor; 05's dill_C sweep stays
+  inside the printing window (was 8 of 8 points without an edge). 05's standalone shot-noise
+  demonstration was broken (LER 0, fit exponent NaN); rebuilt with a dark line, 0.2 acids per
+  incident photon and a fixed relative threshold, it fits a dose exponent of −0.55 (Poisson: −0.5)
+  and LWR/LER = 1.37–1.43 (√2 = 1.41), and 03's
+  broken copy of it is removed. 04: the dose sweep brackets the dose-to-size, the focus sweep no
+  longer cuts off the DoF, the NA comparison works (it was all-NaN, see `dose_matrix` below), the
+  SE-blur effect is computed with the full chemistry (EL 22.8 % → 10.0 % from 0 to 10 nm) and MEEF
+  with the full chemistry (1.28; the threshold model gives 0.50). 06: the RCWA demonstration uses the
+  pipeline's mask set-up (4× mask period, mirror operator; it used a bare substrate and the wafer
+  pitch, so its efficiencies were ~1000× too small), the taper cell that did not model a taper is
+  replaced by the pipeline's rejection, and best focus is compared for thin mask (0 nm) and RCWA
+  (+25 nm). 01: σ = 0.5 is no longer called coherent.
+- Releases: only the gated "Create Release" job in ci.yml (after the full test matrix) creates the
+  GitHub release; release.yml is manual. Both used to fire on a tag and raced.
 
 ### Fixed
+- `metro.dose_matrix` called the callback with keywords and turned every exception into NaN, so a
+  callback named `(dose, focus)` gave an all-NaN matrix without a warning (notebook 04 reported
+  DoF = EL = 0 for its whole NA and SE-blur sweeps). It now calls positionally and lets errors
+  surface; two tests added.
 - full_chem reported a NILS (0.47 at 64 nm pitch) when nothing developed (CD = pitch), read off the
   wrap-around pixels; it is now NaN because there is no printed edge (test added).
+- API/GUI: absorber taper and undercut (not implemented, the pipeline raises) are rejected with a
+  clear 422 message instead of a server error; the field catalogue called them "RCWA path".
+- Windows: the CLI reads YAML/JSON configs as UTF-8 (the platform default is cp1252).
+- SECURITY.md and the Code of Conduct pointed to mailboxes of the old project name on a foreign
+  domain; reports now go through GitHub's private vulnerability reporting.
 
 ### Added
+- Documented limitation: the `aerial_threshold` model's threshold follows the image mean, so it
+  underestimates MEEF by about half (0.50 vs 1.02 with a fixed threshold, 1.28 in the full
+  chemistry at 64/32 nm). README and docs/physics.md say to use `full_chem` for mask comparisons.
 - `docs/campaign_2026-09-07/`: exploratory parameter campaign (256 configurations over optics, PEB
   kinetics, development and stochastics) with scripts, raw data and the pattern-search report — all
   patterns map onto known laws (edge-dose invariance, lumped-parameter development model to 8 %,
