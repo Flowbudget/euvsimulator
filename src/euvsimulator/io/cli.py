@@ -3,7 +3,7 @@
 Usage:
     euv simulate [--config=FILE | --period=64 --cd=32 ...]
     euv make-mask --pitch=64 --cd=32 [--out=mask.gds]
-    euv serve [--host=0.0.0.0 --port=8000]
+    euv serve [--host=127.0.0.1 --port=8000]
     euv process-window --period=64 --cd=32 [--doses=... --focuses=...]
     euv materials [list | nk Si --energy=91.84]
     euv version
@@ -645,7 +645,12 @@ def materials(
 
 @app.command()
 def serve(
-    host: str = typer.Option("0.0.0.0", "--host", help="Bind address"),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Bind address; 127.0.0.1 = this machine only (default). 0.0.0.0 serves the local "
+        "network -- the server has no authentication, use it only on a trusted network",
+    ),
     port: int = typer.Option(8000, "--port", "-p", help="Listen port"),
     reload: bool = typer.Option(False, "--reload", "-r", help="Auto-reload on changes"),
 ):
@@ -653,6 +658,8 @@ def serve(
     import uvicorn
 
     shown = "localhost" if host in ("0.0.0.0", "::") else host
+    if host in ("0.0.0.0", "::"):
+        typer.echo("   Warning: listening on all interfaces without authentication.")
     typer.echo(f"\U0001f680 euvsimulator server on http://{shown}:{port}")
     typer.echo(f"   GUI:  http://{shown}:{port}/")
     typer.echo(f"   Docs: http://{shown}:{port}/docs")

@@ -89,3 +89,11 @@ def test_physics_errors_catch_the_model_domains() -> None:
     assert any("absorber_taper_deg" in m for m in msgs)
     assert any("sigma_inner" in m for m in msgs)
     assert physics_errors(SimulationConfig()) == []
+
+
+def test_unimplemented_mask_geometry_is_a_physics_error_not_a_crash() -> None:
+    """The pipeline raises NotImplementedError for taper/undercut; the API must say so (422)."""
+    msgs = physics_errors(resolve_config(None, {"absorber_taper_deg": 85.0}))
+    assert any("not implemented" in m for m in msgs)
+    msgs = physics_errors(resolve_config(None, {"mask_undercut_nm": 2.0}))
+    assert any("not implemented" in m for m in msgs)

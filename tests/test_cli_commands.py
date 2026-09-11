@@ -87,3 +87,12 @@ def test_process_window_small_grid(tmp_path):
     assert payload, "empty process-window output"
     text = json.dumps(payload)
     assert "cd" in text.lower()
+
+
+def test_serve_binds_to_localhost_by_default():
+    """The server has no authentication, so it must not listen on the network unasked."""
+    import inspect
+
+    from euvsimulator.io.cli import serve
+
+    assert inspect.signature(serve).parameters["host"].default.default == "127.0.0.1"

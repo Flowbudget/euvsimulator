@@ -37,8 +37,9 @@ This project is maintained by one person in their spare time.
 2. Prepare a fix and a release.
 3. Publish a GitHub security advisory and credit the reporter (with consent).
 
-Note that `euv serve` binds to all interfaces (0.0.0.0) by default and has no
-authentication; it is meant for a local machine or a trusted network. Do not
-expose it to the internet.
+`euv serve` has no authentication. Since 2.2.1 it binds to 127.0.0.1 (this machine
+only) by default; `--host 0.0.0.0` serves the local network and belongs on a trusted
+network only, never on the internet. The Docker image listens on 0.0.0.0 inside the
+container; publish its port only to trusted networks.
 
 Thank you for helping keep euvsimulator and its users safe.

@@ -114,11 +114,15 @@ FIELDS: Dict[str, Dict[str, Any]] = {
     "absorber_taper_deg": _f(
         "mask",
         "Sidewall angle",
-        "Absorber sidewall angle from horizontal (90 = vertical); RCWA path",
+        "Absorber sidewall angle from horizontal. Not implemented: only 90 (vertical) "
+        "is accepted, other values are rejected",
         "°",
     ),
     "mask_undercut_nm": _f(
-        "mask", "Undercut", "Absorber undercut at the multilayer interface; RCWA path", "nm"
+        "mask",
+        "Undercut",
+        "Absorber undercut at the multilayer interface. Not implemented: only 0 is accepted",
+        "nm",
     ),
     "mask_demagnification": _f(
         "mask",
@@ -431,6 +435,10 @@ def physics_errors(cfg: SimulationConfig) -> List[str]:
     if not (0.0 < cfg.absorber_taper_deg < 180.0):
         e.append("absorber_taper_deg must be between 0 and 180")
     pos("mask_undercut_nm", strict=False)
+    if cfg.absorber_taper_deg != 90.0 or cfg.mask_undercut_nm != 0.0:
+        e.append(
+            "absorber_taper_deg / mask_undercut_nm are not implemented (only 90 and 0 are accepted)"
+        )
     pos("mask_demagnification")
     if cfg.ml_n_bilayers < 0:
         e.append("ml_n_bilayers must be >= 0")
