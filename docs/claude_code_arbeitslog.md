@@ -101,7 +101,7 @@ aus nicht frei zugänglich (Bezahlschranke bzw. JS-Block):**
 
 **Ehrliches Fazit:** Trotz genuiner, mehrstufiger Suche keine frei zugängliche, EUV-spezifische,
 primärquellenverifizierte Quelle für Mack R_max/R_min/n/M_th gefunden. Beide Kandidaten-Paper
-sind im Code als Zeiger dokumentiert (`pipeline.py`, Kommentar bei `mack_*`), falls du oder Hermes
+sind im Code als Zeiger dokumentiert (`pipeline.py`, Kommentar bei `mack_*`), falls du oder ein anderer Agent
 institutionellen Zugang habt.
 
 **Verifiziert:** `SimulationConfig()` lädt weiterhin fehlerfrei nach der erweiterten
@@ -185,7 +185,7 @@ wurden geprüft und ausführlich dokumentiert (Zitate + offene Fragen direkt im 
 `mack_M_th`), aber NICHT verändert, weil jede Einzeländerung ohne eigenen Beleg genau die
 Art Kompromiss wäre, die der Nutzer explizit ausgeschlossen hat. Vollständige, in sich
 konsistente EUV-CAR-Parametersätze (Dill+PEB+Mack aus EINEM real gemessenen Resist) wurden trotz
-sehr breiter Suche (siehe `/Users/flo/mack fits/catalog.md`, jetzt ~25 Quellen über
+sehr breiter Suche (siehe `$HOME/mack fits/catalog.md`, jetzt ~25 Quellen über
 lithoguru.com, imec-publications.be, open.fau.de, OSTI.gov, ARCNL, Zitationsketten) nicht frei
 zugänglich gefunden — nur für 193nm (Schnattinger). **Empfehlung:** entweder echte
 Bossung-Kalibrierdaten über `euv calibrate` einspeisen, sobald verfügbar, oder weiter gezielt
@@ -198,7 +198,7 @@ vorbestehender Fehlschlag in `test_metro.py`, siehe früherer Eintrag). Keine Re
 
 ## 2026-09-03 — Mack R_max/R_min: EUV-nativer, aber PROVISORISCHER Fund eingebaut
 
-**Kontext:** Fortsetzung der Mack-Parameter-Recherche (siehe `/Users/flo/mack fits/catalog.md`,
+**Kontext:** Fortsetzung der Mack-Parameter-Recherche (siehe `$HOME/mack fits/catalog.md`,
 inzwischen 28 Quellen). Bester Fund: Vesters, De Simone, De Gendt (imec/KU Leuven), *J.
 Photopolym. Sci. Technol.* 30(6), 675 (2017), frei über J-STAGE — echte, bei ASML-NXE-Scannern
 benannte EUV-Resists (NXE1716, NXE1717), explizit mit dem Original-Mack-Modell gefittet, aber
@@ -304,7 +304,7 @@ unabhängige `test_metro.py`-Altlast (verwaister `import euv.metro` aus der OpEn
 
 **Verbleibende Lücke (Stand zu diesem Zeitpunkt):** `mack_M_th` weiterhin ohne EUV-native
 Quelle. Vollständiger Suchverlauf (35 katalogisierte Quellen über 9 Runden) in
-`/Users/flo/mack fits/search_log.md` und `catalog.json`.
+`$HOME/mack fits/search_log.md` und `catalog.json`.
 
 ---
 
@@ -390,7 +390,7 @@ unabhängige `test_metro.py`-Altlast** — keine Regression durch diese Änderun
 Beinahe-Fundes an der o.g. Einheiten-Ambiguität gescheitert) — das sind jetzt die einzigen
 beiden noch offenen Parameter im gesamten Satz. Separate, unveränderte Architektur-Aufgabe:
 `MackModel` ist weiterhin nicht in die Pipeline verdrahtet. Vollständiger Suchverlauf (37
-katalogisierte Quellen über 9 Runden) in `/Users/flo/mack fits/search_log.md` und
+katalogisierte Quellen über 9 Runden) in `$HOME/mack fits/search_log.md` und
 `catalog.json`.
 
 ---
@@ -431,7 +431,7 @@ und "PRE-EXISTING KNOWN ISSUE"-Kommentaren in `pipeline.py` dokumentiert; keine
 Verhaltensänderung der Simulation (nur Dokumentation), verifiziert.
 
 Vollständiger Suchverlauf (39 katalogisierte Quellen über 9 Runden) in
-`/Users/flo/mack fits/search_log.md` und `catalog.json`.
+`$HOME/mack fits/search_log.md` und `catalog.json`.
 
 ---
 
@@ -893,7 +893,7 @@ Physik-Simulation (kein SEM-Messrauschen) gegen SEM-Messwerte verglichen wird, d
 Messrauschen enthalten.
 
 **Primärquelle direkt geprüft:** `Vesters_2019_PhD_Thesis_KULeuven.pdf` liegt lokal vor
-(`/Users/flo/mack fits/pdfs/`), als Volltext extrahiert und durchsucht.
+(`$HOME/mack fits/pdfs/`), als Volltext extrahiert und durchsucht.
 
 **Zentraler Fund — Abschnitt 1.8.2 "Scanning Electron Microscopy" (S. 59-62) der Thesis,
 wörtlich:** CD-SEM-Detektoren erzeugen ein "white noise signal... even for a perfectly flat
@@ -1071,7 +1071,7 @@ Arbeitslog-Eintrag, statt die (jetzt widerlegte) "unterschätzt"-Aussage als Fak
 lassen. Geprüft und als NICHT betroffen ausgeschlossen: Test-Golden-Values (Selbstkonsistenz-
 Schnappschüsse über Commits hinweg, kein externer Vergleich), CDU/LCDU (kommt im Code nirgends
 vor), der interne `stochastic_ler_grid_y`-Referenzwert (`N_eff≈59, LER≈0,07nm bei 40mJ/cm²`,
-reiner Selbstvergleich ohne externe Quelle), der Forschungskatalog unter `/Users/flo/mack
+reiner Selbstvergleich ohne externe Quelle), der Forschungskatalog unter `$HOME/mack
 fits/` (Hintergrundnotizen, in keinen Simulator-Default eingeflossen), und `development_
 strength=20,0` selbst (war nie gegen einen Vesters-Zahlenwert kalibriert, sondern nur gegen
 "produziert überhaupt ein nicht-degeneriertes Ergebnis").
@@ -1139,7 +1139,7 @@ bestätigt n=18,2 exakt. Eigene `MackModel`-Formel verifiziert identisch zur kla
 Mack-Konvention. Berechnet: `a=(n+1)/(n-1)*(1-Mth)^n = 1,38e-4` — extrem klein, was den
 10%→90%-Übergang von R(M) auf nur ΔM≈0,14 komprimiert. Das ist die mathematisch zwingende,
 korrekte Ursache der seit Tagen beobachteten extremen CD-Empfindlichkeit — kein Bug, keine
-Fehlübertragung. PDF jetzt lokal archiviert (`/Users/flo/mack fits/pdfs/`, vorher nur als
+Fehlübertragung. PDF jetzt lokal archiviert (`$HOME/mack fits/pdfs/`, vorher nur als
 URL referenziert).
 
 ### Prüfung 2: Multilayer-Parameter-Quellenlage — siehe Commit `f2292e8`. Bilayer-Periode
@@ -1382,7 +1382,7 @@ bevor die Entwicklungsstufe (Yamamoto-Mack-Modell) überhaupt greift.
 
 Es gibt **keine einzige frei zugängliche Quelle**, die den gesamten Belichtung+PEB+Quenching+
 Entwicklung-Parametersatz für einen realen Resist liefert. Das bestätigt und erweitert die
-bereits sehr gründliche, 9-Runden-Literatursuche aus früheren Sitzungen (siehe `/Users/flo/mack
+bereits sehr gründliche, 9-Runden-Literatursuche aus früheren Sitzungen (siehe `$HOME/mack
 fits/search_log.md`) explizit auf die Belichtung+Quenching-Kombination, die dort noch nicht
 geprüft worden war. Der aktuelle `full_chem`-Stack mischt jetzt nachweislich **fünf
 unabhängige Quellen**: Yamamoto et al. 2011 (dill_A/B, mack_R_max/R_min/n/M_th, peb_k,
@@ -1399,7 +1399,7 @@ setzen können (kein neues Feld nötig, `dill_C` ist bereits voll konfigurierbar
 Default-Verhalten geändert. `test_full_chem_config.py` weiterhin grün (7/7, reiner
 Kommentar-Zusatz).
 
-**Für zukünftige Sitzungen im externen Katalog vermerkt:** `/Users/flo/mack fits/catalog.json`,
+**Für zukünftige Sitzungen im externen Katalog vermerkt:** `$HOME/mack fits/catalog.json`,
 Eintrag zur Quenching-Quelle, um C=0,08652/δ0-Dosis=3,43mJ/cm² als neuen, verifizierten
 Fund zu sichern (nicht nur PAG/Quencher-Dichte/Rate wie zuvor).
 
@@ -2424,7 +2424,7 @@ Laufzeit-Hinweis: 61440-Zeilen-Test ≈ 5 min (kritischster Posten für die CI-M
 ## 2026-09-05 (Fortsetzung 18): Literaturrunde 10 — was für euvsimulator daraus folgt
 
 Auf Nutzerwunsch („mehr Fachliteratur, was uns noch fehlt, alle Sprachen, auch Patente, auch weitere Mack-Fits") eine
-bedarfsgetriebene Suche; Katalog und Suchprotokoll in `/Users/flo/mack fits/` (Runde 10), ≈ 65 neue Dateien. Für den
+bedarfsgetriebene Suche; Katalog und Suchprotokoll in `$HOME/mack fits/` (Runde 10), ≈ 65 neue Dateien. Für den
 Simulator unmittelbar relevant:
 
 1. **Säureverlust ist messbar und gemessen:** Kang et al. 2010 (Macromolecules 43, 4275; NIST/Intel) fitten FT-IR-Kinetik
@@ -3634,7 +3634,7 @@ Zitat), `references/`. **Entfernt:** `keyword_context.txt` (gescrapter PMC-Vollt
 PDF und den SPIE-Volltext (Commit-Bereiche der alten Historie, hier nicht mehr genannt). Solange das Repo privat ist, sieht das niemand; vor einer
 Veröffentlichung ist eine Historien-Bereinigung (git filter-repo, Force-Push, alle Klone neu) nötig — Entscheidung des Nutzers.
 
-**Historie bereinigt (2026-09-06, auf Freigabe des Nutzers):** Backup-Bundle `/Users/flo/euvsimulator-backup/euvsimulator-before-
+**Historie bereinigt (2026-09-06, auf Freigabe des Nutzers):** Backup-Bundle `$HOME/euvsimulator-backup/euvsimulator-before-
 history-rewrite-2026-09-06.bundle` (26 MB, verifiziert), dann `git filter-repo --invert-paths` über acht Pfade: Mack-Buch-PDF,
 Develioglu-2023-SPIE-PDF, drei Textextrakte, PMC-Volltext-HTML, ScienceDirect-Abstract-HTML, eScholarship-Wayback-HTML. 195 Commits
 neu geschrieben, Tags v1.x/v2.0.0/v2.1.0 mitgezogen, Force-Push von Branches und Tags. Verifikation: keine Referenz mehr auf einen

@@ -989,7 +989,7 @@ class SimulationConfig:
     #     via a 9-round, ~39-source search (institutional repositories,
     #     government archives, conference archives back to 2008, code/data
     #     repositories, author-centric/citation-trail follow-ups; see
-    #     /Users/flo/mack fits/catalog.md and docs/claude_code_arbeitslog.md
+    #     $HOME/mack fits/catalog.md and docs/claude_code_arbeitslog.md
     #     for the full trail). dill_Q and peb_k needed a separate,
     #     mechanistic investigation (see their own notes above): dill_Q
     #     corresponds to Mack's phi_PAG, a fundamentally different quantity
