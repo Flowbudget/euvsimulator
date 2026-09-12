@@ -3766,7 +3766,10 @@ Commit 21f9fc6 lief auf main grün, dort brauchte Notebook 05 insgesamt 994 s �
 dieser Zelle um mehr als das Doppelte. Das Limit ist laut Kommentar im Workflow ausdrücklich eine
 Hänger-Sicherung, kein Laufzeitbudget → auf 2400 s angehoben. Zusätzlich wird der Notebook-Job bei Tags
 übersprungen (`if: "!startsWith(github.ref, 'refs/tags/')"`): der Tag-Commit ist per Definition schon auf
-main geprüft, der Lauf kostete rund 30 Minuten Kontingent und belegte nichts Neues.
+main geprüft, der Lauf belegte nichts Neues und blockierte rund 30 Minuten Laufzeit auf den
+Mietmaschinen. **Korrektur zur ersten Fassung dieses Eintrags (und zur Commit-Nachricht von
+a9ec2ef):** von „Kontingent“ zu sprechen war falsch, öffentliche Repos rechnen Actions-Minuten
+nicht ab; das Argument ist Wartezeit und Maschinenbelegung, nicht Verbrauch.
 **Agentendateien:** `mcp/server.json` und `.well-known/agent-card.json` gelöscht (Git behält sie in der
 Historie). Sie beschrieben einen MCP-Server mit drei Werkzeugen und einen A2A-Endpunkt, für die es keinen
 Code gibt; die Schemas nannten zudem nicht existierende Werte („quadrupole“, resist_model „stochastic“),

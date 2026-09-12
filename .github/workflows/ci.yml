@@ -113,8 +113,9 @@ jobs:
   notebooks:
     name: Execute Notebooks
     runs-on: ubuntu-latest
-    # Tags point at a commit that has already run this job on main; re-running it costs
-    # ~30 min of Actions quota and verifies nothing new.
+    # Tags point at a commit that has already run this job on main; re-running it occupies
+    # ~30 min of runner time and verifies nothing new. (Public repositories are not billed
+    # for Actions minutes, so this is wall-clock and runner capacity, not quota.)
     if: "!startsWith(github.ref, 'refs/tags/')"
     steps:
       - name: Checkout repository

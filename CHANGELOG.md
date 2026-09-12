@@ -5,7 +5,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Removed
+- `mcp/server.json` and `.well-known/agent-card.json`. They described an MCP server with three
+  tools and an A2A agent endpoint, neither of which exists in this repository, and their schemas
+  had drifted from the real parameters (illumination `quadrupole`, resist model `stochastic`, the
+  removed `Q` output field, "48 wheel configurations" for what is 3 operating systems × 4 Python
+  versions, "534 tests", and a URL that returns 404). Git keeps both files in the history.
+
+### Changed
+- `llms.txt` and `agents.md` rewritten, every claim checked against the working tree: no
+  "physics-accurate" claim, no reference to the non-existent `docs/cli.rst`, no `euv notebook`
+  command, the real `SimulationConfig` defaults and `SimulationResult` fields, development named
+  as an Eikonal front plus a vertical-column model (was "level-set" and "PEB (ADI solver)"),
+  `etch` and `opc` marked as present but not wired into the pipeline or CLI, test counts carrying
+  their date, and an explicit list of interfaces that do not exist.
+- CI: the per-cell notebook timeout is 2400 s (was 900 s) and the notebook job is skipped for
+  tags. The v2.2.1 tag run timed out after 900 s in notebook 05's `dill_C` loop while the
+  identical commit passed on `main`, where notebook 05 took 994 s in total; hosted-runner speed
+  varies by more than 2× on that cell, and the limit is a hang guard, not a performance budget. A
+  tag commit has already run this job on `main`, so repeating it occupies about 30 minutes of
+  runner time and verifies nothing new.
+
+### Fixed
+- The `--resist-preset` help text said "CAR (5nm)" while `RESIST_PRESETS["CAR"]` is
+  `DEFAULT_SE_BLUR_NM` = 2.5 nm, as `test_se_blur_default` asserts; the `pipeline` module
+  docstring repeated the same stale 5.0. The help now also states that `nonCAR` and `HighNA` are
+  unsourced placeholders.
 
 ## [2.2.1] — 2026-09-11
 
