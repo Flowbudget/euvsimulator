@@ -1,275 +1,178 @@
 # euvsimulator — Agent Integration Guide
 
-**Target audience:** Autonomous AI agents, coding assistants, and agent frameworks.
+**Target audience:** autonomous agents, coding assistants and agent frameworks.
 
-This document describes the actual current state of the working tree. Every claim has been verified against the repository. The scientific status is based on the P0–P8 audit series (2026-09-02).
+Every claim below was checked against the working tree of version 2.2.1 on 2026-09-12. Numbers
+that go stale quickly (test counts, timings) are marked with that date.
 
----
+## 1. Interfaces that exist
 
-## 1. Installation
+| Interface | Entry point | Status |
+|---|---|---|
+| Python API | `euvsimulator.pipeline.run_simulation` | supported |
+| CLI | `euv` (Typer) | supported |
+| REST API + browser GUI | `euv serve` (FastAPI, binds 127.0.0.1) | supported, no authentication |
+| MCP server | — | **does not exist** |
+| A2A agent endpoint | — | **does not exist** |
+| Hosted docs site | — | **does not exist**, docs live in the repository |
+
+Versions 2.1–2.2.0 shipped `mcp/server.json` and `.well-known/agent-card.json` describing an MCP
+server and an A2A endpoint. No code ever backed them, and their schemas had drifted from the real
+parameters. Both files were removed in 2.2.1. If you are an agent looking for a tool endpoint:
+call the CLI, the Python API, or the local REST API instead.
+
+## 2. Installation
 
 ```bash
-cd euvsimulator
-pip install -e ".[dev]"   # includes pytest, ruff, mypy, jupyter
-
-# Verify installation
-pytest tests/ -x -q       # 789 tests passing (baseline)
+pip install -e ".[dev]"    # pytest, ruff, mypy, jupyter
+pytest -q                  # 989 tests collected (2026-09-12)
 ```
 
-**Requirements:** Python 3.10+, PyTorch, NumPy, SciPy. GPU optional (MPS on Apple Silicon, CUDA where available).
+Python 3.10 to 3.13. PyTorch, NumPy, SciPy. GPU optional (MPS on Apple Silicon, CUDA elsewhere).
 
----
+## 3. Python API
 
-## 2. Python API — Core Entry Points
-
-### 2.1 Single Simulation
 ```python
 from euvsimulator.pipeline import SimulationConfig, run_simulation
 
 cfg = SimulationConfig(
-    period_nm=64.0,
+    period_nm=64.0,            # wafer scale; the mask carries 4x larger features
     line_width_nm=32.0,
-    dose_mj_cm2=20.0,
+    dose_mj_cm2=1.3,           # dose-to-size of the default resist at 64/32
     na=0.33,
     sigma=0.8,
-    illumination_shape="conventional",  # "conventional" | "annular" | "dipole" | "dipole_x" | "dipole_y" | "quasar"
-    resist_model="aerial_threshold",    # "aerial_threshold" | "full_chem"
+    illumination_shape="conventional",  # annular | dipole | dipole_x | dipole_y | quasar
+    resist_model="full_chem",  # or "aerial_threshold" (default)
     grid=256,
     focus_nm=0.0,
 )
-
 result = run_simulation(cfg)
-
-# Key outputs
-print(f"CD: {result.cd_nm:.2f} nm")
-print(f"NILS: {result.nils_value:.3f}")
 ```
 
-When `resist_model="full_chem"` is used, Dill A/B/C, PEB, and Mack development
-parameters are applied. When `enable_stochastic=True` is also set, photon shot
-noise and LER/LWR extraction are additionally enabled:
+`SimulationResult` fields: `cd_nm`, `nils_value`, `ler_nm`, `lwr_nm`, `aerial_image`,
+`resist_profile`, `absorber_reflectivity`, `clear_field_reflectivity`, `ler_metadata`.
+
+Defaults worth knowing: `se_blur_nm=2.5` (Thackeray 2010), `dill_A=0.0`, `dill_B=4.44`,
+`dill_C=0.0152`, `use_rcwa=False` (thin mask), `enable_stochastic=False`,
+`stochastic_n_realisations=1`. `RESIST_PRESETS` holds SE-blur values only:
+CAR 2.5, nonCAR 2.5, HighNA 3.0 nm; the latter two are unsourced placeholders.
+
+Stochastic runs add shot noise and roughness:
 
 ```python
-cfg = SimulationConfig(
-    resist_model="full_chem",
-    enable_stochastic=True,
-    stochastic_n_realisations=10,
-    dill_A=0.5, dill_B=0.2, dill_C=0.05,
-    peb_D=5.0, peb_k=0.3, peb_t_bake=60.0,
-    mack_R_max=100.0, mack_R_min=0.1, mack_n=5.0, mack_M_th=0.5,
-)
-
-result = run_simulation(cfg)
-print(f"CD: {result.cd_nm:.2f} nm")
-print(f"LER: {result.ler_nm:.3f} nm")
-print(f"LWR: {result.lwr_nm:.3f} nm")
-if result.resist_profile is not None:
-    print(f"Resist profile: {result.resist_profile.shape}")
+cfg = SimulationConfig(period_nm=64.0, line_width_nm=32.0, dose_mj_cm2=1.3,
+                       resist_model="full_chem", enable_stochastic=True,
+                       stochastic_n_realisations=10, stochastic_seed=42, se_blur_nm=5.0)
 ```
 
-### 2.2 Resist Presets
+Named measurement anchors are in `euvsimulator.presets`: `nxe1716_config()`, `met2d_config()`,
+`load_nxe1716_anchor()`, `load_met2d_anchor()`. The anchor data sits in
+`src/euvsimulator/data/anchors/`.
 
-`RESIST_PRESETS` contains only typical secondary-electron blur lengths:
+A simulation can be cancelled and reports progress; see `SimulationCancelledError` and the
+progress hook in `pipeline.py`.
+
+## 4. CLI
+
+| Command | Purpose |
+|---|---|
+| `simulate` | one end-to-end simulation |
+| `process-window` | Bossung plot over dose × focus, CD heatmap, DoF and EL |
+| `calibrate` | fit resist parameters to measured wafer CD data (`--bands` for uncertainty) |
+| `make-mask` | line/space test mask as GDSII |
+| `serve` | browser GUI and REST API |
+| `materials` | query the CXRO database |
+| `bench` | performance benchmark |
+| `version`, `info` | version and system information |
+
+There is no `euv notebook` command; open the notebooks with Jupyter directly.
+
+## 5. Post-processing and calibration helpers
 
 ```python
-from euvsimulator.pipeline import RESIST_PRESETS
+from euvsimulator.metro.process_window import process_window, dose_matrix
+# process_window(cd_matrix, doses, focuses, target_cd=32.0, tolerance=0.1)
+#   -> {"dof_nm", "el_pct", "best_dose", "best_focus", ...}
 
-# RESIST_PRESETS = {"CAR": 5.0, "nonCAR": 2.5, "HighNA": 3.0}
-# Each value is se_blur_nm in nm.
-cfg = SimulationConfig(period_nm=64, line_width_nm=32, dose_mj_cm2=20,
-                       se_blur_nm=RESIST_PRESETS["CAR"])
-```
-
-See the CLI (`euv simulate --help`) for full Dill, PEB, Mack, and stochastic
-parameter names and defaults.
-
-### 2.3 Process Window (via CLI)
-
-```bash
-euv process-window \
-  --period 64 --cd 32 --dose-start 10 --dose-end 40 --dose-steps 7 \
-  --focus-start -50 --focus-end 50 --focus-steps 7 \
-  --output pw_results.json --output-plot pw_heatmap.png --output-csv pw.csv \
-  --tolerance 0.1
-```
-
-A post-processing helper is available in `euvsimulator.metro.process_window`:
-
-```python
-from euvsimulator.metro.process_window import process_window
-import numpy as np
-
-# Pre-compute a CD matrix via a dose×focus sweep (e.g. using the CLI
-# or a manual loop over SimulationConfig), then analyse it:
-cd_matrix = np.array([[30.0, 28.5, 27.0], ...])  # shape (n_focus, n_dose)
-doses = [10.0, 15.0, 20.0, 30.0, 40.0]
-focuses = [-50.0, -25.0, 0.0, 25.0, 50.0]
-
-result = process_window(
-    cd_matrix=cd_matrix,
-    doses=doses,
-    focuses=focuses,
-    target_cd=32.0,
-    tolerance=0.1,
-)
-# result: dict with keys 'dof_nm', 'el_pct', 'best_dose', 'best_focus'
-```
-
-### 2.4 Calibration (Wafer CD → Resist Parameters)
-
-```python
 from euvsimulator.calibrate import WaferCDData, fit_resist_params, bootstrap_fit
-import numpy as np
-
-# FEM CD data: shape (n_dose, n_focus)
-data = WaferCDData(
-    dose_values=np.array([10, 15, 20, 30]),
-    focus_values=np.array([-50, -25, 0, 25, 50]),
-    cd_matrix_nm=...,  # measured CD values
-)
-result = fit_resist_params(
-    data,
-    initial_params={"dill_C": 0.05, "mack_n": 5.0},
-    pipeline_fn=lambda dose, focus, **kw: ...,
-    bounds={"dill_C": (0.01, 0.5)},
-)
-# result: {"fitted_params": {...}, "rmse": ..., "success": True}
+# WaferCDData(dose_values, focus_values, cd_matrix_nm)
+# fit_resist_params(data, initial_params, pipeline_fn, bounds=None, method="Nelder-Mead")
 ```
 
----
+`dose_matrix` calls `pipeline_fn(dose, focus)` positionally and does not swallow exceptions.
 
-## 3. CLI Commands
+## 6. Notebooks
 
-```bash
-euv --help
-```
-
-| Command | Description |
-|---------|-------------|
-| `simulate` | Run a single simulation (all resist and mask parameters) |
-| `process-window` | Bossung plot over dose × focus, CD heatmap, DoF/EL |
-| `calibrate` | Fit resist parameters to measured wafer CD data |
-| `make-mask` | Generate a line/space test mask as GDSII |
-| `serve` | Start the REST API server |
-| `materials` | Query the CXRO material database |
-| `bench` | Run a performance benchmark |
-| `version`, `info` | Version and system information |
-
-All commands accept config files via `--config`.
-
----
-
-## 4. Jupyter Notebooks
-
-Six notebooks in `notebooks/`:
+Six notebooks in `notebooks/`, all executed in CI on pushes to `main` and on pull requests
+(skipped for tags, whose commit has already run on `main`).
 
 | Notebook | Focus |
-|----------|-------|
-| `01_aerial_image.ipynb` | Aerial image formation, pupil, coherence, TCC |
-| `02_nils_cd.ipynb` | NILS analysis, CD extraction, SE blur effects |
-| `03_resist_chain.ipynb` | Dill ABC, PEB, development, parameter sweeps |
-| `04_process_window.ipynb` | Bossung curves, CD heatmaps, DoF/EL, CSV export |
-| `05_stochastics.ipynb` | Shot noise, LER/LWR extraction, verification gates |
-| `06_mask3d.ipynb` | RCWA 1D/2D, mask 3D effects, Fourier orders |
+|---|---|
+| `01_aerial_image.ipynb` | aerial image formation, pupil, coherence |
+| `02_nils_cd.ipynb` | NILS, CD extraction, SE-blur effect |
+| `03_resist_chain.ipynb` | Dill ABC, PEB, development, photon budget |
+| `04_process_window.ipynb` | Bossung, DoF/EL, NA comparison, MEEF |
+| `05_stochastics.ipynb` | shot noise, LER/LWR, dose scaling |
+| `06_mask3d.ipynb` | RCWA orders, convergence, best focus |
 
----
+## 7. What a physics change must pass
 
-## 5. Physics Validation
+1. `pytest -q` — the full suite, including goldens held to 1e-4 nm.
+2. The NILS gate in `tests/test_reference_nils.py`: the difference to an inlined NumPy/SciPy
+   Hopkins reference (no euvsimulator imports) must stay below 0.3.
+3. All six notebooks execute without error.
+4. `ruff check .` and `mypy src`.
 
-Any PR changing physics must pass:
+Before changing physics, measure the change with a monkey patch against a falsifiable prediction
+written down in advance. `docs/physics.md` records every default with its source and status.
 
-1. **Full test suite:** `pytest tests/ -x -q` — 789 tests passing (baseline)
-2. **NILS Gate:** `|euvsimulator - Reference| < 0.3` for sinusoidal grating
-3. **Notebook Execution:** All 6 notebooks execute without error
+## 8. Scientific status
 
-Reference model: inlined in `tests/test_reference_nils.py` (pure NumPy/SciPy Hopkins/TCC
-implementation, no euvsimulator imports — correction 2026-09-04: this used to live in a
-standalone `scripts/reference_model.py`; that file no longer exists in the repository, the
-reference implementation was consolidated directly into the test module instead. This
-document was not updated at the time of that consolidation).
+| Layer | Status |
+|---|---|
+| Hopkins/TCC optics | internally validated against an independent NumPy reference |
+| Mo/Si multilayer TMM | internally validated, Fresnel limits and phase confirmed |
+| Aerial image, threshold resist | implemented, grid-convergent |
+| Full chemistry (Dill, PEB, Mack) | implemented, defaults sourced |
+| Stochastics, LER/LWR | implemented |
+| Wafer calibration | implemented, with uncertainty bands |
+| External quantitative validation | **open**: at the NXE1716 anchor the printing dose is 1.7–1.9× the measurement; at MET-2D the roughness is 4.3 nm 3σ against 6.7 nm measured |
 
----
+Known model weakness: the `aerial_threshold` model normalises the threshold to the image mean
+(`resist_threshold_norm × mean(aerial) × 20/dose`), so its MEEF is 0.50 where the full chemistry
+gives 1.28. Use `resist_model="full_chem"` for mask-error sensitivity. See README, known
+limitations.
 
-## 6. Scientific Status
-
-| Layer | Status | Detail |
-|-------|--------|--------|
-| **Hopkins/TCC optics** | ✅ Internally mathematically validated | Bitwise match with independent numpy reference (12/12 cases) |
-| **TMM (Mo/Si ML, Ta absorber)** | ✅ Internally validated | Fresnel limits confirmed, phase propagates (Δφ≈179°, 15% CD impact) |
-| **Aerial image** | ✅ Grid-convergent, always non-negative | Sub-pixel CD extraction monotonic, 0.04 nm span 64→1024 |
-| **Aerial-threshold resist** | ✅ Implemented, grid-convergent | `resist_model="aerial_threshold"` |
-| **Full-chem resist** | ✅ Implemented (Dill, PEB, Mack) | `resist_model="full_chem"` with Dill A/B/C, PEB kinetics, Mack development |
-| **Stochastic/LER/LWR** | ✅ Implemented | `enable_stochastic=True`, photon shot noise, LER/LWR extraction |
-| **Wafer calibration** | ✅ Implemented | `calibrate` module: `WaferCDData`, `fit_resist_params`, `bootstrap_fit` |
-| **Dose** | ⚠️ Model parameter (mJ/cm²) | No absolute photon-flux→resist-energy calibration; dose scales aerial image |
-| **CD** | ⚠️ Optical threshold CD | Not an experimentally validated wafer CD |
-| **NILS** | ⚠️ Optical metric | Same aerial-image threshold as CD; not a resist-performance metric |
-| **Mask model** | ⚠️ Thin-mask / scalar | 3D mask effects available via optional RCWA (`--use-rcwa`) |
-| **External quantitative validation** | ❌ Unvalidated | No public reference with identical parameters (PROLITH/Dr.LiTHO N/A) |
-
-**Classification:** Internally mathematically validated, physically simplified, externally quantitatively unvalidated.
-
-**Standard result (aerial_threshold, grid=256):** CD=27.62 nm, NILS=4.97 — optical threshold-CD of the implemented model, not a wafer-validated value.
-
-**Threshold normalization:** The implementation uses `mean(aerial)`, not `max(aerial)` (the docstring at pipeline.py:247 contains an outdated reference to "max").
-
----
-
-## 7. Contribution Workflow
-
-```bash
-git checkout -b feat/your-change
-# Make changes, then:
-pip install -e ".[dev]"
-pytest tests/ -x -q
-git add .
-git commit -m "feat(scope): description"
-git push origin feat/your-change
-# Open PR at https://github.com/Flowbudget/euvsimulator/pulls
-```
-
-**PR Requirements:**
-- Tests pass
-- Conventional commit messages
-
----
-
-## 8. Project Structure
+## 9. Repository layout
 
 ```
 src/euvsimulator/
-├── source/         LPP Sn-plasma emission
-├── materials/      CXRO f1/f2 database
-├── optics/         Multilayer TMM
-├── mask3d/         RCWA 1D/2D
-├── aerial/         Abbe/Hopkins imaging
-├── resist/         Dill ABC, PEB, development, stochastic
-├── metro/          CD metrology, process window
-├── calibrate/      Wafer fitting + bootstrap uncertainty
-├── pipeline.py     End-to-end orchestration
-├── io/             CLI, GDSII, rasterization
-├── api/            FastAPI REST server (optional)
-└── accel/          GPU acceleration device selection
-
-tests/              789 tests (unit + integration)
-notebooks/          6 verified notebooks
-scripts/            gen_notebooks.py, download_cxro.py/.sh, run_tests.sh, setup_github.sh
-                    (correction 2026-09-04: a `validate_nils.py` was referenced here
-                    previously but does not exist in the repository; NILS cross-validation
-                    against the reference model actually lives in
-                    tests/test_reference_nils.py, see Section 5 above)
+  source/      LPP Sn-plasma power budget (parametric, not wired into imaging)
+  materials/   CXRO f1/f2 database
+  optics/      multilayer TMM
+  mask3d/      RCWA 1D/2D
+  aerial/      Abbe/Hopkins imaging
+  resist/      Dill ABC, SE blur, PEB kinetics, development, stochastics
+  metro/       CD metrology, process window
+  calibrate/   wafer fitting, bootstrap, bands
+  io/          CLI, GDSII, rasterisation
+  api/         FastAPI REST server and browser GUI
+  accel/       device selection, VRAM budget, chunking
+  etch/, opc/  etch bias and an ILT bridge; not wired into the pipeline or CLI
+  pipeline.py  end-to-end orchestration, SimulationConfig, SimulationResult
+  presets.py   named anchors: nxe1716_config(), met2d_config()
+  constants.py physical constants; materials.py thin material helpers
+tests/         989 tests (2026-09-12)
+notebooks/     6 notebooks
 ```
 
----
+## 10. Contributing
 
-## 9. Contact & Community
+```bash
+git checkout -b feat/your-change
+pytest -q && ruff check . && mypy src
+git commit -m "feat(scope): description"   # conventional commits
+```
 
-- **Issues:** https://github.com/Flowbudget/euvsimulator/issues
-- **Discussions:** https://github.com/Flowbudget/euvsimulator/discussions
-- **Security:** See SECURITY.md
-
----
-
-## 10. License
-
-Apache-2.0 — permissive, allows commercial use, modification, distribution.
+Issues and Discussions are open; security reports go through GitHub private vulnerability
+reporting, see `SECURITY.md`. Licence Apache-2.0.

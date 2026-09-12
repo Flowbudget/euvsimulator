@@ -4,7 +4,7 @@ Connects all modules: mask → RCWA → aerial image → resist → CD.
 
 Resist presets (typical SE blur sigma for different resist types):
     RESIST_PRESETS = {
-        "CAR": 5.0,      # Chemically Amplified Resist (typical EUV)
+        "CAR": 2.5,      # Chemically Amplified Resist (DEFAULT_SE_BLUR_NM)
         "nonCAR": 2.5,   # Non-chemically amplified / metal resist
         "HighNA": 3.0,   # High-NA EUV (thinner resist)
     }

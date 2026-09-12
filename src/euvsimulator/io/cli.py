@@ -107,7 +107,12 @@ def simulate(
         ),
     ),
     resist_preset: Optional[str] = typer.Option(
-        None, "--resist-preset", help="Resist preset: CAR (5nm), nonCAR (2.5nm), HighNA (3nm)"
+        None,
+        "--resist-preset",
+        help=(
+            "se_blur_nm preset: CAR (2.5 nm, Thackeray 2010); nonCAR (2.5 nm) and "
+            "HighNA (3 nm) are unsourced placeholders"
+        ),
     ),
     resist_model: str = typer.Option(
         "aerial_threshold", "--resist-model", help="Resist model: aerial_threshold or full_chem"

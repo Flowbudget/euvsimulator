@@ -3747,3 +3747,41 @@ Dose-to-Size: CD 32,00/32,01 nm über ±50 nm (isofokal), NILS 5,10→4,46/4,43.
 0,0853/0,0764/0,0755, 0/0,0029/0,0030; |−1|/|+1| 0,855 TE / 0,796 TM; Konvergenz 0. Ordnung 0,1333 (11) → 0,1363 (61),
 21 Ordnungen 0,7 % darunter; bester Fokus dünn 0 nm, RCWA +25 nm; über Pitch 40–96 nm +10…+30 nm (10-nm-Schritte).
 
+
+## 2026-09-12 (Fortsetzung 50): GitHub-Metadaten, Release-Notizen, Notebook-Timeout, Agentendateien
+**Anlass:** Frage des Nutzers zu den Topics, dazu der damalige About-Text. Prüfung ergab falsche oder
+veraltete Angaben in der Repo-Beschreibung **und** in vier Dateien, die sich an KI-Agenten richten.
+**GitHub-Metadaten (nach ausdrücklicher Freigabe im Chat, alte Werte vorher gesichert):** About neu gefasst,
+ohne „Physics-accurate“ (die README sagt selbst: nicht für Produktionsresists validiert), ohne „LPP Sn-plasma
+source“ (das Modul ist ein parametrisches Leistungsbudget, nicht an die Abbildung angebunden) und ohne
+Testzahl (534 war veraltet, 989 wäre morgen wieder falsch; das CI-Badge zeigt den Zustand live). Topics:
+`a2a-agent`, `agent-friendly`, `mcp-server` entfernt (kein Code dafür im Repo), `plasma-physics` entfernt
+(s. o.); neu `rcwa`, `line-edge-roughness`, `stochastic-simulation`, `python`. Homepage geleert, weil
+`flowbudget.github.io/euvsimulator` 404 liefert (Pages ist nicht eingerichtet).
+**Release v2.2.1:** Titel und Notizen aus dem CHANGELOG gesetzt (vorher nur der automatische
+Vergleichslink); Wheel `euvsimulator-2.2.1-py3-none-any.whl` hängt an, kein Entwurf.
+**CI-Befund:** Der Tag-Lauf 34649346387 war nur im Job „Execute Notebooks“ rot: `CellTimeoutError` nach
+900 s in der Dill-C-Schleife von Notebook 05 (8 Konfigurationen × 3 Realisierungen, Vollchemie). Derselbe
+Commit 21f9fc6 lief auf main grün, dort brauchte Notebook 05 insgesamt 994 s — die Mietmaschinen streuen auf
+dieser Zelle um mehr als das Doppelte. Das Limit ist laut Kommentar im Workflow ausdrücklich eine
+Hänger-Sicherung, kein Laufzeitbudget → auf 2400 s angehoben. Zusätzlich wird der Notebook-Job bei Tags
+übersprungen (`if: "!startsWith(github.ref, 'refs/tags/')"`): der Tag-Commit ist per Definition schon auf
+main geprüft, der Lauf kostete rund 30 Minuten Kontingent und belegte nichts Neues.
+**Agentendateien:** `mcp/server.json` und `.well-known/agent-card.json` gelöscht (Git behält sie in der
+Historie). Sie beschrieben einen MCP-Server mit drei Werkzeugen und einen A2A-Endpunkt, für die es keinen
+Code gibt; die Schemas nannten zudem nicht existierende Werte („quadrupole“, resist_model „stochastic“),
+das abgeschaffte Ausgabefeld Q, „48 wheel configurations“ (es sind 3 OS × 4 Python = 12 Testläufe und ein
+plattformunabhängiges Wheel), „534 tests“ und eine 404-URL. `llms.txt` und `agents.md` neu geschrieben, jede
+Angabe gegen den Arbeitsbaum geprüft: kein `euv notebook` (kein solcher Befehl), kein Verweis auf die nicht
+existierende `docs/cli.rst`, echte Defaults (se_blur 2,5; Dill A 0/B 4,44/C 0,0152; grid 256), echte
+Ergebnisfelder, Entwicklung korrekt als Eikonal-Front plus Säulenmodell benannt (vorher „level-set“ und
+„PEB (ADI solver)“), `etch` und `opc` ausdrücklich als nicht angebunden markiert, Testzahl mit Datum, und ein
+Abschnitt „What does not exist“ für Agenten, die nach einem Werkzeug-Endpunkt suchen.
+**Zwei Faktenfehler im Code selbst mitkorrigiert:** die Hilfe von `--resist-preset` nannte „CAR (5nm)“,
+`RESIST_PRESETS["CAR"]` ist aber `DEFAULT_SE_BLUR_NM` = 2,5 nm (so auch von `test_se_blur_default` geprüft);
+der Modul-Docstring in `pipeline.py` zeigte dieselbe alte 5,0. Die Hilfe sagt jetzt zusätzlich, dass nonCAR
+und HighNA unbelegte Platzhalter sind.
+**Prüfungen (2026-09-12, 02:35 CEST):** `ruff check src/ tests/` und `ruff format --check` grün (126 Dateien),
+`mypy src/euvsimulator --python-version 3.12` grün (56 Dateien), die 48 Tests der berührten Module grün,
+Suite sammelt 989 Tests. Push mit `[skip ci]`, weil nur Doku, Workflow-Konfiguration und zwei Hilfetexte
+betroffen sind; die neue Workflow-Datei wurde lokal als YAML geparst.

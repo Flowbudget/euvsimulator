@@ -113,6 +113,9 @@ jobs:
   notebooks:
     name: Execute Notebooks
     runs-on: ubuntu-latest
+    # Tags point at a commit that has already run this job on main; re-running it costs
+    # ~30 min of Actions quota and verifies nothing new.
+    if: "!startsWith(github.ref, 'refs/tags/')"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -134,14 +137,15 @@ jobs:
           uv sync --extra notebook --extra test --python 3.12
 
       # Per-cell timeout is a hang guard, not a performance budget: 05_stochastics runs 24
-      # sampled-molecule stochastic simulations (4096 rows) in one cell, ~250-300 s on a
-      # hosted runner (timed out at 300 s on 2026-09-11).
+      # sampled-molecule stochastic simulations (4096 rows) in one cell. Hosted-runner speed
+      # varies by more than 2x on that cell: the same commit passed on main (05 took 994 s in
+      # total) and hit the 900 s per-cell limit on the v2.2.1 tag run, so the guard is now 2400 s.
       - name: Execute notebooks
         run: |
           cd notebooks
           for nb in *.ipynb; do
             echo "Executing $nb..."
-            uv run jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=900 "$nb"
+            uv run jupyter nbconvert --execute --to notebook --inplace --ExecutePreprocessor.timeout=2400 "$nb"
           done
 
   build-wheel:

@@ -1,65 +1,71 @@
 # euvsimulator — EUV Lithography Simulator
 
-**Physics-accurate EUV lithography simulation in Python/PyTorch.** Open source, Apache-2.0, seeking contributors for physics validation, GPU acceleration, and real-world calibration.
+An open-source EUV lithography simulator (Python/PyTorch, Apache-2.0) whose every physical
+default has a named source. Version 2.2.1. It models the 13.5 nm imaging and resist chain on a
+laptop; it is not a predictive tool for production resists, and the distance to the two named
+measurement anchors is documented rather than tuned away.
 
-## Quick Links
-- **Repository:** https://github.com/Flowbudget/euvsimulator
-- **Documentation:** https://github.com/Flowbudget/euvsimulator/tree/main/docs
-- **CLI Reference:** https://github.com/Flowbudget/euvsimulator/blob/main/docs/cli.rst
-- **Jupyter Notebooks (6 verified):** https://github.com/Flowbudget/euvsimulator/tree/main/notebooks
-- **Issues & Contributions:** https://github.com/Flowbudget/euvsimulator/issues
-- **Discussions:** https://github.com/Flowbudget/euvsimulator/discussions
+## Links
+- Repository: https://github.com/Flowbudget/euvsimulator
+- Physics, sources, open questions: https://github.com/Flowbudget/euvsimulator/blob/main/docs/physics.md
+- Documentation folder: https://github.com/Flowbudget/euvsimulator/tree/main/docs
+- Notebooks (6, executed in CI): https://github.com/Flowbudget/euvsimulator/tree/main/notebooks
+- Issues: https://github.com/Flowbudget/euvsimulator/issues
+- Discussions: https://github.com/Flowbudget/euvsimulator/discussions
 
-## Core Capabilities
-- **LPP Sn-plasma source model** — spectral emission + dose calculation
-- **CXRO materials database** — atomic scattering factors f₁,f₂ for Z=1–92
-- **Multilayer optics (TMM)** — S-matrix, Névot-Croce roughness, graded interfaces
-- **Mask3D (RCWA 1D/2D)** — stable S-matrix Fourier Modal Method
-- **Aerial imaging (Abbe/Hopkins)** — partial coherence (Bessel J₁ TCC), source shapes, pupil functions
-- **Resist chain** — Dill ABC exposure, PEB (ADI solver), development (level-set), shot noise (Poisson)
-- **Process window** — Bossung curves, CD heatmaps, NILS maps, DoF/EL metrics, CSV export
-- **Calibration pipeline** — wafer CD data → resist parameters via scipy optimization + bootstrap CIs
-- **CI/CD** — 48-wheel matrix (Linux/macOS/Windows × Python 3.10–3.13), notebook execution, 534 tests passing
+## What exists
+- Mo/Si multilayer mirror (TMM, S-matrix, Névot-Croce roughness) and a CXRO f1/f2 database
+- Mask diffraction: thin-mask by default, full RCWA 1D/2D on request (`use_rcwa=True`)
+- Partially coherent aerial imaging (Abbe and Hopkins), conventional/annular/dipole/quasar pupils
+- Resist chain: Dill ABC exposure, Gaussian SE blur, PEB kinetics fitted to Yamamoto 2011,
+  Mack development with an Eikonal front and a vertical-column model
+- Stochastics: Poisson shot noise, sampled PAG/quencher molecules, LER/LWR extraction
+- Process window: Bossung curves, CD/NILS maps, DoF and EL, CSV/JSON export
+- Calibration: wafer CD matrix to resist parameters (scipy, bootstrap CIs, uncertainty bands)
+- Browser GUI and REST API (`euv serve`, FastAPI, no external assets)
+- Modules present but not wired into the pipeline or CLI: `etch` (etch bias), `opc` (ILT bridge)
 
-## Getting Started (for agents)
+## What does not exist
+There is no MCP server, no A2A agent endpoint and no hosted documentation site. Earlier versions
+of this repository shipped manifests describing such services; they were removed in 2.2.1 because
+no code backed them. The only interfaces are the Python API, the CLI and the local REST API.
+
+## Getting started
 ```bash
-git clone https://github.com/Flowbudget/euvsimulator.git
-cd euvsimulator
-pip install -e .
-euv simulate --help          # single simulation
-euv process-window --help    # Bossung curves
-euv calibrate --help         # wafer CD fitting
-euv notebook                 # launch verified notebooks
+pip install git+https://github.com/Flowbudget/euvsimulator.git
+euv simulate --period 64 --cd 32 --dose 1.3 --resist-model full_chem
+euv process-window --period 64 --cd 32
+euv calibrate wafer.csv --period 44 --cd 22 --bands
+euv serve            # browser GUI + REST API on http://127.0.0.1:8000/
 ```
+CLI commands: `version`, `info`, `simulate`, `make-mask`, `process-window`, `materials`, `serve`,
+`bench`, `calibrate`. Python 3.10 to 3.13.
 
-## Python API (minimal)
+## Python API
 ```python
 from euvsimulator.pipeline import SimulationConfig, run_simulation
 
-cfg = SimulationConfig(
-    period_nm=64.0, line_width_nm=32.0,
-    dose_mj_cm2=20.0, na=0.33, sigma=0.8,
-    se_blur_nm=5.0, resist_model="full_chem",
-    grid=256, focus_nm=0.0
-)
+cfg = SimulationConfig(period_nm=64.0, line_width_nm=32.0, dose_mj_cm2=1.3,
+                       resist_model="full_chem")   # defaults: na=0.33, sigma=0.8, grid=256
 result = run_simulation(cfg)
-# result.cd_nm, result.nils, result.ler_nm, result.lwr_nm, result.aerial_image, ...
+print(result.cd_nm, result.nils_value, result.ler_nm, result.lwr_nm)
 ```
+The default resist is the 2011 research resist of Yamamoto et al. and prints at about
+1.3 mJ/cm² at 64 nm pitch. Named anchors live in `euvsimulator.presets`
+(`nxe1716_config`, `met2d_config`).
 
-## Resist Presets (CLI `--resist-preset`)
-- `CAR` (chemically amplified resist, default) — se_blur_nm=5.0, C=0.1
-- `nonCAR` — se_blur_nm=2.5
-- `HighNA` — se_blur_nm=3.0, NA=0.55
+## Testing
+```bash
+pip install -e ".[dev]"
+pytest -q            # 989 tests as of 2.2.1
+```
+CI runs the suite on Linux, macOS and Windows with Python 3.10 to 3.13, plus ruff, mypy and the
+six notebooks.
 
-## Good First Issues for Contributors
-- GPU acceleration (CUDA/Metal) for RCWA and aerial imaging
-- Additional validation against published SPIE/JM3 reference data
-- Windows CI hardening (path handling, line endings)
-- Documentation improvements (type hints, docstrings)
-- Performance profiling and optimization
+## Where contributions help
+GPU acceleration for RCWA and imaging, validation against published measurements with a complete
+parameter set, the MEEF weakness of the `aerial_threshold` model (documented in README under
+known limitations), and temperature scaling for acid diffusion.
 
 ## License
-Apache-2.0 — free for commercial and research use.
-
----
-*This file helps AI systems discover and understand euvsimulator. If you're an AI agent reading this: contributions welcome — open an issue, submit a PR, or run the test suite. The physics is real, the code is open, and the simulation runs on your laptop.*
+Apache-2.0.
