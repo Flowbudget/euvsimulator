@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>euvsimulator</title>
+  <link rel="stylesheet" href="/static/style.css?v=__VERSION__" />
+</head>
+<body>
+
+  <header>
+    <div class="container header-row">
+      <div class="brand">
+        <div class="brand-text">
+          <h1>euvsimulator</h1>
+          <span>Open source EUV lithography simulator · 13.5 nm · line/space</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span class="header-status-text" id="status-text">checking…</span>
+        <span class="header-version" id="version-text"></span>
+        <a class="header-link" href="/docs" target="_blank" rel="noopener">API docs</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container workspace">
+
+    <!-- ── Parameters (generated from GET /fields and GET /presets) ── -->
+    <aside class="params">
+      <form id="sim-form" novalidate>
+
+        <h3>Task</h3>
+        <div class="task-row" id="task-row">
+          <button type="button" data-task="simulate" class="active">Simulation</button>
+          <button type="button" data-task="process_window">Process window</button>
+          <button type="button" data-task="bands">Uncertainty bands</button>
+        </div>
+
+        <div class="task-panel hidden" id="panel-process_window">
+          <div class="param">
+            <label>Dose start / end [mJ/cm²] / steps</label>
+            <div class="param-inputs">
+              <input type="number" id="pw-dose-start" step="any" value="10" />
+              <input type="number" id="pw-dose-end" step="any" value="40" />
+              <input type="number" id="pw-dose-steps" step="1" value="7" />
+            </div>
+          </div>
+          <div class="param">
+            <label>Focus start / end [nm] / steps</label>
+            <div class="param-inputs">
+              <input type="number" id="pw-focus-start" step="any" value="-50" />
+              <input type="number" id="pw-focus-end" step="any" value="50" />
+              <input type="number" id="pw-focus-steps" step="1" value="7" />
+            </div>
+          </div>
+          <div class="param">
+            <label for="pw-tolerance">CD tolerance (fraction)</label>
+            <input type="number" id="pw-tolerance" step="0.01" value="0.1" />
+            <small>Dose × focus grid of single runs; DoF and EL from metro.process_window. The main parameters below are the base point (dose and defocus are swept).</small>
+          </div>
+        </div>
+
+        <div class="task-panel hidden" id="panel-bands">
+          <div class="param">
+            <label>Rows / seeds (comma separated)</label>
+            <div class="param-inputs param-pair">
+              <input type="number" id="bands-rows" step="1" value="1024" />
+              <input type="text" id="bands-seeds" value="1, 2, 3" />
+            </div>
+          </div>
+          <div class="param">
+            <label>Dose search range [mJ/cm²]</label>
+            <div class="param-inputs param-pair">
+              <input type="number" id="bands-dose-lo" step="any" value="0.3" />
+              <input type="number" id="bands-dose-hi" step="any" value="60" />
+            </div>
+            <small>Same as <code>euv calibrate --bands</code>: dose-to-size under both PEB acid-loss laws, 3σ LWR with photon noise alone and with dissolution-cell noise (1 and 4.3 nm). Needs the full-chemistry model; minutes at grid 128.</small>
+          </div>
+        </div>
+
+        <div class="run-row">
+          <button type="submit" class="btn btn-success" id="sim-submit-btn">
+            <span class="spinner hidden" id="sim-spinner"></span>
+            Run
+          </button>
+          <button type="button" class="btn btn-danger hidden" id="cancel-btn">Cancel</button>
+          <span class="run-time" id="sim-time"></span>
+        </div>
+        <div class="estimate" id="estimate"></div>
+        <div class="progress hidden" id="progress">
+          <div class="progress-bar"><div id="progress-fill"></div></div>
+          <div class="progress-text"><span id="progress-msg"></span><span id="progress-pct"></span></div>
+        </div>
+
+        <div id="error-bar" class="alert alert-error error-bar hidden">
+          <span id="error-text"></span>
+        </div>
+
+        <h3>Start from</h3>
+        <div class="param">
+          <label for="preset">Preset</label>
+          <select id="preset"></select>
+          <small id="preset-summary"></small>
+          <button type="button" class="btn btn-secondary btn-small" id="reset-btn">Reset to preset</button>
+        </div>
+        <details class="provenance">
+          <summary>Where these numbers come from</summary>
+          <p id="preset-provenance"></p>
+        </details>
+
+        <h3>Main parameters</h3>
+        <div id="head-fields"></div>
+
+        <div id="group-fields"></div>
+
+        <div class="params-loading" id="params-loading">
+          <span class="spinner"></span> Loading the field catalogue…
+        </div>
+
+        <datalist id="elements"></datalist>
+      </form>
+    </aside>
+
+    <!-- ── Output ── -->
+    <section class="output">
+
+      <div class="card" id="profile-card">
+        <div class="card-header">
+          <h2>Cross section through the image</h2>
+          <span class="card-note" id="plot-note"></span>
+        </div>
+        <div class="card-body plot-body">
+          <div class="plot-placeholder" id="plot-placeholder">
+            Pick a preset, adjust what you like and press <strong>Run</strong>.
+          </div>
+          <svg id="plot" class="plot hidden" viewBox="0 0 800 380" preserveAspectRatio="xMidYMid meet" role="img"
+               aria-label="Aerial image cross section"></svg>
+          <div class="legend hidden" id="plot-legend">
+            <span><i class="sw sw-aerial"></i>local dose</span>
+            <span id="legend-thr"><i class="sw sw-thr"></i>threshold used for CD</span>
+            <span><i class="sw sw-resist"></i>developed (resist removed)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tiles" id="results">
+        <div class="tile"><span class="tile-label">CD</span><span class="tile-value" id="r-cd">—</span><span class="tile-unit">nm</span></div>
+        <div class="tile"><span class="tile-label">NILS</span><span class="tile-value" id="r-nils">—</span><span class="tile-unit"></span></div>
+        <div class="tile"><span class="tile-label">Contrast</span><span class="tile-value" id="r-contrast">—</span><span class="tile-unit">%</span></div>
+        <div class="tile" title="|r|² of the absorber-on-multilayer stack at the 6° chief ray (not the pattern average)"><span class="tile-label">Absorber reflectivity</span><span class="tile-value" id="r-refl">—</span><span class="tile-unit">%</span></div>
+        <div class="tile"><span class="tile-label">Dose</span><span class="tile-value" id="r-dose">—</span><span class="tile-unit">mJ/cm²</span></div>
+        <div class="tile hidden" id="tile-ler"><span class="tile-label">LER 1σ</span><span class="tile-value" id="r-ler">—</span><span class="tile-unit">nm</span></div>
+        <div class="tile hidden" id="tile-lwr"><span class="tile-label">LWR 1σ</span><span class="tile-value" id="r-lwr">—</span><span class="tile-unit">nm</span></div>
+      </div>
+
+      <div class="card hidden" id="pw-card">
+        <div class="card-header">
+          <h2>Process window (Bossung table)</h2>
+          <span class="card-note" id="pw-note"></span>
+        </div>
+        <div class="card-body">
+          <div class="tiles" style="margin-bottom:12px">
+            <div class="tile"><span class="tile-label">Depth of focus</span><span class="tile-value" id="pw-dof">—</span><span class="tile-unit">nm</span></div>
+            <div class="tile"><span class="tile-label">Exposure latitude</span><span class="tile-value" id="pw-el">—</span><span class="tile-unit">%</span></div>
+            <div class="tile"><span class="tile-label">Target CD</span><span class="tile-value" id="pw-target">—</span><span class="tile-unit">nm</span></div>
+          </div>
+          <div class="matrix-wrap" id="pw-matrix"></div>
+          <div class="matrix-caption">CD [nm]; green = within tolerance of the target, rows = focus, columns = dose.</div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="bands-card">
+        <div class="card-header">
+          <h2>Structural uncertainty bands</h2>
+          <span class="card-note" id="bands-note"></span>
+        </div>
+        <div class="card-body">
+          <div class="tiles" style="margin-bottom:12px">
+            <div class="tile"><span class="tile-label">Dose-to-size band</span><span class="tile-value" id="bands-d2s">—</span><span class="tile-unit">mJ/cm²</span></div>
+            <div class="tile"><span class="tile-label">LWR 3σ band</span><span class="tile-value" id="bands-lwr">—</span><span class="tile-unit">nm</span></div>
+          </div>
+          <div class="matrix-wrap" id="bands-table"></div>
+          <div class="matrix-caption" id="bands-caption"></div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="notes-card">
+        <div class="card-header">
+          <h2>Reading this result</h2>
+          <span class="actions" id="export-actions"></span>
+        </div>
+        <div class="card-body"><ul class="notes" id="notes"></ul></div>
+      </div>
+
+      <details class="card" id="materials-card">
+        <summary class="card-header card-summary">
+          <h2>Materials (CXRO optical constants)</h2>
+          <span class="mat-count" id="material-count"></span>
+        </summary>
+        <div class="card-body">
+          <input type="text" class="material-search" id="material-search"
+                 placeholder="Filter by symbol or Z…" autocomplete="off" />
+          <div class="material-list" id="material-list"></div>
+          <div class="mat-detail" id="mat-detail">
+            <div class="mat-hint">Click an element to see n, k and the absorption length at 13.5 nm.</div>
+          </div>
+        </div>
+      </details>
+
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>euvsimulator · Apache-2.0 ·
+        <a href="https://github.com/Flowbudget/euvsimulator" target="_blank" rel="noopener">GitHub</a></p>
+      <p class="footer-note">No external assets: this page works offline. Optical constants: CXRO/Henke tables.</p>
+    </div>
+  </footer>
+
+  <script src="/static/app.js?v=__VERSION__"></script>
+</body>
+</html>

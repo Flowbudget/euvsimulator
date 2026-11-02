@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Simulation output
+output/
+*.png
+*.tiff
+*.h5
+*.hdf5
+
+# Logs
+*.log
+
+# Built documentation
+docs/_build/
+
+# Test / coverage artifacts
+.pytest_cache/
+coverage_html/
+.coverage
+.ruff_cache/
+
+# Secrets
+.env
+
+# Debug / scratch files
+_debug*.py
+_test*.py
+
+# Ad-hoc analysis scripts
+scratch/
+
+# README screenshots of the browser GUI (rendered from the GUI itself)
+!docs/images/*.png
+
+# test-run artefacts written into the repo root
+/process_window_cd.csv
+/process_window_metrics.json

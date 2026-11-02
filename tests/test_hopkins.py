@@ -1,0 +1,795 @@
+"""Tests for the Hopkins/TCC aerial image module."""
+
+from __future__ import annotations
+
+import pytest
+import torch
+
+from euvsimulator.aerial.abbe import _compute_tcc_matrix, aerial_from_orders
+from euvsimulator.aerial.hopkins import (
+    compare_hopkins_abbe,
+    compute_tcc,
+    hopkins_aerial,
+    tcc_soc_decomposition,
+)
+from euvsimulator.aerial.pupil import circular_pupil, pupil_grid
+from euvsimulator.aerial.source import conventional, dipole_x
+
+# ── Fixtures ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def G() -> int:
+    """Default grid size for tests."""
+    return 24
+
+
+@pytest.fixture
+def na() -> float:
+    return 0.33
+
+
+@pytest.fixture
+def sigma() -> float:
+    return 0.8
+
+
+@pytest.fixture
+def source(G: int, sigma: float) -> torch.Tensor:
+    return conventional(G, sigma=sigma)
+
+
+@pytest.fixture
+def pupil(G: int, na: float) -> torch.Tensor:
+    return circular_pupil(G, na=na)
+
+
+@pytest.fixture
+def fx_fy(G: int, na: float):
+    """Return (fx, fy, _) from pupil_grid."""
+    return pupil_grid(G, na=na)
+
+
+@pytest.fixture
+def thin_mask(G: int) -> torch.Tensor:
+    """A simple thin-mask: centred dark line on bright background.
+
+    This produces a diffraction spectrum that a partially coherent
+    system can image correctly — a good reference for comparing
+    Hopkins vs. Abbe.
+    """
+    mask = torch.ones(G, G, dtype=torch.float64)
+    # Dark line in the centre (3 pixels wide)
+    half = G // 2
+    mask[half - 1 : half + 2, :] = 0.0
+    return mask
+
+
+# ── TCC symmetry ──────────────────────────────────────────────────────
+
+
+class TestTccSymmetry:
+    """Verify that the TCC matrix is Hermitian (conjugate symmetric)."""
+
+    def test_hermitian_property(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        # TCC should equal its conjugate transpose
+        diff = tcc - tcc.mH
+        max_violation = diff.abs().max().item()
+        assert max_violation < 1e-10, f"TCC is not Hermitian (max violation = {max_violation:.2e})"
+
+    def test_diagonal_real(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        diag = tcc.diag()
+        # Diagonal of a Hermitian matrix must be real
+        imag_part = diag.imag.abs().max().item()
+        assert imag_part < 1e-12, f"TCC diagonal has imaginary part = {imag_part:.2e}"
+
+    def test_small_grid_hermitian(self):
+        """Test on a very small grid (faster)."""
+        G = 16
+        src = conventional(G, sigma=0.8)
+        pup = circular_pupil(G, na=0.33)
+        tcc = compute_tcc(src, pup, na=0.33, grid=G)
+        diff = tcc - tcc.mH
+        assert diff.abs().max().item() < 1e-10
+
+
+# ── SOCS decomposition ────────────────────────────────────────────────
+
+
+class TestTccDecomposition:
+    """Verify the SOCS kernel properties."""
+
+    def test_kernels_orthonormal(
+        self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor
+    ):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        n_kernels = min(16, G * G)
+        kernels = tcc_soc_decomposition(tcc, n_kernels=n_kernels)
+
+        # Each kernel is (G, G); flatten to (n_kernels, G²)
+        flat = kernels.reshape(n_kernels, -1)  # (N, G²)
+
+        # Inner product: <Φ_i, Φ_j> should be λ_i * δ_ij
+        # For the weighted kernels, inner = sum(conj(Φ_i) * Φ_j) = λ_i * δ_ij
+        # Since kernels = sqrt(λ) * Φ, the inner product:
+        # Σ conj(k_i) * k_j = sqrt(λ_i*λ_j) * Σ conj(Φ_i) * Φ_j
+        #                    = sqrt(λ_i*λ_j) * δ_ij
+
+        # Check that different kernels are approximately orthogonal
+        for i in range(min(8, n_kernels)):
+            for j in range(i + 1, min(8, n_kernels)):
+                inner = (flat[i].conj() * flat[j]).sum().abs().item()
+                assert inner < 1e-8, (
+                    f"SOCS kernels {i} and {j} not orthogonal (inner = {inner:.2e})"
+                )
+
+    def test_kernel_shape(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        n_kernels = 8
+        kernels = tcc_soc_decomposition(tcc, n_kernels=n_kernels)
+        assert kernels.shape == (
+            n_kernels,
+            G,
+            G,
+        ), f"Expected ({n_kernels}, {G}, {G}), got {kernels.shape}"
+
+    def test_dtype_complex128(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        kernels = tcc_soc_decomposition(tcc, n_kernels=4)
+        assert kernels.dtype == torch.complex128
+
+    def test_eigenvalues_positive(
+        self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor
+    ):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        n_kernels = 16
+        kernels = tcc_soc_decomposition(tcc, n_kernels=n_kernels)
+        # The norm (sum of |kernel|²) should be positive for all kernels
+        norms = (kernels.abs() ** 2).reshape(n_kernels, -1).sum(dim=1)
+        assert (norms > 0).all(), "Some SOCS kernels have zero norm"
+
+
+# ── Hopkins vs Abbe comparison ────────────────────────────────────────
+
+
+class TestHopkinsAerial:
+    """Compare Hopkins/TCC imaging with the Abbe reference."""
+
+    def test_hopkins_aerial_matches_abbe(
+        self,
+        G: int,
+        na: float,
+        source: torch.Tensor,
+        pupil: torch.Tensor,
+        thin_mask: torch.Tensor,
+        fx_fy,
+    ):
+        """For thin-mask, Hopkins ≈ Abbe within ~1%."""
+        fx, fy, _ = fx_fy
+
+        result = compare_hopkins_abbe(
+            thin_mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
+
+        # Both images should have plausible shape
+        assert result["hopkins_aerial"].shape == (G, G)
+        assert result["abbe_aerial"].shape == (G, G)
+
+        # Measured 0.67 % (64 SOCS kernels) once the spectrum is centred; with
+        # the former uncentred spectrum it was 5.7 % and the bound 10 %.
+        rel_err = result["relative_error"]
+        assert rel_err < 0.02, f"Hopkins/Abbe relative error too large: {rel_err:.4f} (> 2%)"
+
+        # MAE should be reasonable
+        mae = result["mae"]
+        assert mae < 0.03, f"MAE too large: {mae:.6f}"
+
+    def test_nonnegative_intensity(
+        self,
+        G: int,
+        na: float,
+        source: torch.Tensor,
+        pupil: torch.Tensor,
+        thin_mask: torch.Tensor,
+        fx_fy,
+    ):
+        """Aerial image intensities must be non-negative."""
+        fx, fy, _ = fx_fy
+        result = compare_hopkins_abbe(
+            thin_mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
+        assert (result["hopkins_aerial"] >= -1e-12).all()
+        assert (result["abbe_aerial"] >= -1e-12).all()
+
+
+# ── Direct hopkins_aerial API ─────────────────────────────────────────
+
+
+class TestDirectHopkinsAerial:
+    """Test the hopkins_aerial function directly."""
+
+    def test_basic_call(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        n_kernels = 8
+        kernels = tcc_soc_decomposition(tcc, n_kernels=n_kernels)
+
+        mask = torch.ones(G, G, dtype=torch.float64)
+        mask_fft = torch.fft.fft2(mask)
+
+        aerial = hopkins_aerial(mask_fft, kernels)
+        assert aerial.shape == (G, G)
+        assert aerial.dtype == torch.float64
+        assert (aerial >= -1e-12).all()
+
+
+# ── Dipole illumination ───────────────────────────────────────────────
+
+
+class TestDipoleIllumination:
+    """Test that Hopkins/TCC works correctly with dipole source."""
+
+    @pytest.fixture
+    def dipole_src(self, G: int) -> torch.Tensor:
+        return dipole_x(G, sigma=0.15, sigma_out=0.7, separation=0.55)
+
+    def test_dipole_tcc(self, G: int, na: float, pupil: torch.Tensor, dipole_src):
+        tcc = compute_tcc(dipole_src, pupil, na=na, grid=G)
+        # TCC should be Hermitian
+        diff = tcc - tcc.mH
+        assert diff.abs().max().item() < 1e-10
+
+    def test_dipole_aerial(
+        self,
+        G: int,
+        na: float,
+        pupil: torch.Tensor,
+        dipole_src,
+        thin_mask: torch.Tensor,
+        fx_fy,
+    ):
+        fx, fy, _ = fx_fy
+        result = compare_hopkins_abbe(
+            thin_mask, dipole_src, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
+
+        assert result["hopkins_aerial"].shape == (G, G)
+        assert result["abbe_aerial"].shape == (G, G)
+        assert (result["hopkins_aerial"] >= -1e-12).all()
+        assert (result["abbe_aerial"] >= -1e-12).all()
+
+        # Measured 1.55 %.  The former 47 % came from compare_hopkins_abbe passing
+        # an uncentred spectrum; a 50 % bound had let it pass silently.
+        rel_err = result["relative_error"]
+        assert rel_err < 0.05, f"Dipole Hopkins/Abbe relative error {rel_err:.4f} (> 5%)"
+
+
+# ── Kernel shape ──────────────────────────────────────────────────────
+
+
+class TestSocKernelShape:
+    """Verify SOCS kernel shapes."""
+
+    def test_kernel_count(self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor):
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        # Test multiple kernel counts from the same TCC
+        for n in [1, 4, 16, 48]:
+            kernels = tcc_soc_decomposition(tcc, n_kernels=n)
+            expected = min(n, G * G)
+            assert kernels.shape[0] == expected, f"Requested {n} kernels, got {kernels.shape[0]}"
+            assert kernels.shape[1:] == (G, G)
+
+    def test_more_kernels_than_rank(
+        self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor
+    ):
+        """Requesting more kernels than the TCC rank should clamp gracefully."""
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        n_kernels = G * G + 100  # more than possible
+        kernels = tcc_soc_decomposition(tcc, n_kernels=n_kernels)
+        assert kernels.shape[0] <= G * G
+        assert kernels.shape[1:] == (G, G)
+
+
+# ── Speed note ────────────────────────────────────────────────────────
+
+
+class TestHopkinsSpeed:
+    """Note on speed characteristics.
+
+    For a single mask, Abbe is competitive.  For large iteration counts
+    (thousands of masks in an OPC loop), the TCC is pre-computed once and
+    each mask images in O(N² log N) vs. Abbe's O(N_src × N² log N).
+    """
+
+    def test_tcc_precompute_then_fast(
+        self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor
+    ):
+        """Verify the two-phase workflow: precompute TCC, then image many masks.
+
+        This is a functional test, not a benchmark — it verifies that
+        the precomputation pattern works correctly.
+        """
+        # Phase 1: Precompute TCC and kernels once
+        tcc = compute_tcc(source, pupil, na=na, grid=G)
+        n_kernels = 16
+        kernels = tcc_soc_decomposition(tcc, n_kernels=n_kernels)
+
+        # Phase 2: Image several masks using the same kernels
+        masks = []
+        for i in range(3):
+            m = torch.ones(G, G, dtype=torch.float64)
+            half = G // 2
+            offset = i - 1
+            center = half + offset
+            m[center - 1 : center + 2, :] = 0.0
+            masks.append(m)
+
+        for m in masks:
+            m_fft = torch.fft.fft2(m)
+            aerial = hopkins_aerial(m_fft, kernels)
+            assert aerial.shape == (G, G)
+            assert (aerial >= -1e-12).all()
+
+
+# ── Edge cases ────────────────────────────────────────────────────────
+
+
+class TestEdgeCases:
+    def test_empty_source(self, G: int, na: float, pupil: torch.Tensor):
+        """Zero source → zero TCC."""
+        src = torch.zeros(G, G, dtype=torch.float64)
+        tcc = compute_tcc(src, pupil, na=na, grid=G)
+        expected = G * G
+        assert tcc.shape == (expected, expected)
+        assert tcc.abs().max().item() == 0.0
+
+    def test_uniform_mask(
+        self, G: int, na: float, source: torch.Tensor, pupil: torch.Tensor, fx_fy
+    ):
+        """Uniform mask → constant aerial image."""
+        fx, fy, _ = fx_fy
+        mask = torch.ones(G, G, dtype=torch.float64)
+        result = compare_hopkins_abbe(
+            mask, source, pupil, fx, fy, na=na, grid=G, period_m=13.5e-9 / (2 * na)
+        )
+        # The aerial should be nearly constant
+        hop_img = result["hopkins_aerial"]
+        std = hop_img.std().item()
+        assert std < 0.01, f"Uniform mask aerial not constant (std = {std:.4f})"
+
+
+# ── Aerial_from_orders P0 regression (TCC sigma=0 + squaring) ──────────────
+
+
+class TestAerialFromOrdersPhysics:
+    """P0 regressions for aerial_from_orders (fix 2026-08-31).
+
+    Covers:
+    1. sigma=0 must not crash (was ZeroDivisionError at TCC line).
+    2. sigma=0 must equal the coherent limit |Σ r_m e^{iφ_m}|².
+    3. Single-order normalization: r_0=1 -> aerial = 1 for any sigma.
+    4. The returned aerial is the linear Hopkins intensity, NOT its square.
+    5. TCC(x->0) = 1 implemented via the x-guard (dm=0 and sigma=0).
+    6. sigma>0 behaviour preserved (Hopkins J1 coherence).
+    """
+
+    @pytest.fixture
+    def orders(self) -> torch.Tensor:
+        # Non-trivial complex amplitudes for 3 orders
+        return torch.tensor(
+            [
+                complex(-0.05, 0.03),
+                complex(0.30, -0.10),
+                complex(-0.04, -0.02),
+            ],
+            dtype=torch.complex128,
+        )
+
+    @pytest.fixture
+    def order_idx(self) -> torch.Tensor:
+        return torch.tensor([-1, 0, 1], dtype=torch.int64)
+
+    @pytest.fixture
+    def params(self):
+        return dict(period_m=48e-9, na=0.33, wavelength_m=13.5e-9, grid=128)
+
+    def test_sigma_zero_does_not_crash(self, orders, order_idx, params):
+        a = aerial_from_orders(orders, order_idx, **params, sigma=0.0)
+        assert a.shape == (params["grid"], params["grid"])
+        assert not torch.isnan(a).any()
+        assert not torch.isinf(a).any()
+        assert (a >= 0).all()
+
+    def test_sigma_zero_matches_coherent_limit(self, orders, order_idx, params):
+        """sigma=0 must equal the fully coherent |Σ r_m exp(i 2π m x/Λ)|²."""
+        import math
+
+        period_m = params["period_m"]
+        G = params["grid"]
+        x_pos = -period_m / 2 + period_m * torch.arange(G, dtype=torch.float64) / G
+        I_coherent = torch.zeros(params["grid"], dtype=torch.complex128)
+        for i, m in enumerate(order_idx.tolist()):
+            I_coherent += orders[i] * torch.exp(1j * 2 * math.pi * m * x_pos / period_m)
+        I_coherent = (I_coherent * I_coherent.conj()).real
+
+        a = aerial_from_orders(orders, order_idx, **params, sigma=0.0)
+        diff = (a[0, :] - I_coherent).abs().max().item()
+        assert diff < 1e-6, f"sigma=0 not coherent: max|diff|={diff:.2e}"
+
+    def test_single_order_normalization(self, params):
+        """r_0 = 1, all others 0 -> aerial = 1 constant, for any sigma."""
+        idx = torch.tensor([0], dtype=torch.int64)
+        orders = torch.tensor([complex(1.0, 0.0)], dtype=torch.complex128)
+        for sig in [0.0, 0.1, 0.3, 0.8, 1.0]:
+            a = aerial_from_orders(orders, idx, **params, sigma=sig)
+            assert abs(a.max().item() - 1.0) < 1e-8, f"sigma={sig} max not 1"
+            assert abs(a.min().item() - 1.0) < 1e-8, f"sigma={sig} min not 1"
+
+    def test_not_squared(self, orders, order_idx, params):
+        """The returned aerial is the linear Hopkins I, not I²."""
+        import math
+
+        period_m = params["period_m"]
+        G = params["grid"]
+        x_pos = -period_m / 2 + period_m * torch.arange(G, dtype=torch.float64) / G
+        sigma = 1e-6  # ~ coherent, avoids 0/0 edge but TCC ≈ 1
+        a = aerial_from_orders(orders, order_idx, **params, sigma=sigma)
+
+        # True Hopkins double-sum with the same TCC
+        I_true = torch.zeros(params["grid"], dtype=torch.complex128)
+        for i in range(len(order_idx)):
+            mi = int(order_idx[i])
+            ri = orders[i]
+            for j in range(len(order_idx)):
+                mj = int(order_idx[j])
+                rj = orders[j]
+                dm = abs(mi - mj)
+                x_t = math.pi * sigma * params["na"] * dm * params["wavelength_m"] / period_m
+                tcc = 1.0 if abs(x_t) < 1e-15 else 2.0 * _j1_ref(x_t) / x_t
+                I_true += (
+                    ri
+                    * rj.conj()
+                    * tcc
+                    * torch.exp(1j * 2 * math.pi * (mi - mj) * x_pos / period_m)
+                )
+        I_true = I_true.real
+
+        diff_lin = (a[0, :] - I_true).abs().max().item()
+        diff_sq = (a[0, :] - I_true**2).abs().max().item()
+        assert diff_lin < 1e-6, f"aerial ≠ linear I: max|diff|={diff_lin:.2e}"
+        assert diff_sq > 1e-3, f"aerial is still squared: max|diff| vs I²={diff_sq:.2e}"
+
+    def test_sigma_large_coherence_damps(self, orders, order_idx, params):
+        """Contrast should decrease as sigma grows (incoherence)."""
+        contrast = {}
+        for sig in [0.1, 0.5, 1.0, 3.0, 10.0]:
+            a = aerial_from_orders(orders, order_idx, **params, sigma=sig)
+            c = (a.max() - a.min()) / (a.max() + a.min() + 1e-30)
+            contrast[sig] = float(c)
+        # Contrast must monotonically (mostly) decrease; certainly 0.1 > 10.0
+        assert contrast[0.1] > contrast[10.0], (
+            f"Coherence not damped: contrast(0.1)={contrast[0.1]:.4f}, "
+            f"contrast(10)={contrast[10.0]:.4f}"
+        )
+
+
+# ── P1-Defocus regression tests ──────────────────────────────────────────
+
+
+class TestDefocusPhase:
+    """P1-Defocus: invariants of the defocused Hopkins image.
+
+    Defocus is the paraxial pupil phase W(rho) = -π·focus·NA²·|rho|²/λ at
+    the pupil position rho = s + f_m of order m under source point s.  It
+    is evaluated inside the TCC (fix 2026-10; before, the s = 0 value
+    φ_m = -π·focus·m²·λ/Λ² was applied to every source point):
+        I = Σ_i Σ_j a_i · a_j* · TCC_ij(focus) · e^{i·2π·(m_i−m_j)·x/Λ}
+
+    Key invariants:
+    1. focus=0 matches the original (non-defocused) result exactly.
+    2. TCC(focus) is Hermitian and positive semidefinite for any focus.
+    3. The aerial image is real (imaginary part only from numerical noise).
+    4. Intensity is non-negative everywhere.
+    """
+
+    @pytest.fixture
+    def orders(self) -> torch.Tensor:
+        return torch.tensor(
+            [complex(0.30, -0.10), complex(-0.05, 0.03), complex(0.02, 0.01)],
+            dtype=torch.complex128,
+        )
+
+    @pytest.fixture
+    def order_idx(self) -> torch.Tensor:
+        return torch.tensor([0, 1, 2], dtype=torch.int64)
+
+    @pytest.fixture
+    def params(self):
+        return dict(period_m=64e-9, na=0.33, wavelength_m=13.5e-9, sigma=0.8, grid=128)
+
+    def test_focus_zero_unchanged(self, orders, order_idx, params):
+        """focus=0 must be identical to not passing focus_nm."""
+        a0 = aerial_from_orders(orders, order_idx, **params, focus_nm=0.0)
+        a_default = aerial_from_orders(orders, order_idx, **params)
+        assert (a0 - a_default).abs().max().item() < 1e-15
+
+    def test_focus_tcc_hermitian_psd(self, params):
+        """TCC(focus) is Hermitian and positive semidefinite for any focus."""
+        from euvsimulator.aerial.abbe import _compute_tcc_matrix
+
+        kw = {k: params[k] for k in ("sigma", "na", "wavelength_m", "period_m")}
+        idx5 = torch.tensor([-2, -1, 0, 1, 2], dtype=torch.int64)
+        for focus_nm in [0.0, 10.0, 50.0, -50.0, 100.0]:
+            for shape in ("conventional", "annular", "dipole", "quasar"):
+                tcc = _compute_tcc_matrix(idx5, **kw, illumination_shape=shape, focus_nm=focus_nm)
+                violation = (tcc - tcc.conj().T).abs().max().item()
+                assert violation < 1e-12, (
+                    f"focus={focus_nm}nm {shape}: TCC not Hermitian ({violation:.2e})"
+                )
+                min_eig = torch.linalg.eigvalsh(tcc).min().item()
+                assert min_eig > -1e-12, f"focus={focus_nm}nm {shape}: min eigenvalue {min_eig:.2e}"
+
+    def test_focus_changes_aerial(self, order_idx, params):
+        """Defocus must change the aerial image for non-trivial orders."""
+        orders_2 = torch.tensor([complex(0.3, -0.1), complex(-0.05, 0.03)], dtype=torch.complex128)
+        idx_2 = torch.tensor([0, 1], dtype=torch.int64)
+        a0 = aerial_from_orders(orders_2, idx_2, **params, focus_nm=0.0)
+        a50 = aerial_from_orders(orders_2, idx_2, **params, focus_nm=50.0)
+        diff = (a0 - a50).abs().max().item()
+        assert diff > 1e-6, f"Defocus should change aerial: max|diff| = {diff:.2e}"
+
+    def test_focus_vs_defocus(self, orders, order_idx, params):
+        """I(+z) and I(-z) are generally different for asymmetric masks."""
+        a_pos = aerial_from_orders(orders, order_idx, **params, focus_nm=50.0)
+        a_neg = aerial_from_orders(orders, order_idx, **params, focus_nm=-50.0)
+        diff = (a_pos - a_neg).abs().max().item()
+        assert diff > 1e-6, f"+50nm and -50nm should differ: max|diff| = {diff:.2e}"
+
+    def test_focus_aerial_real(self, orders, order_idx, params):
+        """Aerial image must be real (no imaginary component)."""
+        for focus_nm in [0.0, 10.0, 50.0, -50.0, 100.0]:
+            a = aerial_from_orders(orders, order_idx, **params, focus_nm=focus_nm)
+            assert a.dtype == torch.float64, f"focus={focus_nm}nm: dtype is {a.dtype}, not float64"
+
+    def test_focus_nonnegative(self, orders, order_idx, params):
+        """Aerial image must be non-negative for any focus."""
+        for focus_nm in [0.0, 10.0, 50.0, -50.0, 100.0]:
+            a = aerial_from_orders(orders, order_idx, **params, focus_nm=focus_nm)
+            assert (a >= -1e-12).all(), f"focus={focus_nm}nm: negative values found"
+
+    def test_two_order_analytic(self, params):
+        """Two orders [0, 1]: the image is the Hopkins sum with the defocused TCC.
+
+        I(x) = |a0|²·TCC_00 + |a1|²·TCC_11 + 2·Re[ a0·a1*·TCC_01·e^{-i·2π·x/Λ} ]
+
+        TCC = TCC(focus) from _compute_tcc_matrix(..., focus_nm=focus).  No
+        extra per-order phase factor may appear: the defocus phase depends on
+        the source point and is already inside TCC(focus).
+        """
+        import math
+
+        from euvsimulator.aerial.abbe import _compute_tcc_matrix
+
+        a0 = complex(0.3, -0.1)
+        a1 = complex(-0.05, 0.03)
+        orders = torch.tensor([a0, a1], dtype=torch.complex128)
+        idx = torch.tensor([0, 1], dtype=torch.int64)
+        focus_nm = 50.0
+
+        tcc = _compute_tcc_matrix(
+            idx,
+            **{k: params[k] for k in ("sigma", "na", "wavelength_m", "period_m")},
+            focus_nm=focus_nm,
+        )
+
+        G = params["grid"]
+        x = -params["period_m"] / 2 + params["period_m"] * torch.arange(G, dtype=torch.float64) / G
+        I_analytic = (
+            abs(a0) ** 2 * tcc[0, 0].real.item()
+            + abs(a1) ** 2 * tcc[1, 1].real.item()
+            + 2.0
+            * (
+                a0
+                * a1.conjugate()
+                * tcc[0, 1]
+                * torch.exp(1j * 2 * math.pi * (-1) * x / params["period_m"])
+            ).real
+        )
+
+        a_sim = aerial_from_orders(orders, idx, **params, focus_nm=focus_nm)
+        diff = (a_sim[0, :] - I_analytic).abs().max().item()
+        assert diff < 1e-6, f"Analytic mismatch: max|diff| = {diff:.2e}"
+
+    def test_focus_converges_to_zero(self, orders, order_idx, params):
+        """As focus → 0, the aerial image must converge to the focus=0 result.
+
+        The defocus phase φ_m = -π·focus·m²·λ/Λ² scales linearly with focus.
+        For focus → 0, φ_m → 0 and the aerial image approaches the in-focus case.
+        """
+        a0 = aerial_from_orders(orders, order_idx, **params, focus_nm=0.0)
+        a_eps = aerial_from_orders(orders, order_idx, **params, focus_nm=1e-6)
+        # At focus=1e-6nm, φ ≈ 1e-8 rad → diff should be negligible for float64
+        diff = (a0 - a_eps).abs().max().item()
+        assert diff < 1e-6, f"focus=1e-6nm not converging: max|diff| = {diff:.2e}"
+
+
+# ── P1-3: Illumination shape regression tests ──────────────────────────────
+
+
+class TestIlluminationShapes:
+    """P1-3: TCC for annular, dipole_x/y, quasar illumination shapes.
+
+    All shapes must produce Hermitian, positive-semidefinite TCC matrices
+    with real diagonals. Different shapes must produce different TCCs.
+    """
+
+    @pytest.fixture
+    def order_idx(self) -> torch.Tensor:
+        return torch.tensor([-2, -1, 0, 1, 2], dtype=torch.int64)
+
+    @pytest.fixture
+    def params(self):
+        return dict(sigma=0.8, na=0.33, wavelength_m=13.5e-9, period_m=64e-9)
+
+    def test_all_shapes_hermitian(self, order_idx, params):
+        """Every illumination shape must produce a Hermitian TCC."""
+        for shape in ("conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"):
+            tcc = _compute_tcc_matrix(order_idx, **params, illumination_shape=shape)
+            violation = (tcc - tcc.conj().T).abs().max().item()
+            assert violation < 1e-12, f"{shape}: TCC not Hermitian ({violation:.2e})"
+
+    def test_all_shapes_diagonal_real(self, order_idx, params):
+        """Diagonal of TCC must be real."""
+        for shape in ("conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"):
+            tcc = _compute_tcc_matrix(order_idx, **params, illumination_shape=shape)
+            imag = tcc.diag().imag.abs().max().item()
+            assert imag < 1e-15, f"{shape}: diagonal imaginary ({imag:.2e})"
+
+    def test_all_shapes_positive_semidefinite(self, order_idx, params):
+        """TCC eigenvalues must be >= 0 (positive semidefinite)."""
+        for shape in ("conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"):
+            tcc = _compute_tcc_matrix(order_idx, **params, illumination_shape=shape)
+            eigvals = torch.linalg.eigvalsh(tcc)
+            min_eig = eigvals.min().item()
+            assert min_eig > -1e-12, f"{shape}: min eigenvalue = {min_eig:.4e}"
+
+    def test_all_shapes_TCC_diagonal_one(self, order_idx, params):
+        """TCC(i,i) = 1 for the zero-order (self-coherence at pupil center)."""
+        zero_idx = len(order_idx) // 2  # order 0 is at the center
+        for shape in ("conventional", "annular", "dipole", "dipole_x", "dipole_y", "quasar"):
+            tcc = _compute_tcc_matrix(order_idx, **params, illumination_shape=shape)
+            val = tcc[zero_idx, zero_idx].item()
+            assert abs(val - 1.0) < 1e-12, f"{shape}[{zero_idx},{zero_idx}] = {val:.6f}"
+            # Higher-order diagonals are <1 due to pupil clipping (finite NA effect)
+
+    def test_shapes_differ(self, order_idx, params):
+        """Different illumination shapes must produce measurably different TCCs."""
+        shapes = ["conventional", "annular", "dipole", "quasar"]
+        tccs = {s: _compute_tcc_matrix(order_idx, **params, illumination_shape=s) for s in shapes}
+        for i, s1 in enumerate(shapes):
+            for s2 in shapes[i + 1 :]:
+                diff = (tccs[s1] - tccs[s2]).abs().max().item()
+                assert diff > 1e-6, f"{s1} vs {s2}: not different ({diff:.2e})"
+
+    def test_annular_reduces_to_conventional(self, order_idx, params):
+        """Annular with sigma_inner=0 is the conventional disk."""
+        tcc_conv = _compute_tcc_matrix(order_idx, **params, illumination_shape="conventional")
+        tcc_ann = _compute_tcc_matrix(
+            order_idx, **params, illumination_shape="annular", sigma_inner=0.0
+        )
+        assert (tcc_ann - tcc_conv).abs().max().item() < 1e-15
+
+    def test_aerial_differs_by_shape(self, params):
+        """Aerial image from different illumination shapes must differ."""
+        orders = torch.tensor(
+            [complex(0.3, -0.1), complex(-0.05, 0.03), complex(0.02, 0.01)],
+            dtype=torch.complex128,
+        )
+        idx = torch.tensor([-1, 0, 1], dtype=torch.int64)
+        aerials = {}
+        for shape in ("conventional", "annular", "dipole", "quasar"):
+            a = aerial_from_orders(
+                orders,
+                idx,
+                period_m=params["period_m"],
+                na=params["na"],
+                wavelength_m=params["wavelength_m"],
+                sigma=params["sigma"],
+                illumination_shape=shape,
+                grid=128,
+            )
+            aerials[shape] = a
+        # All pairs should differ
+        for s1 in aerials:
+            for s2 in aerials:
+                if s1 >= s2:
+                    continue
+                diff = (aerials[s1] - aerials[s2]).abs().max().item()
+                assert diff > 1e-4, f"{s1} vs {s2}: aerial diff too small ({diff:.2e})"
+
+    def test_conventional_unchanged(self, params):
+        """Conventional TCC is the default and matches the analytic overlap.
+
+        For a uniform disk source of radius sigma inside the unit pupil,
+        TCC(0, ±1) is the fraction of the source disk that lies inside the
+        pupil shifted by f1 = λ/(Λ·NA): a circle-circle lens area.  Measured
+        deviation of the grid integral: 4.5e-4 at grid 256.
+        """
+        import math
+
+        order_idx = torch.tensor([-1, 0, 1], dtype=torch.int64)
+        tcc_now = _compute_tcc_matrix(order_idx, **params, illumination_shape="conventional")
+        tcc_ref = _compute_tcc_matrix(order_idx, **params)  # default (no shape param)
+        assert (tcc_now - tcc_ref).abs().max().item() < 1e-15
+
+        def lens(d: float, r1: float, r2: float) -> float:
+            a1 = r1 * r1 * math.acos((d * d + r1 * r1 - r2 * r2) / (2 * d * r1))
+            a2 = r2 * r2 * math.acos((d * d + r2 * r2 - r1 * r1) / (2 * d * r2))
+            k = (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)
+            return a1 + a2 - 0.5 * math.sqrt(k)
+
+        sigma = params["sigma"]
+        f1 = params["wavelength_m"] / (params["period_m"] * params["na"])
+        expected = lens(f1, sigma, 1.0) / (math.pi * sigma**2)
+        fine = dict(params, grid=256)
+        tcc = _compute_tcc_matrix(order_idx, **fine, illumination_shape="conventional")
+        assert tcc[1, 2].real.item() == pytest.approx(expected, rel=2e-3)
+        assert tcc[1, 0].real.item() == pytest.approx(expected, rel=2e-3)
+
+
+# ── P1-3: RCWA / Thin-mask ratio validation ──────────────────────────────
+
+
+class TestRcwaThinMaskRatio:
+    """Validate the RCWA vs thin-mask ratio is physically plausible.
+
+    P1-2 introduced the ML operator; the RCWA/thin-mask ratio settled
+    at ~0.76.  This test ensures the ratio stays in a physically
+    plausible range (0.5-1.2) and does not drift with code changes.
+    """
+
+    def test_rcwa_thin_mask_ratio_plausible(self):
+        """RCWA/thin-mask aerial_mean ratio must be in [0.5, 1.2]."""
+        from euvsimulator.pipeline import SimulationConfig, run_simulation
+
+        cfg_tm = SimulationConfig(
+            period_nm=64,
+            line_width_nm=32,
+            dose_mj_cm2=20,
+            na=0.33,
+            sigma=0.8,
+            grid=256,
+            device="cpu",
+            use_rcwa=False,
+            se_blur_nm=0.0,
+            resist_model="aerial_threshold",
+        )
+        cfg_rcwa = SimulationConfig(
+            period_nm=64,
+            line_width_nm=32,
+            dose_mj_cm2=20,
+            na=0.33,
+            sigma=0.8,
+            grid=256,
+            device="cpu",
+            use_rcwa=True,
+            n_rcwa_orders=21,
+            se_blur_nm=0.0,
+            resist_model="aerial_threshold",
+        )
+
+        r_tm = run_simulation(cfg_tm)
+        r_rcwa = run_simulation(cfg_rcwa)
+
+        ratio = r_rcwa.aerial_image.mean().item() / r_tm.aerial_image.mean().item()
+        assert 0.5 <= ratio <= 1.2, (
+            f"RCWA/thin-mask ratio {ratio:.4f} outside plausible range [0.5, 1.2]"
+        )
+
+
+def _j1_ref(x: float) -> float:
+    """Reference Bessel J1 (scipy) — independent of the module under test."""
+    from scipy.special import j1
+
+    return float(j1(x))

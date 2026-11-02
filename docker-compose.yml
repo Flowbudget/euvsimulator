@@ -1,0 +1,24 @@
+# =============================================================================
+# euvsimulator — Docker Compose (API service)
+# =============================================================================
+# Starts the euvsimulator REST API on port 8000, with CXRO data mounted from the
+# host source tree so the database is live without rebuilding the image.
+#
+# The API has no authentication (SECURITY.md), so the port is published on the
+# host's loopback interface only.  To reach it from other machines, change the
+# mapping deliberately, e.g. "0.0.0.0:8000:8000", and only on a trusted network.
+# The data volume targets the installed package (materials.py reads
+# <package>/data/cxro), which lives in site-packages of the python:3.11 image.
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: euvsimulator-api
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./src/euvsimulator/data:/usr/local/lib/python3.11/site-packages/euvsimulator/data
+    restart: unless-stopped

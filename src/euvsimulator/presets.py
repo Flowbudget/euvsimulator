@@ -1,0 +1,343 @@
+"""Named-resist anchors: configurations that reproduce one published data set.
+
+Each preset states, parameter by parameter, whether the value is measured on
+THAT resist, taken from a generic source, or calibrated -- so that a result
+obtained with it can be read for what it is.
+
+NXE1716 (imec / Vesters 2017, 2019)
+-----------------------------------
+The only freely available EUV chemically amplified resist with BOTH a
+dissolution-rate contrast curve (DRM, flood exposure, Vesters et al. JPST
+30(6) 675, Fig. 6) AND patterning data at the same PEB (thesis Table 4.2:
+22 nm lines at 44 nm pitch on an NXE3300B, dose-to-size 11.0 mJ/cm², LWR
+6.7 nm 3σ SEM-biased). The digitised curve ships as package data
+(``data/anchors/vesters2017_nxe1716.json``).
+
+Parameter provenance:
+
+* ``mack_R_max``/``mack_R_min`` -- plateaus of the authors' Mack fit (245 /
+  0.0186 nm/s); measured on NXE1716.
+* ``mack_n``, ``peb_k`` -- fitted here to the authors' fit curve with this
+  chain's form R = Mack(exp(-k·t_eff·H(E))), H = 1 - exp(-C·E), at fixed
+  ``mack_M_th`` (the triple (k, M_th, n) is degenerate on a flood curve;
+  the line prediction does not depend on the split). rms 0.04 in log10 R.
+* ``dill_C`` 0.0152 (LBNL MET-2D), ``dill_B`` 4.44 (generic PHS), ``peb_D``
+  4.2 (Kang 2010 at 90 °C -- the PEB temperature of this data set),
+  ``peb_acid_lifetime_s`` 10.5 (Yamamoto at 110 °C; unknown at 90 °C),
+  ``se_blur_nm`` 2.5 (Thackeray) -- generic, NOT measured on NXE1716.
+* Optics: NA 0.33, dipole 90X sigma 0.62/0.90 (thesis Sec. 4.3.2); film 35 nm
+  on AL412; develop time 30 s (imec's recipe time is not published).
+
+Status (re-measured 2026-10-03): with the DRM dose scale and no free
+parameter the chain prints 22 nm lines at 18.7 mJ/cm² instead of 11.0
+(factor 1.70, ``NXE1716_DOSE_GAP``) -- an open discrepancy that neither blur
+nor develop time explains. (2026-09-06 had 19.7 and
+1.79; the aerial-image sampling, film-bottom CD and thin-mask phase-reference
+fixes of 2026-10 moved it.)  ``NXE1716_DOSE_SCALE_CALIBRATION`` (1.657)
+rescales k so that the chain's dose-to-size is 11 mJ/cm²; it is a
+CALIBRATION and is labelled as such.  It is not the dose ratio 1.70: the
+dose-to-size is not
+exactly proportional to 1/k (until 2026-09-26 the ratio was used and the
+preset printed 20.35 nm instead of 22 nm at 11.0 mJ/cm²). At
+that dose (computed 2026-09-06 with the former factor 1.788) the
+photon-shot-noise LWR is 10.9 nm 3σ with this preset's 9.4 nm PEB
+blur (√(2·4.2·10.5), the lifetime is pinned at 10.5 s; the package default
+of 7.54 s gives 7.9 nm) and 4.8 nm with a 5 nm blur, against 6.7 nm measured
+(SEM-biased; 5.1-5.7 nm bias-corrected): the
+blur of this resist at 90 °C is not published, so the anchor brackets the
+measurement rather than validating or falsifying the noise model.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import replace
+from importlib import resources
+
+import numpy as np
+
+from euvsimulator.pipeline import SimulationConfig
+
+ANCHOR_FILE = "vesters2017_nxe1716.json"
+
+
+def load_nxe1716_anchor() -> dict:
+    """The digitised Vesters 2017 Fig. 6 data and the thesis patterning row."""
+    with resources.files("euvsimulator.data.anchors").joinpath(ANCHOR_FILE).open() as f:
+        return json.load(f)
+
+
+def mack_rate(M, R_max: float, R_min: float, M_th: float, n: float):
+    """Mack 1987 development rate R(M) (same form as resist/develop.MackModel)."""
+    M = np.asarray(M, dtype=float)
+    a = (n + 1.0) / (n - 1.0) * (1.0 - M_th) ** n
+    return R_max * (a + 1.0) * (1.0 - M) ** n / (a + (1.0 - M) ** n) + R_min
+
+
+def flood_rate(cfg: SimulationConfig, dose_mj_cm2):
+    """Surface dissolution rate after a uniform (flood) exposure and the PEB,
+    without diffusion (uniform field) -- the quantity a DRM contrast curve
+    measures, evaluated with the chain's own laws.
+    """
+    E = np.asarray(dose_mj_cm2, dtype=float)
+    H = 1.0 - np.exp(-cfg.dill_C * E)
+    tau = cfg.peb_acid_lifetime_s
+    t_eff = cfg.peb_t_bake if tau is None else tau * (1.0 - math.exp(-cfg.peb_t_bake / tau))
+    M = np.exp(-cfg.peb_k * t_eff * H)
+    return mack_rate(M, cfg.mack_R_max, cfg.mack_R_min, cfg.mack_M_th, cfg.mack_n)
+
+
+def flood_rate_quenched(cfg: SimulationConfig, dose_mj_cm2):
+    """Like :func:`flood_rate` but through the chain's quenching PEB step
+    (Mack 2011 second-order neutralisation with k_Q*G0, acid lifetime,
+    uniform quencher q = Q/G0) -- the flood response of a resist WITH base.
+    """
+    import torch
+
+    from euvsimulator.resist.peb import reaction_diffusion_with_quenching
+
+    E = np.atleast_1d(np.asarray(dose_mj_cm2, dtype=float))
+    h = torch.tensor(1.0 - np.exp(-cfg.dill_C * E), dtype=torch.float64)
+    h = h.view(-1, 1, 1).expand(-1, 2, 2).clone()
+    q = cfg.quencher_density_per_nm3 / cfg.pag_density_per_nm3
+    _, _, M = reaction_diffusion_with_quenching(
+        h,
+        float(q),
+        torch.ones_like(h),
+        D=0.0,
+        k=cfg.peb_k,
+        quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+        t_bake=cfg.peb_t_bake,
+        sigma_diff=0.0,
+        dx=1.0,
+        pag_density=cfg.pag_density_per_nm3,
+        acid_lifetime_s=cfg.peb_acid_lifetime_s,
+    )
+    return mack_rate(M[:, 0, 0].numpy(), cfg.mack_R_max, cfg.mack_R_min, cfg.mack_M_th, cfg.mack_n)
+
+
+# Two-curve quencher fit (2026-09-06): NXE1716 and NXE1717
+# differ only in quencher loading (2:1, Vesters 2017). Shared deprotection rate
+# k and quencher ratio, per-curve Mack n and plateaus (the quencher also
+# changes dissolution, Vesters: "plasticizing effect"); M_th 0.39 fixed
+# (degenerate with k), C 0.0152, G0 0.2, k_Q 12.6 nm^3/s (Osaka 2025; the
+# neutralisation is complete, k_Q*G0*t_eff = 26, so its value hardly matters),
+# tau 10.5 s. rms 0.031 / 0.063 in log10 R. The relative quencher loading is
+# the robust outcome (0.13-0.15 across tau choices); the Mack n values are
+# model-dependent (a single curve cannot separate quencher from n).
+NXE1716_QUENCHER_FIT = {
+    "peb_k": 1.8207,
+    "mack_n_1716": 4.48,
+    "mack_n_1717": 7.38,
+    "q_rel_1716": 0.1481,  # Q/G0 -> Q = 0.0296 nm^-3 at G0 = 0.2
+    "q_rel_1717": 0.1481 / 2.0,  # the 2:1 ratio is a constraint of the fit
+    "acid_base_quench_rate_nm3_per_s": 12.6,
+    "peb_acid_lifetime_s": 10.5,
+}
+
+
+def flood_rate_pde(cfg: SimulationConfig, dose_mj_cm2):
+    """Flood response through the concurrent reaction-diffusion PEB
+    (:func:`euvsimulator.resist.peb.reaction_diffusion_pde`; uniform field, so
+    the diffusion terms are inert): acid trapping by deprotected sites,
+    neutralisation with k_Q*G0 and deprotection, then the Mack rate.
+    """
+    import torch
+
+    from euvsimulator.resist.peb import reaction_diffusion_pde
+
+    E = np.atleast_1d(np.asarray(dose_mj_cm2, dtype=float))
+    h = torch.tensor(1.0 - np.exp(-cfg.dill_C * E), dtype=torch.float64)
+    h = h.view(-1, 1, 1).expand(-1, 2, 2).clone()
+    q = cfg.quencher_density_per_nm3 / cfg.pag_density_per_nm3
+    _, _, M = reaction_diffusion_pde(
+        h,
+        float(q),
+        torch.ones_like(h),
+        D=0.0,
+        k=cfg.peb_k,
+        k_trap=cfg.peb_k_trap_per_s,
+        quench_rate=cfg.acid_base_quench_rate_nm3_per_s,
+        t_bake=cfg.peb_t_bake,
+        dx=1.0,
+        pag_density=cfg.pag_density_per_nm3,
+        dt=0.25,
+    )
+    return mack_rate(M[:, 0, 0].numpy(), cfg.mack_R_max, cfg.mack_R_min, cfg.mack_M_th, cfg.mack_n)
+
+
+# Same two-curve fit through the concurrent reaction-diffusion PEB:
+# k_trap(90 C) = 0.0528 1/s (Polymer A table, NIST law), k_Q
+# = 1.2 nm^3/s (NIST bilayer), shared k, per-curve n, 2:1 quencher ratio.
+# rms 0.042 / 0.070. The quencher loading comes out at Q/PAG = 0.36 --
+# between Mack 2011's 0.25 and Osaka 2025's 0.5 -- and the Mack n at 13-14,
+# i.e. this PEB law makes the curve-pair fit physically consistent where the
+# analytical one (complete neutralisation) did not (n at its bound).
+NXE1716_QUENCHER_FIT_PDE = {
+    "peb_k": 0.4608,
+    "peb_k_trap_per_s": 0.0528,
+    "mack_n_1716": 12.68,
+    "mack_n_1717": 14.16,
+    "q_rel_1716": 0.3633,
+    "q_rel_1717": 0.3633 / 2.0,
+    "acid_base_quench_rate_nm3_per_s": 1.2,
+}
+
+
+# Fit of (k, n) at M_th = 0.39 to the authors' Mack-fit curve (see module
+# docstring; rms 0.042 in log10 R).
+NXE1716_MACK_N = 12.76
+NXE1716_PEB_K_FROM_DRM = 0.4955  # s^-1 at 90 °C with tau = 10.5 s, C = 0.0152
+# Dose gap: the uncalibrated chain prints 22 nm at 18.70 mJ/cm², the wafer at
+# 11.0 (bisection 2026-10-03, dose-to-size 18.697, CD 21.9995 nm; 19.67 before
+# the sampling, film-bottom and thin-mask phase fixes of 2026-10, log
+#
+NXE1716_DOSE_GAP = 18.70 / 11.0
+# Dose-scale calibration: factor on peb_k for which the chain prints CD 22.0 nm
+# at 11.0 mJ/cm² (effective kinetics, grid 256; bisection 2026-10-30, CD
+# 21.9999 nm; 1.6572 before the Si-terminated multilayer of 2.3.0, whose
+# clear-field reflectivity is 0.7322 instead of 0.6470, bisection 2026-10-03;
+# 1.7392 before the 2026-10 fixes, bisection 2026-09-26).  One
+# declared parameter.  It differs from NXE1716_DOSE_GAP because the dose-to-
+# size is not exactly proportional to 1/k.
+NXE1716_DOSE_SCALE_CALIBRATION = 1.70648
+
+
+def nxe1716_config(
+    *, calibrated_dose_scale: bool = False, explicit_quencher: bool = False, **overrides
+) -> SimulationConfig:
+    """SimulationConfig for the NXE1716 anchor (22 nm lines, 44 nm pitch, NXE3300B).
+
+    ``calibrated_dose_scale=True`` multiplies the deprotection rate by
+    ``NXE1716_DOSE_SCALE_CALIBRATION`` so that the chain prints 22 nm at the
+    measured 11.0 mJ/cm²; with ``False`` (default) every parameter comes from
+    the DRM curve or a generic source and the dose-to-size is a prediction
+    (18.7).  The calibration holds for the effective kinetics only: combined
+    with ``explicit_quencher`` it raises ValueError (the neutralisation does
+    not scale with k; the analytical quencher variant would need a factor of
+    3.33, measured 2026-09-26 before the 2026-10 fixes).
+    ``explicit_quencher=True`` uses the two-curve fit ``NXE1716_QUENCHER_FIT``
+    (quencher as a real species, Q = 0.030 nm^-3) instead of the effective
+    single-curve kinetics; the dose-to-size is the same 18.7 (18.73 against
+    18.70, bisection 2026-10-03; the quencher is subtracted alike in flood and
+    pattern).
+    """
+    if calibrated_dose_scale and explicit_quencher:
+        raise ValueError(
+            "calibrated_dose_scale is calibrated for the effective kinetics; with "
+            "explicit_quencher the dose-to-size does not scale with peb_k"
+        )
+    k = NXE1716_PEB_K_FROM_DRM * (NXE1716_DOSE_SCALE_CALIBRATION if calibrated_dose_scale else 1.0)
+    if explicit_quencher and overrides.get("peb_model") == "reaction_diffusion":
+        f = NXE1716_QUENCHER_FIT_PDE
+        k = f["peb_k"]
+        overrides = {
+            "mack_n": f["mack_n_1716"],
+            "quencher_density_per_nm3": f["q_rel_1716"] * 0.2,
+            "acid_base_quench_rate_nm3_per_s": f["acid_base_quench_rate_nm3_per_s"],
+            "peb_k_trap_per_s": f["peb_k_trap_per_s"],
+            **overrides,
+        }
+    elif explicit_quencher:
+        f = NXE1716_QUENCHER_FIT
+        k = f["peb_k"]
+        overrides = {
+            "mack_n": f["mack_n_1716"],
+            "quencher_density_per_nm3": f["q_rel_1716"] * 0.2,
+            "acid_base_quench_rate_nm3_per_s": f["acid_base_quench_rate_nm3_per_s"],
+            "peb_acid_lifetime_s": f["peb_acid_lifetime_s"],
+            **overrides,
+        }
+    cfg = SimulationConfig(
+        resist_model="full_chem",
+        period_nm=44.0,
+        line_width_nm=22.0,
+        grid=256,
+        na=0.33,
+        illumination_shape="dipole",
+        sigma=0.90,
+        sigma_inner=0.62,
+        pole_opening_deg=90.0,
+        mack_R_max=245.0,
+        mack_R_min=0.0186,
+        mack_M_th=0.39,
+        mack_n=NXE1716_MACK_N,
+        peb_k=k,
+        # the DRM fits above assumed the pre-C1 lifetime of 10.5 s; pinned here so
+        # that the preset does not drift with the chain's default (C1: 7.54 s)
+        peb_acid_lifetime_s=10.5,
+        peb_t_bake=60.0,
+        resist_thickness_nm=35.0,
+        develop_time_s=30.0,
+        dose_mj_cm2=11.0,
+        # imec biased CD-SEM protocol (thesis Sec. 5.3): 5.38 nm y-pixels, 5.5 um images
+        ler_passband_nm=(10.8, 5500.0),
+    )
+    return replace(cfg, **overrides) if overrides else cfg
+
+
+# ---------------------------------------------------------------------------
+# MET-2D / XP 5271 (Rohm and Haas), assembled from four measurement groups
+# ---------------------------------------------------------------------------
+MET2D_ANCHOR_FILE = "met2d_xp5271.json"
+
+
+def load_met2d_anchor() -> dict:
+    """LBNL (C, FQY), Sekiguchi 2011 Table 6 (B, Mack), Anderson/Naulleau 2008
+    (blur, E-size, LER) for the same commercial resist; see the JSON for the
+    per-entry provenance and process conditions.
+    """
+    with resources.files("euvsimulator.data.anchors").joinpath(MET2D_ANCHOR_FILE).open() as f:
+        return json.load(f)
+
+
+# Deprotection blur measured on XP 5271-D at PEB 120 C / 90 s (Anderson &
+# Naulleau 2008, contact-hole metric, 23.8 nm; a width, read as FWHM ->
+# sigma = 23.8 / 2.355). The corner metric gives 34.8 nm (sigma 14.8).
+MET2D_BLUR_CONTACT_SIGMA_NM = 23.8 / 2.354820045
+MET2D_BLUR_CORNER_SIGMA_NM = 34.8 / 2.354820045
+
+
+def met2d_config(*, blur_metric: str = "contact", **overrides) -> SimulationConfig:
+    """SimulationConfig for the MET-2D anchor: 50 nm 1:1 lines on the Berkeley
+    MET (NA 0.3, annular sigma 0.35-0.55), 80 nm film, PEB 120 C / 90 s,
+    develop 45 s (Anderson & Naulleau 2008, Table I).
+
+    Provenance: Mack R_max/R_min/M_th/n and dill_B from Sekiguchi 2011 Table 6
+    (EUV MET-2D, PEB 110 C); dill_C from LBNL (0.0152); the PEB blur is SET
+    DIRECTLY from the measured deprotection blur (peb_sigma_diff), so peb_D and
+    the acid lifetime do not enter the blur. The deprotection rate is NOT
+    sourced for this resist in this chain's form (Sekiguchi's PROLITH
+    amplification pair is tied to their C = 0.090 and to PROLITH's two-term
+    PEB model); the dose scale therefore has to be calibrated to the measured
+    E-size (12.5 mJ/cm^2) before any LER prediction -- see
+    tests/test_met2d_anchor.py.
+    """
+    if blur_metric not in ("contact", "corner"):
+        raise ValueError(f"blur_metric must be 'contact' or 'corner', got {blur_metric!r}")
+    sigma = MET2D_BLUR_CONTACT_SIGMA_NM if blur_metric == "contact" else MET2D_BLUR_CORNER_SIGMA_NM
+    cfg = SimulationConfig(
+        resist_model="full_chem",
+        period_nm=100.0,
+        line_width_nm=50.0,
+        grid=256,
+        na=0.30,
+        illumination_shape="annular",
+        sigma=0.55,
+        sigma_inner=0.35,
+        mack_R_max=170.2,
+        mack_R_min=0.028,
+        mack_M_th=0.518,
+        mack_n=18.96,
+        dill_B=5.21,
+        peb_sigma_diff=sigma,
+        peb_acid_lifetime_s=10.5,  # dose-scale calibration of the log was done with this value
+        peb_t_bake=90.0,
+        resist_thickness_nm=80.0,
+        develop_time_s=45.0,
+        dose_mj_cm2=12.5,
+        # Anderson & Naulleau 2008, Sec. III C: LER passband 10-834 nm periods
+        ler_passband_nm=(10.0, 834.0),
+    )
+    return replace(cfg, **overrides) if overrides else cfg

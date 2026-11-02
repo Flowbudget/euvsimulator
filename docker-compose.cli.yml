@@ -1,0 +1,20 @@
+# =============================================================================
+# euvsimulator — Docker Compose (CLI mode)
+# =============================================================================
+# Runs the euvsimulator CLI interactively.  By default shows `--help`; override
+# the command with `docker compose -f docker-compose.cli.yml run --rm cli ...`
+# The data volume targets the installed package (materials.py reads
+# <package>/data/cxro), which lives in site-packages of the python:3.11 image.
+# =============================================================================
+
+services:
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli
+    container_name: euvsimulator-cli
+    image: euvsimulator-cli:latest
+    stdin_open: true   # -i
+    tty: true          # -t
+    volumes:
+      - ./src/euvsimulator/data:/usr/local/lib/python3.11/site-packages/euvsimulator/data

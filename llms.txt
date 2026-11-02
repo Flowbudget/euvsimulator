@@ -1,0 +1,72 @@
+# euvsimulator — EUV Lithography Simulator
+
+An open-source EUV lithography simulator (Python/PyTorch, Apache-2.0) whose every physical
+default has a named source. Version 2.3.0. It models the 13.5 nm imaging and resist chain on a
+laptop; it is not a predictive tool for production resists, and the distance to the two named
+measurement anchors is documented rather than tuned away.
+
+## Links
+- Repository: https://github.com/Flowbudget/euvsimulator
+- Physics, sources, open questions: https://github.com/Flowbudget/euvsimulator/blob/main/docs/physics.md
+- Documentation folder: https://github.com/Flowbudget/euvsimulator/tree/main/docs
+- Notebooks (6, executed in CI): https://github.com/Flowbudget/euvsimulator/tree/main/notebooks
+- Issues: https://github.com/Flowbudget/euvsimulator/issues
+- Discussions: https://github.com/Flowbudget/euvsimulator/discussions
+
+## What exists
+- Mo/Si multilayer mirror (TMM, S-matrix, Névot-Croce roughness) and a CXRO f1/f2 database
+- Mask diffraction: thin-mask by default, RCWA 1D on request (`use_rcwa=True`); a scalar 2D RCWA
+  exists as a standalone module
+- Partially coherent aerial imaging (Abbe and Hopkins), conventional/annular/dipole/quasar pupils
+- Resist chain: Dill ABC exposure, Gaussian SE blur, PEB kinetics fitted to Yamamoto 2011,
+  Mack development with an Eikonal front and a vertical-column model
+- Stochastics: Poisson shot noise, sampled PAG/quencher molecules, LER/LWR extraction
+- Process window: Bossung curves, CD/NILS maps, DoF and EL, CSV/JSON export
+- Calibration: wafer CD matrix to resist parameters (scipy, bootstrap CIs, uncertainty bands)
+- Browser GUI and REST API (`euv serve`, FastAPI, no external assets)
+- Modules present but not wired into the pipeline or CLI: `etch` (etch bias), `opc` (ILT bridge)
+
+## What does not exist
+There is no MCP server, no A2A agent endpoint and no hosted documentation site. Earlier versions
+of this repository shipped manifests describing such services; they were removed in 2.2.1 because
+no code backed them. The only interfaces are the Python API, the CLI and the local REST API.
+
+## Getting started
+```bash
+pip install git+https://github.com/Flowbudget/euvsimulator.git
+euv simulate --period 64 --cd 32 --dose 1.3 --resist-model full_chem
+euv process-window --period 64 --cd 32 --dose-start 10 --dose-end 19 --dose-steps 10 --focus-start -150 --focus-end 150
+euv calibrate wafer.csv --period 44 --cd 22 --bands
+euv serve            # browser GUI + REST API on http://127.0.0.1:8000/
+```
+CLI commands: `version`, `info`, `simulate`, `make-mask`, `process-window`, `materials`, `serve`,
+`bench`, `calibrate`. Python 3.10 to 3.13.
+
+## Python API
+```python
+from euvsimulator.pipeline import SimulationConfig, run_simulation
+
+cfg = SimulationConfig(period_nm=64.0, line_width_nm=32.0, dose_mj_cm2=1.3,
+                       resist_model="full_chem")   # defaults: na=0.33, sigma=0.8, grid=256
+result = run_simulation(cfg)
+print(result.cd_nm, result.nils_value, result.ler_nm, result.lwr_nm)
+```
+The default resist is the 2011 research resist of Yamamoto et al. and prints at about
+1.25 mJ/cm² at 64 nm pitch. Named anchors live in `euvsimulator.presets`
+(`nxe1716_config`, `met2d_config`).
+
+## Testing
+```bash
+pip install -e ".[dev]"
+pytest -q            # 1448 tests, 1 skipped
+```
+CI runs the suite on Linux, macOS and Windows with Python 3.10 to 3.13, plus ruff, mypy and the
+six notebooks.
+
+## Where contributions help
+GPU acceleration for RCWA and imaging, validation against published measurements with a complete
+parameter set, the MEEF weakness of the `aerial_threshold` model (documented in README under
+known limitations), and temperature scaling for acid diffusion.
+
+## License
+Apache-2.0.

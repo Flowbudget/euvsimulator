@@ -1,0 +1,58 @@
+# =============================================================================
+# euvsimulator — CLI-only Docker image
+# =============================================================================
+# Same base as the API image; the default command runs the CLI instead of the
+# server.  uvicorn is a core dependency in pyproject.toml, so `pip install .`
+# brings it in here as well -- the image is not smaller for lack of it.
+# Default command prints the CLI help; override with `euv <subcommand>`.
+#
+# arm64 hosts (Apple Silicon, Raspberry Pi): gdstk publishes Linux wheels for
+# x86_64 only, so pip would build it from source, and python:3.11-slim has no
+# C++ compiler.  Build the amd64 image there under emulation instead (Docker
+# Desktop emulates amd64; on a plain Linux host register QEMU binfmt first):
+#   docker build --platform linux/amd64 -t euvsimulator-cli -f Dockerfile.cli .
+# =============================================================================
+
+# ── Stage 1: Builder ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir setuptools wheel
+
+COPY pyproject.toml README.md ./
+
+# CPU-only PyTorch (no CUDA runtime). --index-url replaces PyPI, and the
+# PyTorch index hosts only torch and its own dependencies, so nothing else
+# may be installed through it.
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch
+
+# Remaining runtime deps from PyPI (uvicorn follows with the package itself,
+# see above; torch is already satisfied)
+RUN pip install --no-cache-dir \
+    numpy scipy fastapi pydantic httpx typer gdstk matplotlib
+
+# pyproject.toml finds the package under src/ (packages.find where=["src"]),
+# so src/ must be in this stage before the package is installed
+COPY src/ ./src/
+
+# Install the package itself from the local src/ (deps are already satisfied)
+RUN pip install --no-cache-dir .
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# No source copy here: the package and its data are installed in
+# site-packages above, and /app/src would not be on sys.path.  The package
+# reads its data from site-packages/euvsimulator/data, which is where
+# docker-compose.cli.yml mounts the host data
+
+# Default: show CLI help
+CMD ["euv", "simulate", "--help"]
