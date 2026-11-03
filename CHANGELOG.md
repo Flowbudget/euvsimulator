@@ -3,6 +3,16 @@
 All notable changes to euvsimulator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed (2026-11-03)
+- CI: `tests/test_download_cxro.py` ran the `.sh` syntax check through whatever `bash` PATH
+  offered. On the Windows runners that is the WSL stub in `System32`, which exits non-zero and
+  prints its error as UTF-16, so all four Windows jobs failed. The test now probes candidates and
+  uses Git Bash when PATH has no working shell, and skips with a reason if the machine has none.
+  `*.sh` is pinned to LF in `.gitattributes` so a CRLF checkout cannot confuse `bash -n`.
+- `ruff format --check` flagged three files whose comments start with `#.` instead of `# .`.
+
 ## [2.3.0] - 2026-10-30
 
 ### Fixed (2026-10-30)

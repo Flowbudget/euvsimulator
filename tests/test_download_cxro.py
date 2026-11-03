@@ -8,6 +8,8 @@ scripts/download_cxro.py first") could not fix the error.
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -62,6 +64,35 @@ def test_converted_csv_is_readable_by_loader(tmp_path):
     assert table.get_f1f2("Mo", 100.0) == pytest.approx((7.0, 3.0))
 
 
+def _bash_for_syntax_check() -> str | None:
+    """Return a bash that actually runs; skip the test when there is none.
+
+    ``bash`` on PATH is not proof of a working shell: on Windows runners that
+    name belongs to the WSL stub in System32, which exits non-zero and prints
+    its "no installed distributions" error as UTF-16. Git Bash is installed
+    with every Git for Windows, so try that next and probe each candidate once.
+    """
+    candidates: list[str] = []
+    on_path = shutil.which("bash")
+    if on_path:
+        candidates.append(on_path)
+    if sys.platform.startswith("win"):
+        for variable in ("ProgramFiles", "ProgramW6432"):
+            program_files = os.environ.get(variable)
+            if program_files:
+                candidates.append(str(Path(program_files) / "Git" / "bin" / "bash.exe"))
+    for candidate in candidates:
+        if not Path(candidate).is_file():
+            continue
+        try:
+            probe = subprocess.run([candidate, "-c", "true"], capture_output=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if probe.returncode == 0:
+            return candidate
+    return None
+
+
 def test_shell_script_wraps_python_script():
     """download_cxro.sh delegates to download_cxro.py.
 
@@ -72,4 +103,13 @@ def test_shell_script_wraps_python_script():
     text = sh.read_text()
     assert "src/euv/" not in text
     assert "download_cxro.py" in text
-    subprocess.run(["bash", "-n", str(sh)], check=True)
+
+    bash = _bash_for_syntax_check()
+    if bash is None:
+        pytest.skip("no usable bash on this machine")
+    assert bash is not None
+
+    # Feed the script through stdin: Git Bash mangles a Windows path argument,
+    # and a CRLF checkout would otherwise be misread as part of the grammar.
+    script = sh.read_bytes().replace(b"\r\n", b"\n")
+    subprocess.run([bash, "-n", "-"], input=script, check=True)
