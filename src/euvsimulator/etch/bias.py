@@ -332,7 +332,7 @@ def etch_bias_from_formula(
 # and SPIE Proc. (1990-2010)"; no specific source, data set or fitting record
 # exists in this repository for any of the 35 numbers, so they must be read
 # as illustrative trend shapes for screening, not as measured etch behaviour
-#. Not used by the pipeline.
+# . Not used by the pipeline.
 _CHEMISTRY_FORMULAS: Dict[str, Dict[str, Any]] = {
     "cf4": {
         "a": 12.0,

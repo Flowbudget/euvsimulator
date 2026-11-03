@@ -205,7 +205,7 @@ class RCWA1D:
         #   for HOMOGENEOUS layers (everything commutes; slab == TMM) but wrong
         #   for gratings: the effective-medium limit P << λ gave R_TM = 0.21
         #   instead of the exact 0.030 and did not converge in M
-        #.
+        # .
         Kx2 = Kx @ Kx
         if self.cfg.polarization == "TE":
             A = E_eps - Kx2

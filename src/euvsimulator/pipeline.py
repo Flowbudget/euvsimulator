@@ -61,7 +61,6 @@ from euvsimulator.resist.stochastic import (
 AERIAL_THRESHOLD_REFERENCE_DOSE_MJ_CM2 = 20.0
 
 
-
 #: Chief-ray incidence angle on the mask [degrees].  All TMM entry points take
 #: radians, so this is converted once, right before the call.
 ML_INCIDENCE_DEG = 6.0
@@ -120,7 +119,7 @@ DEFAULT_BLOCKED_SITE_DENSITY_PER_NM3 = 1.63
 # the same curve differently over the bake, not because the resist differs. One
 # law's k with the other law's acid loss does not reproduce the curve: 10.947
 # with k_trap 0.2076 gives a flood P(60 s) of 0.139 against Fig. 3's 0.176
-#.
+# .
 PEB_K_DEFAULT_PER_LAW = {"analytical": 10.947, "reaction_diffusion": 8.929}
 
 
@@ -720,7 +719,7 @@ class SimulationConfig:
     # latter, peb_acid_lifetime_s is not used; the acid loss is
     # peb_k_trap_per_s * h * phi, and peb_k must be the NIST-law value: an
     # unset peb_k resolves to it (8.929 s^-1 at 110 C, PEB_K_DEFAULT_PER_LAW;
-    #), and peb_temperature_c sets k and k_trap together.
+    # ), and peb_temperature_c sets k and k_trap together.
     peb_model: str = "analytical"
     # Trapping rate constant [1/s] of the reaction_diffusion model at the
     # default 110 C PEB: fit of the Kang/NIST law to Yamamoto's Fig. 3 curve,
